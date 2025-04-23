@@ -27,6 +27,7 @@ int IRatPopLast(Rat* vector);
 int IRatPopFirst(Rat* vector);
 int IRatFree(Rat* vector);
 int IRatCheckSize(Rat* vector);
+int IRatEmpty(bool* isEmpty, Rat* vector);
 /////////////////////////////
 
 ///////////Vulkan////////////

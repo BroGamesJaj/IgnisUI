@@ -141,5 +141,26 @@ int IRatCheckSize(Rat* vector)
 
     return 0;
 }
+int IRatEmpty(bool* isEmpty, Rat* vector)
+{
+    if(!vector) return 1;
+
+    *isEmpty = true;
+
+    for (size_t i = 0; i < vector->capacity; i++)
+    {
+        void* itemPtr = (char*)vector->data + i * vector->dSize;
+
+        for (size_t j = 0; j < vector->dSize; j++)
+        {
+            if(*((unsigned char*)itemPtr+j) != 0)
+            {
+                *isEmpty = false;
+            }
+        }  
+    }
+
+    return 0;
+}
 /////////////////////////////
 

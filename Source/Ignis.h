@@ -18,9 +18,6 @@ namespace ignis_internal
 }
 #endif
 
-
-
-
 #ifdef __cplusplus
 class Ignis {
 public:
