@@ -1,6 +1,5 @@
 #include "Ignis.h"
 
-void Hello(){
-    printf("Hello Ignis!");
+void Hello() {
+    printf("Hello Ignis!\n");
 }
-

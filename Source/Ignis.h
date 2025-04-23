@@ -2,15 +2,22 @@
 
 #include <stdio.h>
 
-static void Hello(); 
+#ifdef __cplusplus
+namespace ignis_internal 
+{
+	extern "C" {
+#endif
+		void Hello();
+#ifdef __cplusplus
+	}
+}
+#endif
 
 #ifdef __cplusplus
-class Ignis
-{
+class Ignis {
 public:
-    
-    static void Hello() {
-        ::Hello();
-    }
+	static void Hello() {
+		ignis_internal::Hello();
+	}
 };
 #endif
