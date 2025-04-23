@@ -1,5 +1,4 @@
 #include "IgnisInternal.h"
-#include "Ignis.h"
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -59,14 +58,14 @@ int setupDebugMessenger();
 bool checkValidationLayerSupport();
 
 Rat validationLayers;
-const char* validationLayer = "VK_LAYER_KHRONOS_validation";
+char* validationLayer = "VK_LAYER_KHRONOS_validation";
 
 int IgnisSetupInternal(VkInstance* instance, VkSurfaceKHR* surface)
 {
     window.instance = instance;
     window.surface = surface;
 
-    IRat(&validationLayers, 1, sizeof(const char*));
+    IRat(&validationLayers, 1, sizeof(char*));
     IRatAdd(validationLayer, &validationLayers);
 
     if(!checkValidationLayerSupport()) return 1;
@@ -105,6 +104,7 @@ bool checkValidationLayerSupport()
     }
     return true;
 }
+/*
 int setupDebugMessenger()
 {
     VkDebugUtilsMessengerCreateInfoEXT createInfo;
@@ -114,4 +114,4 @@ int setupDebugMessenger()
         return 1;
     }
     return 0;
-}
+}*/

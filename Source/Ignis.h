@@ -25,7 +25,7 @@ namespace ignis_internal
 class Ignis {
 public:
 	static void IgnisSetup(VkInstance* instance, VkSurfaceKHR* surface) {
-		ignis_internal::IgnisSetup(VkInstance* instance, VkSurfaceKHR* surface);
+		ignis_internal::IgnisSetup(instance, surface);
 	}
 };
 #endif

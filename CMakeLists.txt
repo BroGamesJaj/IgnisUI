@@ -5,7 +5,7 @@ set(CMAKE_C_STANDARD 17)
 
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-file(GLOB SOURCES "${CMAKE_SOURCE_DIR}/Source/*.c")
+file(GLOB_RECURSE SOURCES "${CMAKE_SOURCE_DIR}/Source/*.c")
 
 if(MSVC)
     set(outputDir ${CMAKE_SOURCE_DIR}/Output)
