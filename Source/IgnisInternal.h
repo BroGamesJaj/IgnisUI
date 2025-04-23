@@ -12,7 +12,7 @@
 typedef struct Rat {
     void* data;
     size_t dSize; //data type size
-    size_t aSize; //array size
+    size_t Size; //array size
     size_t capacity;
 } Rat;
 
@@ -26,5 +26,9 @@ int IRatRemove(size_t index, Rat* vector);
 int IRatPopLast(Rat* vector);
 int IRatPopFirst(Rat* vector);
 int IRatFree(Rat* vector);
+/////////////////////////////
+
+///////////Vulkan////////////
+int IgnisSetupInternal(VkInstance* instance, VkSurfaceKHR* surface);
 /////////////////////////////
 

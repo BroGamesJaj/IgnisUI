@@ -1,23 +1,31 @@
 #pragma once
 
 #include <stdio.h>
+#include "vulkan/vulkan.h"
 
 #ifdef __cplusplus
 namespace ignis_internal 
 {
 	extern "C" {
 #endif
-		void Hello();
+
+
+	int IgnisSetup(VkInstance* instance, VkSurfaceKHR* surface);
+
+
 #ifdef __cplusplus
 	}
 }
 #endif
 
+
+
+
 #ifdef __cplusplus
 class Ignis {
 public:
-	static void Hello() {
-		ignis_internal::Hello();
+	static void IgnisSetup(VkInstance* instance, VkSurfaceKHR* surface) {
+		ignis_internal::IgnisSetup(VkInstance* instance, VkSurfaceKHR* surface);
 	}
 };
 #endif

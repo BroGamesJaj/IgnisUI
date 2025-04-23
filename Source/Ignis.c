@@ -1,5 +1,6 @@
 #include "Ignis.h"
+#include "IgnisInternal.h"
 
-void Hello() {
-    printf("Hello Ignis!\n");
+int IgnisSetup(VkInstance* instance, VkSurfaceKHR* surface) {
+    return IgnisSetupInternal(instance, surface);
 }
