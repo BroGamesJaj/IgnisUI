@@ -62,12 +62,14 @@ char* validationLayer = "VK_LAYER_KHRONOS_validation";
 
 int IgnisSetupInternal(VkInstance* instance, VkSurfaceKHR* surface)
 {
+    printf("Start initing\n");
     window.instance = instance;
     window.surface = surface;
-
+    printf("initing 1\n");
     IRat(&validationLayers, 1, sizeof(char*));
+    printf("initing 2\n");
     IRatAdd(validationLayer, &validationLayers);
-
+    printf("initing 3\n");
     if(!checkValidationLayerSupport()) return 1;
 
     printf("Suppordet stuff works\n");
