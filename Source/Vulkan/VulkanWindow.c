@@ -70,7 +70,7 @@ int IgnisSetupInternal(VkInstance* instance, VkSurfaceKHR* surface)
 
     if(!checkValidationLayerSupport()) return 1;
 
-    prinf("Suppordet stuff works");
+    printf("Suppordet stuff works\n");
 
     return 0;
 }
