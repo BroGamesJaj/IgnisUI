@@ -26,6 +26,4 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${outputDir})
 
 add_library(Ignis STATIC ${SOURCES})
 
-set(VULKAN_SDK_PATH $ENV{VULKAN_SDK})
-
 target_include_directories(Ignis PRIVATE ${CMAKE_SOURCE_DIR}/Source)
