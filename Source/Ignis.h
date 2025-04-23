@@ -1,18 +1,16 @@
+#pragma once
+
 #include <stdio.h>
 
-#ifndef IGNIS_H
-#define IGNIS_H
-
+static void Hello(); 
 
 #ifdef __cplusplus
-extern "C" {
-#endif
-
-	void Hello(void);
-
-#ifdef __cplusplus
-}
-#endif
-
-
+class Ignis
+{
+public:
+    
+    static void Hello() {
+        ::Hello();
+    }
+};
 #endif
