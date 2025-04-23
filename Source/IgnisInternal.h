@@ -26,6 +26,7 @@ int IRatRemove(size_t index, Rat* vector);
 int IRatPopLast(Rat* vector);
 int IRatPopFirst(Rat* vector);
 int IRatFree(Rat* vector);
+int IRatCheckSize(Rat* vector);
 /////////////////////////////
 
 ///////////Vulkan////////////

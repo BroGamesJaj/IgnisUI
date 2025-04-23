@@ -85,6 +85,9 @@ bool checkValidationLayerSupport()
     Rat/*VkLayerProperties*/ availableLayers;
     IRat(&availableLayers, layerCount, sizeof(VkLayerProperties));
     vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data);
+    IRatCheckSize(&availableLayers);
+
+    printf("%zu\n", availableLayers.Size);
 
     for (size_t i = 0; i < validationLayers.Size; i++)
     {
