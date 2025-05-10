@@ -7,7 +7,6 @@
 #define true 1
 #define false 0
 
-
 /////////Rat vector//////////
 typedef struct Rat {
     void* data;
@@ -31,6 +30,13 @@ int IRatEmpty(bool* isEmpty, Rat* vector);
 /////////////////////////////
 
 ///////////Vulkan////////////
+typedef struct Vertex {
+    float pos[2];
+    float color[3];
+    float uv[2];
+    int textureIndex;
+} Vertex;
+
 int IgnisSetupInternal(VkInstance* instance, VkSurfaceKHR* surface);
 /////////////////////////////
 
