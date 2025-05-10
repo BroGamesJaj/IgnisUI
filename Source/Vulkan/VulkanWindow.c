@@ -137,17 +137,20 @@ void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT* create
 }
 VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger)
 {
-    auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+    PFN_vkCreateDebugUtilsMessengerEXT func = 
+        (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+
     if (func != NULL) {
         return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
-    }
-    else {
+    } else {
         return VK_ERROR_EXTENSION_NOT_PRESENT;
     }
 }
 void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator) 
 {
-    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+    PFN_vkDestroyDebugUtilsMessengerEXT func =
+        (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+
     if (func != NULL) {
         func(instance, debugMessenger, pAllocator);
     }
@@ -233,7 +236,7 @@ bool checkDeviceExtensionSupport(VkPhysicalDevice device)
 
             IRatGet(&avail, &availableExtensions, i);
             IRatGet(&needed, &deviceExtensions, j);
-            if (strcmp(avail, needed) == 0) {
+            if (strcmp(avail.extensionName, needed.extensionName) == 0) {
                 fulfilled++;
                 break;
             }
