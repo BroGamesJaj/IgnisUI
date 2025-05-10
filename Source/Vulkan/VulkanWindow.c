@@ -52,7 +52,7 @@ typedef struct VulkanWindow {
 bool framebufferResized = false;
 int8_t currentFrame = 0;
 
-VulkanWindow window;
+VulkanWindow window  = {0};
 
 int setupDebugMessenger();
 bool checkValidationLayerSupport();
@@ -311,5 +311,101 @@ bool isDeviceSuitable(VkPhysicalDevice device) {
     VkPhysicalDeviceFeatures supportedFeatures;
     vkGetPhysicalDeviceFeatures(device, &supportedFeatures);
     return isComplete(&indices) && extensionsSupported && swapChainAdequate && supportedFeatures.samplerAnisotropy;
+}
+
+int PickPhysicalDevice() 
+{
+    uint32_t deviceCount = 0;
+    vkEnumeratePhysicalDevices(*window.instance, &deviceCount, NULL);
+
+    if (deviceCount == 0) {
+        fprintf(stderr, "Failed to find GPUs with Vulkan support!\n");
+        return 1;
+    }
+
+    Rat/*VkPhysicalDevice*/ devices;
+    IRat(&devices, deviceCount, sizeof(VkPhysicalDevice));
+    vkEnumeratePhysicalDevices(*window.instance, &deviceCount, devices.data);
+    IRatCheckSize(&devices);
+
+    for (size_t i = 0; i < devices.Size; i++)
+    {
+        VkPhysicalDevice device;
+        IRatGet(&device, &devices, i);
+
+        if (isDeviceSuitable(device)) {
+            window.physicalDevice = device;
+            break;
+        }
+    }
+
+    IRatFree(&devices);
+
+    if (window.physicalDevice == VK_NULL_HANDLE) {
+        fprintf(stderr, "Failed to find a suitable GPU!\n");
+        return 1;
+    }
+    
+    return 0;
+}
+int CreateLogicalDevice()
+{
+    QueueFamilyIndices indices = findQueueFamilies(window.physicalDevice);
+    Rat/*VkDeviceQueueCreateInfo*/ queueCreateInfos;
+
+    uint32_t queueFamilies[2];
+    uint32_t count = 0;
+
+    if (indices.graphicsFamily.has_value) {
+        queueFamilies[count++] = indices.graphicsFamily.value;
+    }
+
+    if (indices.presentFamily.has_value && indices.presentFamily.value != indices.graphicsFamily.value) {
+        queueFamilies[count++] = indices.presentFamily.value;
+    }
+
+    IRat(&queueCreateInfos, count, sizeof(VkDeviceQueueCreateInfo));
+
+    float queuePriority = 1.0f;
+
+    for (uint32_t i = 0; i < count; i++)
+    {
+        VkDeviceQueueCreateInfo queueCreateInfo;
+        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queueCreateInfo.queueFamilyIndex = queueFamilies[i];
+        queueCreateInfo.queueCount = 1;
+        queueCreateInfo.pQueuePriorities = &queuePriority;
+
+        IRatAdd(&queueCreateInfo, &queueCreateInfos);
+    }
+
+    VkPhysicalDeviceFeatures deviceFeatures = {0};
+    deviceFeatures.samplerAnisotropy = VK_TRUE;
+
+    VkDeviceCreateInfo createInfo = {0};
+    createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    createInfo.queueCreateInfoCount = (uint32_t)queueCreateInfos.Size;
+    createInfo.pQueueCreateInfos = queueCreateInfos.data;
+
+    createInfo.pEnabledFeatures = &deviceFeatures;
+
+    const char* deviceExtensions[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+
+    createInfo.enabledExtensionCount = 1;
+    createInfo.ppEnabledExtensionNames = deviceExtensions;
+
+    const char* validationLayers[] = { "VK_LAYER_KHRONOS_validation" };
+
+    createInfo.enabledLayerCount = 1;
+    createInfo.ppEnabledLayerNames = validationLayers;
+
+    if (vkCreateDevice(window.physicalDevice, &createInfo, NULL, &window.device) != VK_SUCCESS) {
+        return 1;
+    }
+
+    vkGetDeviceQueue(window.device, indices.graphicsFamily.value, 0, &window.graphicsQueue);
+    vkGetDeviceQueue(window.device, indices.presentFamily.value, 0, &window.presentQueue);
+
+    return 0;
 }
 /////////////////////////////////
