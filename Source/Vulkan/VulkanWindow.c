@@ -55,9 +55,13 @@ int8_t currentFrame = 0;
 VulkanWindow window  = {0};
 
 int setupDebugMessenger();
-bool checkValidationLayerSupport();
+bool CheckValidationLayerSupport();
 int PickPhysicalDevice();
-int	createLogicalDevice();
+int	CreateLogicalDevice();
+int CreateSwapChain();
+void CreateImageViews();
+int CreateRenderPass();
+int CreateGraphicsPipeline();
 
 int IgnisSetupInternal(VkInstance* instance, VkSurfaceKHR* surface)
 {
@@ -65,18 +69,25 @@ int IgnisSetupInternal(VkInstance* instance, VkSurfaceKHR* surface)
     window.instance = instance;
     window.surface = surface;
 
-    if(!checkValidationLayerSupport()) return 1;
+    if(!CheckValidationLayerSupport()) return 1;
     setupDebugMessenger();
 
-
     PickPhysicalDevice();
-	createLogicalDevice();
+	CreateLogicalDevice();
+
+    CreateSwapChain();
+    CreateImageViews();
+    CreateRenderPass();
+
+    CreateDescriptorSetLayout();
+
+    CreateGraphicsPipeline();
 
     return 0;
 }
 
 ////////////Debugger/////////////
-bool checkValidationLayerSupport() 
+bool CheckValidationLayerSupport() 
 {
     Rat/*char**/ validationLayers;
     char* validationLayer = "VK_LAYER_KHRONOS_validation";
@@ -167,7 +178,7 @@ int setupDebugMessenger()
 }
 /////////////////////////////////
 
-////////Physical Device//////////
+////////Physical & Logical Device//////////
 typedef struct {
     uint32_t value;
     int has_value;
@@ -210,11 +221,8 @@ SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device) {
 }
 bool checkDeviceExtensionSupport(VkPhysicalDevice device) 
 {
-    Rat/*char**/ deviceExtensions;
-    char* deviceExtension = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
-    IRat(&deviceExtensions, 1, sizeof(char*));
-    IRatAdd(&deviceExtension, &deviceExtensions);
-
+    const char* deviceExtensions[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+    int requiredCount = sizeof(deviceExtensions) / sizeof(deviceExtensions[0]);
 
     uint32_t extensionCount;
     vkEnumerateDeviceExtensionProperties(device, NULL, &extensionCount, NULL);
@@ -229,14 +237,13 @@ bool checkDeviceExtensionSupport(VkPhysicalDevice device)
 
     for (size_t i = 0; i < availableExtensions.Size; i++)
     {
-        for (size_t j = 0; j < deviceExtensions.Size; j++)
+        for (size_t j = 0; j < requiredCount; j++)
         {
             VkExtensionProperties avail;
-            VkExtensionProperties needed;
-
+            const char* needed = deviceExtensions[j];
             IRatGet(&avail, &availableExtensions, i);
-            IRatGet(&needed, &deviceExtensions, j);
-            if (strcmp(avail.extensionName, needed.extensionName) == 0) {
+
+            if (strcmp(avail.extensionName, needed) == 0) {
                 fulfilled++;
                 break;
             }
@@ -244,9 +251,8 @@ bool checkDeviceExtensionSupport(VkPhysicalDevice device)
     }
 
     IRatFree(&availableExtensions);
-    IRatFree(&deviceExtensions);
 
-    return (fulfilled == deviceExtensions.Size);
+    return (fulfilled == requiredCount);
 }
 QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) 
 {
@@ -370,7 +376,7 @@ int CreateLogicalDevice()
 
     for (uint32_t i = 0; i < count; i++)
     {
-        VkDeviceQueueCreateInfo queueCreateInfo;
+        VkDeviceQueueCreateInfo queueCreateInfo = {0};
         queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         queueCreateInfo.queueFamilyIndex = queueFamilies[i];
         queueCreateInfo.queueCount = 1;
@@ -399,13 +405,233 @@ int CreateLogicalDevice()
     createInfo.enabledLayerCount = 1;
     createInfo.ppEnabledLayerNames = validationLayers;
 
-    if (vkCreateDevice(window.physicalDevice, &createInfo, NULL, &window.device) != VK_SUCCESS) {
+    VkResult result = vkCreateDevice(window.physicalDevice, &createInfo, NULL, &window.device);
+    if (result != VK_SUCCESS) {
+        printf("Failed to create logical device!\n");
         return 1;
     }
+
+    IRatFree(&queueCreateInfos);
 
     vkGetDeviceQueue(window.device, indices.graphicsFamily.value, 0, &window.graphicsQueue);
     vkGetDeviceQueue(window.device, indices.presentFamily.value, 0, &window.presentQueue);
 
     return 0;
 }
+
+VkSurfaceFormatKHR chooseSwapSurfaceFormat(const Rat/*VkSurfaceFormatKHR*/ availableFormats) {
+    VkSurfaceFormatKHR availableFormat;
+    for (size_t i = 0; i < availableFormats.Size; i++)
+    {
+        IRatGet(&availableFormat, &availableFormats, i);
+        if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+            return availableFormat;
+        }
+    }
+    IRatGet(&availableFormat, &availableFormats, 0);
+    return availableFormat;
+}
+VkPresentModeKHR chooseSwapPresentMode(const Rat/*VkPresentModeKHR*/ availablePresentModes) {
+    VkPresentModeKHR availablePresentMode;
+    for (size_t i = 0; i < availablePresentModes.Size; i++)
+    {
+        IRatGet(&availablePresentMode, &availablePresentModes, i);
+        if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
+            return availablePresentMode;
+        }
+    }
+    return VK_PRESENT_MODE_FIFO_KHR;
+}
+VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR capabilities) {
+    if (capabilities.currentExtent.width != UINT32_MAX) {
+        return capabilities.currentExtent;
+    }
+    else {
+        int width, height;
+        glfwGetFramebufferSize(window, &width, &height);
+        VkExtent2D actualExtent = {
+            (uint32_t)width,
+            (uint32_t)height
+        };
+        if (actualExtent.width < capabilities.minImageExtent.width)
+            actualExtent.width = capabilities.minImageExtent.width;
+        else if (actualExtent.width > capabilities.maxImageExtent.width)
+            actualExtent.width = capabilities.maxImageExtent.width;
+
+        if (actualExtent.height < capabilities.minImageExtent.height)
+            actualExtent.height = capabilities.minImageExtent.height;
+        else if (actualExtent.height > capabilities.maxImageExtent.height)
+            actualExtent.height = capabilities.maxImageExtent.height;
+
+        return actualExtent;
+    }
+}
+
+int CreateSwapChain()
+{
+    SwapChainSupportDetails swapChainSupport = querySwapChainSupport(window.physicalDevice);
+    VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
+    VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
+    VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities);
+
+    uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
+
+    if (swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount) {
+        imageCount = swapChainSupport.capabilities.maxImageCount;
+    }
+
+    VkSwapchainCreateInfoKHR createInfo = {0};
+    createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    createInfo.surface = window.surface;
+
+    createInfo.minImageCount = imageCount;
+    createInfo.imageFormat = surfaceFormat.format;
+    createInfo.imageColorSpace = surfaceFormat.colorSpace;
+    createInfo.imageExtent = extent;
+    createInfo.imageArrayLayers = 1;
+    createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+    QueueFamilyIndices indices = findQueueFamilies(window.physicalDevice);
+    uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value, indices.presentFamily.value };
+
+    if (indices.graphicsFamily.value != indices.presentFamily.value) {
+        createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+        createInfo.queueFamilyIndexCount = 2;
+        createInfo.pQueueFamilyIndices = queueFamilyIndices;
+    }
+    else {
+        createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        createInfo.queueFamilyIndexCount = 0;
+        createInfo.pQueueFamilyIndices = NULL;
+    }
+
+    createInfo.preTransform = swapChainSupport.capabilities.currentTransform;
+
+    createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+
+    createInfo.presentMode = presentMode;
+    createInfo.clipped = VK_TRUE;
+
+    createInfo.oldSwapchain = VK_NULL_HANDLE;
+
+    if (vkCreateSwapchainKHR(window.device, &createInfo, NULL, &window.swapChain) != VK_SUCCESS) {
+        return 1;
+    }
+    vkGetSwapchainImagesKHR(window.device, window.swapChain, &imageCount, NULL);
+    IRat(&(window.swapChainImages), imageCount, sizeof(VkImage));
+    vkGetSwapchainImagesKHR(window.device, window.swapChain, &imageCount, window.swapChainImages.data);
+    window.swapChainImageFormat = surfaceFormat.format;
+    window.swapChainExtent = extent;
+
+    return 0;
+}
+
+VkImageView CreateImageView(VkImage image, VkFormat format) 
+{
+    VkImageViewCreateInfo viewInfo = {0};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image = image;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format = format;
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount = 1;
+    VkImageView imageView;
+    if (vkCreateImageView(window.device, &viewInfo, NULL, &imageView) != VK_SUCCESS) {
+        printf("imageview creation failed\n");
+        return NULL;
+    }
+    return imageView;
+}
+void CreateImageViews() 
+{
+    IRatAlloc(&window.swapChainImageViews, window.swapChainImages.Size);
+
+    for (uint32_t i = 0; i < window.swapChainImages.Size; i++) {
+        VkImage image;
+        IRatGet(&image, &window.swapChainImages, i);
+        VkImageView imageView = createImageView(image, window.swapChainImageFormat);
+        IRatSet(&imageView, &window.swapChainImageViews, i);
+    }
+
+    return 0;
+}
 /////////////////////////////////
+int CreateRenderPass() 
+{
+    VkAttachmentDescription colorAttachment = {0};
+    colorAttachment.format = window.swapChainImageFormat;
+    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    VkAttachmentReference colorAttachmentRef = {0};
+    colorAttachmentRef.attachment = 0;
+    colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpass = {0};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &colorAttachmentRef;
+
+    VkRenderPassCreateInfo renderPassInfo = {0};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = 1;
+    renderPassInfo.pAttachments = &colorAttachment;
+    renderPassInfo.subpassCount = 1;
+    renderPassInfo.pSubpasses = &subpass;
+
+    VkSubpassDependency dependency = {0};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = 0;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.srcAccessMask = 0;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    renderPassInfo.dependencyCount = 1;
+    renderPassInfo.pDependencies = &dependency;
+    if (vkCreateRenderPass(window.device, &renderPassInfo, NULL, &window.renderPass) != VK_SUCCESS) {
+        return 1;
+    }
+    return 0;
+}
+
+int CreateDescriptorSetLayout()
+{
+    VkDescriptorSetLayoutBinding uboLayoutBinding = {0};
+    uboLayoutBinding.binding = 0;
+    uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    uboLayoutBinding.descriptorCount = 1;
+    uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    uboLayoutBinding.pImmutableSamplers = NULL;
+
+    VkDescriptorSetLayoutBinding samplerLayoutBinding = {0};
+    samplerLayoutBinding.binding = 1;
+    samplerLayoutBinding.descriptorCount = 1;
+    samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    samplerLayoutBinding.pImmutableSamplers = NULL;
+    samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutBinding bindings[] = { uboLayoutBinding, samplerLayoutBinding };
+
+    VkDescriptorSetLayoutCreateInfo layoutInfo = {0};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = 2;
+    layoutInfo.pBindings = bindings;
+    if (vkCreateDescriptorSetLayout(window.device, &layoutInfo, NULL, &window.descriptorSetLayout) != VK_SUCCESS) 
+        return 1;
+    
+    return 0;
+}
+
+int CreateGraphicsPipeline()
+{
+    return 0;
+}
+
