@@ -1,4 +1,16 @@
+#pragma once
+
+#define GLFW_INCLUDE_NONE
+
+#ifdef APIENTRY
+#undef APIENTRY
+#endif
+
 #include "vulkan/vulkan.h" //delete this later
+#include "GLFW/glfw3.h"
+#include "GLFW/glfw3native.h"
+
+#include "stb_image/stb_image.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,6 +53,7 @@ typedef struct UniformBufferData {
     int testValue;
 } UniformBufferData;
 
-int IgnisSetupInternal(VkInstance* instance, VkSurfaceKHR* surface);
+int IgnisSetupInternal(VkInstance* instance, VkSurfaceKHR* surface, GLFWwindow* windowIn);
+void MainLoop();
 /////////////////////////////
 

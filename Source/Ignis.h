@@ -1,7 +1,16 @@
 #pragma once
 
+#define GLFW_INCLUDE_NONE
+
+#ifdef APIENTRY
+#undef APIENTRY
+#endif
+
+#include "vulkan/vulkan.h" // Vulkan header
+#include "GLFW/glfw3.h"
+#include "GLFW/glfw3native.h"
+
 #include <stdio.h>
-#include "vulkan/vulkan.h"
 
 #ifdef __cplusplus
 namespace ignis_internal 
@@ -10,7 +19,7 @@ namespace ignis_internal
 #endif
 
 
-	int IgnisSetup(VkInstance* instance, VkSurfaceKHR* surface);
+	void IgnisSetup(VkInstance* instance, VkSurfaceKHR* surface, GLFWwindow* windowIn);
 
 
 #ifdef __cplusplus
@@ -21,8 +30,8 @@ namespace ignis_internal
 #ifdef __cplusplus
 class Ignis {
 public:
-	static void IgnisSetup(VkInstance* instance, VkSurfaceKHR* surface) {
-		ignis_internal::IgnisSetup(instance, surface);
+	static void IgnisSetup(VkInstance* instance, VkSurfaceKHR* surface, GLFWwindow* windowIn) {
+		ignis_internal::IgnisSetup(instance, surface, windowIn);
 	}
 };
 #endif

@@ -31,7 +31,11 @@ set(VULKAN_SDK $ENV{VULKAN_SDK})
 target_include_directories(Ignis PRIVATE
     ${CMAKE_SOURCE_DIR}/Source
     ${VULKAN_SDK}/Include
+    ${CMAKE_SOURCE_DIR}/Dependencies
 )
 
 target_link_directories(Ignis PRIVATE ${VULKAN_SDK}/Lib)
-target_link_libraries(Ignis PRIVATE vulkan-1)
+target_link_libraries(Ignis PRIVATE 
+    vulkan-1
+    ${CMAKE_SOURCE_DIR}/Dependencies/GLFW/glfw3.lib
+)
