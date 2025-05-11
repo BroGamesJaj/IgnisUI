@@ -37,6 +37,10 @@ typedef struct Vertex {
     int textureIndex;
 } Vertex;
 
+typedef struct UniformBufferData {
+    int testValue;
+} UniformBufferData;
+
 int IgnisSetupInternal(VkInstance* instance, VkSurfaceKHR* surface);
 /////////////////////////////
 
