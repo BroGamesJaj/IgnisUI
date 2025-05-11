@@ -126,7 +126,7 @@ int drawFrame();
 
 int IgnisSetupInternal(VkInstance* instance, VkSurfaceKHR* surface, GLFWwindow* windowIn)
 {
-    printf("Start initing\n");
+    printf("Started initialization\n");
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++){
         totalVertexBufferSize[i] = 1000;
@@ -148,6 +148,8 @@ int IgnisSetupInternal(VkInstance* instance, VkSurfaceKHR* surface, GLFWwindow* 
         {{-0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}, 0}
     };
 
+    uint16_t nye[] = { 0, 2, 1, 0, 3, 2 };
+
     IRatAdd(&nya[0], &vertices[0]);
     IRatAdd(&nya[1], &vertices[0]);
     IRatAdd(&nya[2], &vertices[0]);
@@ -157,7 +159,6 @@ int IgnisSetupInternal(VkInstance* instance, VkSurfaceKHR* surface, GLFWwindow* 
     IRatAdd(&nya[2], &vertices[1]);
     IRatAdd(&nya[3], &vertices[1]);
 
-    uint16_t nye[] = { 0, 1, 2, 2, 3, 0 };
     indicies[0].data = nye;
     IRatCheckSize(&indicies[0]);
     indicies[1].data = nye;
@@ -170,32 +171,48 @@ int IgnisSetupInternal(VkInstance* instance, VkSurfaceKHR* surface, GLFWwindow* 
     if(!CheckValidationLayerSupport()) return 1;
     setupDebugMessenger();
 
-    PickPhysicalDevice();
-	CreateLogicalDevice();
+    int result = 0;
 
-    CreateSwapChain();
+    result = PickPhysicalDevice();
+    if(result) printf("PickPhysicalDevice error\n");
+	result = CreateLogicalDevice();
+    if(result) printf("CreateLogicalDevice error\n");
+    result = CreateSwapChain();
+    if(result) printf("CreateSwapChain error\n");
     CreateImageViews();
-    CreateRenderPass();
+    result = CreateRenderPass();
+    if(result) printf("CreateRenderPass error\n");
 
-    CreateDescriptorSetLayout();
+    result = CreateDescriptorSetLayout();
+    if(result) printf("CreateDescriptorSetLayout error\n");
+    result = CreateGraphicsPipeline();
+    if(result) printf("CreateGraphicsPipeline error\n");
+    result = CreateFramebuffers();
+    if(result) printf("CreateFramebuffers error\n");
+    result = CreateCommandPool();
+    if(result) printf("CreateCommandPool error\n");
+    result = CreateTextureImageView();
+    if(result) printf("CreateTextureImageView error\n");
+    result = CreateTextureSampler();
+    if(result) printf("CreateTextureSampler error\n");
+    result = CreateVertexBuffer();
+    if(result) printf("CreateVertexBuffer error\n");
+    result = CreateIndexBuffer();
+    if(result) printf("CreateIndexBuffer error\n");
+    result = CreateUniformBuffers();
+    if(result) printf("CreateUniformBuffers error\n");
 
-    CreateGraphicsPipeline();
+    result = CreateDescriptorPool();
+    if(result) printf("CreateDescriptorPool error\n");
+    result = CreateDescriptorSets();
+    if(result) printf("CreateDescriptorSets error\n");
 
-    CreateFramebuffers();
-    CreateCommandPool();
+    result = CreateCommandBuffers();
+    if(result) printf("CreateCommandBuffers error\n");
+    result = CreateSyncObjects();
+    if(result) printf("CreateSyncObjects error\n");
 
-    CreateTextureImageView();
-    CreateTextureSampler();
-
-    CreateVertexBuffer();
-    CreateIndexBuffer();
-    CreateUniformBuffers();
-
-    CreateDescriptorPool();
-    CreateDescriptorSets();
-
-    CreateCommandBuffers();
-    CreateSyncObjects();
+    printf("Finished initialization");
 
     return 0;
 }
@@ -204,7 +221,9 @@ void MainLoop()
 {
     while (!glfwWindowShouldClose(window.window)) {
         glfwPollEvents();
-        drawFrame();
+        if(drawFrame()){
+            printf("ajaj");
+        }
     }
     vkDeviceWaitIdle(window.device);
 }
@@ -996,7 +1015,7 @@ int CreateFramebuffers()
         IRatSet(&buffer, &window.swapChainFramebuffers, i);
     }
     IRatCheckSize(&window.swapChainFramebuffers);
-    return 1;
+    return 0;
 }
 
 int CreateCommandPool()
@@ -1066,6 +1085,10 @@ int CreateVertexBuffer()
         
         vkMapMemory(window.device, window.vertexBufferMemory[i], 0, 
             bufferSize, 0, &window.mappedVertexData[i]);
+
+        VkDeviceSize UpBufferSize = sizeof(Vertex) * vertices[i].Size;
+        memcpy((char*)window.mappedVertexData[i] + currentOffset[i],
+            vertices[i].data,UpBufferSize);
     }
 
     return 0;
@@ -1119,6 +1142,10 @@ int CreateIndexBuffer()
         
         vkMapMemory(window.device, window.indexBufferMemory[i], 0, 
             bufferSize, 0, &window.mappedIndexData[i]);
+        
+        VkDeviceSize UpBufferSize = sizeof(uint16_t) * indicies[i].Size;
+        memcpy((char*)window.mappedIndexData[i],
+            indicies[i].data,UpBufferSize);
     }
     return 0;
 }
@@ -1605,9 +1632,9 @@ int recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
     renderPassInfo.renderArea.offset.y = 0;
     renderPassInfo.renderArea.extent = window.swapChainExtent;
     VkClearValue clearColor = {0};
-    clearColor.color.float32[0] = 0.0f;
-    clearColor.color.float32[1] = 0.0f;
-    clearColor.color.float32[2] = 0.0f;
+    clearColor.color.float32[0] = 0.1f;
+    clearColor.color.float32[1] = 0.1f;
+    clearColor.color.float32[2] = 0.1f;
     clearColor.color.float32[3] = 1.0f;
     renderPassInfo.clearValueCount = 1;
     renderPassInfo.pClearValues = &clearColor;
