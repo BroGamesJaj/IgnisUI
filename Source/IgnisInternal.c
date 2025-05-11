@@ -119,7 +119,7 @@ int IRatFree(Rat* vector)
 }
 int IRatCheckSize(Rat* vector)
 {
-    if(!vector) return 1;
+    if (!vector || !vector->data) return 1;
 
     vector->Size = 0;
 
@@ -130,13 +130,13 @@ int IRatCheckSize(Rat* vector)
 
         for (size_t j = 0; j < vector->dSize; j++)
         {
-            if(*((unsigned char*)itemPtr+j) != 0)
+            if (*((unsigned char*)itemPtr + j) != 0)
             {
                 isNonZero = true;
                 break;
             }
-        }  
-        if(isNonZero) vector->Size++;
+        }
+        if (isNonZero) vector->Size++;
     }
 
     return 0;

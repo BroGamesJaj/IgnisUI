@@ -122,6 +122,7 @@ int CreateTextureImageView();
 int CreateTextureSampler();
 int CreateCommandBuffers();
 int CreateSyncObjects();
+int drawFrame();
 
 int IgnisSetupInternal(VkInstance* instance, VkSurfaceKHR* surface, GLFWwindow* windowIn)
 {
@@ -134,6 +135,33 @@ int IgnisSetupInternal(VkInstance* instance, VkSurfaceKHR* surface, GLFWwindow* 
 
     IRat(&window.textureImages, 0, sizeof(VkImage));
     IRat(&window.textureImageMemorys, 0, sizeof(VkDeviceMemory));
+
+    IRat(&vertices[0], 100, sizeof(Vertex));
+    IRat(&vertices[1], 100, sizeof(Vertex));
+    IRat(&indicies[0], 100, sizeof(uint16_t));
+    IRat(&indicies[1], 100, sizeof(uint16_t));
+
+    Vertex nya[] = {
+        {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}, 0},
+        {{ 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}, 0},
+        {{ 0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}, 0},
+        {{-0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}, 0}
+    };
+
+    IRatAdd(&nya[0], &vertices[0]);
+    IRatAdd(&nya[1], &vertices[0]);
+    IRatAdd(&nya[2], &vertices[0]);
+    IRatAdd(&nya[3], &vertices[0]);
+    IRatAdd(&nya[0], &vertices[1]);
+    IRatAdd(&nya[1], &vertices[1]);
+    IRatAdd(&nya[2], &vertices[1]);
+    IRatAdd(&nya[3], &vertices[1]);
+
+    uint16_t nye[] = { 0, 1, 2, 2, 3, 0 };
+    indicies[0].data = nye;
+    IRatCheckSize(&indicies[0]);
+    indicies[1].data = nye;
+    IRatCheckSize(&indicies[1]);
 
     window.instance = instance;
     window.surface = surface;
@@ -622,8 +650,9 @@ int CreateSwapChain()
         return 1;
     }
     vkGetSwapchainImagesKHR(window.device, window.swapChain, &imageCount, NULL);
-    IRat(&(window.swapChainImages), imageCount, sizeof(VkImage));
+    IRat(&window.swapChainImages, imageCount, sizeof(VkImage));
     vkGetSwapchainImagesKHR(window.device, window.swapChain, &imageCount, window.swapChainImages.data);
+    IRatCheckSize(&window.swapChainImages);
     window.swapChainImageFormat = surfaceFormat.format;
     window.swapChainExtent = extent;
 
@@ -652,7 +681,7 @@ VkImageView CreateImageView(VkImage image, VkFormat format)
 }
 void CreateImageViews() 
 {
-    IRatAlloc(&window.swapChainImageViews, window.swapChainImages.Size);
+    IRat(&window.swapChainImageViews, window.swapChainImages.Size, sizeof(VkImageView));
 
     for (uint32_t i = 0; i < window.swapChainImages.Size; i++) {
         VkImage image;
@@ -660,6 +689,7 @@ void CreateImageViews()
         VkImageView imageView = CreateImageView(image, window.swapChainImageFormat);
         IRatSet(&imageView, &window.swapChainImageViews, i);
     }
+    IRatCheckSize(&window.swapChainImageViews);
 }
 /////////////////////////////////
 int CreateRenderPass() 
@@ -965,7 +995,7 @@ int CreateFramebuffers()
         }
         IRatSet(&buffer, &window.swapChainFramebuffers, i);
     }
-
+    IRatCheckSize(&window.swapChainFramebuffers);
     return 1;
 }
 
@@ -1630,7 +1660,7 @@ int drawFrame()
     vkResetFences(window.device, 1, &window.inFlightFences[currentFrame]);
     vkResetCommandBuffer(window.commandBuffers[currentFrame], 0);
     recordCommandBuffer(window.commandBuffers[currentFrame], imageIndex);
-    updateUniformBuffer(currentFrame);
+    //updateUniformBuffer(currentFrame);
 
     VkSubmitInfo submitInfo = {0};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
