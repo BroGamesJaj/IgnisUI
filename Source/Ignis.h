@@ -70,6 +70,9 @@ public:
 #endif
 
 #ifdef __cplusplus
+
+struct InsertionProxy;
+
 class View : public UIElement {
 protected:
     ViewMode viewMode = IGNIS_VIEW_CONTINOUS;
