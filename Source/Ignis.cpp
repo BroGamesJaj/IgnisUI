@@ -45,10 +45,6 @@ typedef struct Element_C {
     void *ptr;
 } Element_C;
 
-typedef struct IgVec2_C {
-    int x, y;
-} IgVec2_C;
-
 typedef struct UIElement_C {
     int id;
     char* uid; 

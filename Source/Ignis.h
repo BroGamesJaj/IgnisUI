@@ -33,8 +33,11 @@ typedef enum {
 } Relatives;
 
 typedef struct Element_C Element_C;
-typedef struct IgVec2_C IgVec2_C;
+typedef struct IgVec2_C {
+    int x, y;
+} IgVec2_C;
 typedef struct UIElement_C UIElement_C;
+typedef struct View_C View_C;
 typedef struct MainView_C MainView_C;
 
 #ifdef __cplusplus
