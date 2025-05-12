@@ -61,4 +61,3 @@ int IgnisShutdownInternal();
 /////////////////////////////
 
 size_t ReadFile(const char* filename, char** buffer);
-

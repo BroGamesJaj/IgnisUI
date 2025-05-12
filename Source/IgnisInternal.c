@@ -113,7 +113,6 @@ int IRatFree(Rat* vector)
     if(!vector->data) return 1;
 
     free(vector->data);
-    vector->data = NULL;
 
     return 0;
 }

@@ -126,19 +126,18 @@ int IgnisSetupInternal(VkInstance* instance, VkSurfaceKHR* surface, GLFWwindow* 
 
     uint16_t nye[] = { 0, 2, 1, 0, 3, 2 };
 
-    IRatAdd(&nya[0], &vertices[0]);
-    IRatAdd(&nya[1], &vertices[0]);
-    IRatAdd(&nya[2], &vertices[0]);
-    IRatAdd(&nya[3], &vertices[0]);
-    IRatAdd(&nya[0], &vertices[1]);
-    IRatAdd(&nya[1], &vertices[1]);
-    IRatAdd(&nya[2], &vertices[1]);
-    IRatAdd(&nya[3], &vertices[1]);
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        IRatAdd(&nya[0], &vertices[i]);
+        IRatAdd(&nya[1], &vertices[i]);
+        IRatAdd(&nya[2], &vertices[i]);
+        IRatAdd(&nya[3], &vertices[i]);
 
-    indicies[0].data = nye;
-    IRatCheckSize(&indicies[0]);
-    indicies[1].data = nye;
-    IRatCheckSize(&indicies[1]);
+        for (size_t x = 0; x < 6; x++)
+        {
+            IRatAdd(&nye[x], &indicies[i]);
+        }
+    }
 
     window.instance = instance;
     window.surface = surface;
@@ -851,7 +850,7 @@ int UpdateTextureDescritorSets(int imageViewIndex)
 
     return 0;
 }
-///////////////////////////////
+////////////////////////////////
 
 
 ////// Render Management //////
@@ -1823,8 +1822,8 @@ int DestroyVulkanData()
 {
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
-        IRatFree(&vertices[i]);
-        IRatFree(&indicies[i]);
+        IRatFree(&(vertices[i]));
+        IRatFree(&(indicies[i]));
     }
 
     return 0;
