@@ -117,12 +117,19 @@ int CreateIndexBuffer();
 int CreateUniformBuffers();
 int_least64_t CreateDescriptorPool();
 int CreateDescriptorSets();
+int createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage* image, VkDeviceMemory* imageMemory);
 int CreateTextureImage(const char* fileName, VkImage* texture, VkDeviceMemory* textureMemory);
+int SetTextureIntoView(int viewIndex, VkImage imageToView);
+VkImageView createImageView(VkImage image, VkFormat format);
+int UpdateTextureDescritorSets(int imageViewIndex);
 int CreateTextureImageView();
 int CreateTextureSampler();
 int CreateCommandBuffers();
 int CreateSyncObjects();
 int drawFrame();
+
+VkImage monika;
+VkDeviceMemory monikaMemory;
 
 int IgnisSetupInternal(VkInstance* instance, VkSurfaceKHR* surface, GLFWwindow* windowIn)
 {
@@ -213,6 +220,10 @@ int IgnisSetupInternal(VkInstance* instance, VkSurfaceKHR* surface, GLFWwindow* 
     if(result) printf("CreateSyncObjects error\n");
 
     printf("Finished initialization");
+
+    CreateTextureImage("monika.png\0", &monika, &monikaMemory);
+    SetTextureIntoView(0, monika);
+    UpdateTextureDescritorSets(0);
 
     return 0;
 }
@@ -1071,6 +1082,7 @@ int createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFl
     return 0;
 }
 
+//////////Buffers/////////////
 int CreateVertexBuffer()
 {
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
@@ -1106,6 +1118,7 @@ void ResizeVertexBuffer(uint16_t frameIndex, VkDeviceSize newSize) {
 
     totalVertexBufferSize[frameIndex] = newSize;
 }
+//To change vertecies, set the data in vertices and set the vertexBufferChanged flag 
 void updateVertexBuffer() {
     if(vertexBufferChanged){
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
@@ -1160,6 +1173,7 @@ void ResizeIndexBuffer(uint16_t frameIndex, VkDeviceSize newSize) {
     vkMapMemory(window.device, window.indexBufferMemory[frameIndex], 0, newSize, 0, &window.mappedIndexData[frameIndex]);
     totalIndexBufferSize[frameIndex] = newSize;
 }
+//To change indicies, set the data in indicies and set the indexBufferChanged flag 
 void updateIndexBuffer() {
     if(indexBufferChanged){
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
@@ -1180,6 +1194,7 @@ void updateIndexBuffer() {
     }
 }
 
+//does not use uniform buffer at the moment
 int CreateUniformBuffers()
 {
     VkDeviceSize bufferSize = sizeof(UniformBufferData);
@@ -1196,6 +1211,7 @@ void updateUniformBuffer(uint32_t currentImage) {
     UniformBufferData ubo = {0};
     memcpy(window.uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
 }
+//////////////////////////////
 
 int_least64_t CreateDescriptorPool() {
     VkDescriptorPoolSize poolSizes[2] = {0};
@@ -1284,7 +1300,7 @@ int CreateDescriptorSets() {
     return 0;
 }
 
-int UpdateTextureDescritorSets(int targetIndex, int imageViewIndex)
+int UpdateTextureDescritorSets(int imageViewIndex)
 {
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
@@ -1298,7 +1314,7 @@ int UpdateTextureDescritorSets(int targetIndex, int imageViewIndex)
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = window.descriptorSets[i],
             .dstBinding = 1,
-            .dstArrayElement = targetIndex,
+            .dstArrayElement = imageViewIndex,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .pImageInfo = &newImageInfo,
@@ -1438,25 +1454,6 @@ int createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling 
 
     return 0;
 }
-
-VkImageView createImageView(VkImage image, VkFormat format) {
-    VkImageViewCreateInfo viewInfo = {0};
-    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    viewInfo.image = image;
-    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    viewInfo.format = format;
-    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    viewInfo.subresourceRange.baseMipLevel = 0;
-    viewInfo.subresourceRange.levelCount = 1;
-    viewInfo.subresourceRange.baseArrayLayer = 0;
-    viewInfo.subresourceRange.layerCount = 1;
-    VkImageView imageView;
-    if (vkCreateImageView(window.device, &viewInfo, NULL, &imageView) != VK_SUCCESS) {
-        printf("ImageView creation failed");
-    }
-    return imageView;
-}
-
 int CreateTextureImage(const char* fileName, VkImage* texture, VkDeviceMemory* textureMemory) // be nullterminated
 {
     int texWidth, texHeight, texChannels;
@@ -1483,7 +1480,32 @@ int CreateTextureImage(const char* fileName, VkImage* texture, VkDeviceMemory* t
 
     return 0;
 }
+int SetTextureIntoView(int viewIndex, VkImage imageToView)
+{
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        window.textureImageViews[i][viewIndex] = createImageView(imageToView, VK_FORMAT_R8G8B8A8_SRGB);
+    }
+    return 0;
+}
 
+VkImageView createImageView(VkImage image, VkFormat format) {
+    VkImageViewCreateInfo viewInfo = {0};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image = image;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format = format;
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount = 1;
+    VkImageView imageView;
+    if (vkCreateImageView(window.device, &viewInfo, NULL, &imageView) != VK_SUCCESS) {
+        printf("ImageView creation failed");
+    }
+    return imageView;
+}
 int CreateTextureImageView()
 {
     uint8_t whitePixel[4] = { 0, 255, 255, 255 };
