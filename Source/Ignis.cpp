@@ -1,5 +1,7 @@
 #include "Ignis.h"
+extern "C" {
 #include "IgnisInternal.h"
+}
 #include <threads.h>
 
 typedef struct {
@@ -106,6 +108,7 @@ View::View(IgVec2 pos, IgVec2 size, ViewMode viewMode, Relatives relative)
     this->size = size;
     this->viewMode = viewMode;
     this->relative = relative;
+    this->vElements.clear();
 }
 InsertionProxy View::operator[](size_t index)
 {
@@ -113,7 +116,7 @@ InsertionProxy View::operator[](size_t index)
 }
 View& View::operator<<(const UIElement el) 
 {
-    elements.push_back(el);
+    vElements.push_back(el);
     return *this;
 }
 View_C* View::ToC(Element_C parent) const 
@@ -137,13 +140,13 @@ View_C* View::ToC(Element_C parent) const
     kh_val(cache, k) = (UIElement_C*)view;
 
     IRat(&view->elements, 1, sizeof(Element_C));
-    for (size_t i = 0; i < elements.size(); i++)
+    for (size_t i = 0; i < vElements.size(); i++)
     {
         Element_C element;
-        int elementId = elements[i].id;
+        int elementId = vElements[i].id;
         khiter_t k = kh_get(cPointers, cache, elementId);
         if (k != kh_end(cache)) {
-            element.type = elements[i].type;
+            element.type = vElements[i].type;
             element.ptr = kh_val(cache, k);
         }
         else {
@@ -151,13 +154,13 @@ View_C* View::ToC(Element_C parent) const
             parent.ptr = view;
             parent.type = type;
 
-            if(elements[i].type == IGNIS_TYPE_UIELEMENT){
+            if(vElements[i].type == IGNIS_TYPE_UIELEMENT){
                 element.type = IGNIS_TYPE_UIELEMENT;
-                element.ptr = elements[i].ToC(parent);
+                element.ptr = vElements[i].ToC(parent);
             }
-            else if(elements[i].type == IGNIS_TYPE_VIEW){
+            else if(vElements[i].type == IGNIS_TYPE_VIEW){
                 element.type = IGNIS_TYPE_VIEW;
-                element.ptr = (*(View*)&elements[i]).ToC(parent);
+                element.ptr = (*(View*)&vElements[i]).ToC(parent);
             }
         }
 
@@ -203,27 +206,27 @@ MainView_C* MainView::ToC() const
     kh_val(cache, k) = (UIElement_C*)view;
 
     IRat(&view->base.elements, 1, sizeof(Element_C));
-    for (size_t i = 0; i < elements.size(); i++)
+    for (size_t i = 0; i < vElements.size(); i++)
     {
         Element_C element;
-        int elementId = elements[i].id;
+        int elementId = vElements[i].id;
         khiter_t k = kh_get(cPointers, cache, elementId);
         if (k != kh_end(cache)) {
             element.ptr = kh_val(cache, k);
-            element.type = elements[i].type;
+            element.type = vElements[i].type;
         }
         else {
             Element_C parent;
             parent.ptr = view;
             parent.type = type;
 
-            if(elements[i].type == IGNIS_TYPE_UIELEMENT){
+            if(vElements[i].type == IGNIS_TYPE_UIELEMENT){
                 element.type = IGNIS_TYPE_UIELEMENT;
-                element.ptr = elements[i].ToC(parent);
+                element.ptr = vElements[i].ToC(parent);
             }
-            else if(elements[i].type == IGNIS_TYPE_VIEW){
+            else if(vElements[i].type == IGNIS_TYPE_VIEW){
                 element.type = IGNIS_TYPE_VIEW;
-                element.ptr = (*(View*)&elements[i]).ToC(parent);
+                element.ptr = (*(View*)&vElements[i]).ToC(parent);
             }
         }
 
@@ -234,7 +237,7 @@ MainView_C* MainView::ToC() const
 }
 
 #endif
-
+extern "C" {
 MainView_C* root;
 
 void PrintData(){
@@ -256,5 +259,7 @@ void SetMainView(MainView_C* mainView)
 {
     root = mainView;
     PrintData();
+}
+
 }
 

@@ -78,7 +78,7 @@ protected:
     ViewMode viewMode = IGNIS_VIEW_CONTINOUS;
     Relatives relative = IGNIS_RELATIVE_VIEW;
 public:
-    std::vector<UIElement> elements;
+    std::vector<UIElement> vElements;
 
     View() = default;
     View(IgVec2 pos, IgVec2 size, ViewMode viewMode, Relatives relative = IGNIS_RELATIVE_NONE);
@@ -95,14 +95,14 @@ struct InsertionProxy {
 
     void operator--(int)
     {
-        view.elements.erase(view.elements.begin()+index);
+        view.vElements.erase(view.vElements.begin()+index);
     }
 
     InsertionProxy& operator<<(const UIElement el){
-        if (index >= view.elements.size()) {
-            view.elements.resize(index + 1);
+        if (index >= view.vElements.size()) {
+            view.vElements.resize(index + 1);
         }
-        view.elements.insert(view.elements.begin() + index + 1, el);
+        view.vElements.insert(view.vElements.begin() + index + 1, el);
         index++;
         return *this;
     }
@@ -118,7 +118,8 @@ public:
 
 
 #ifdef __cplusplus
-namespace ignis_internal{extern "C" {
+namespace ignis_internal{
+	extern "C" {
 #endif
 
 	void IgnisSetup(VkInstance* instance, VkSurfaceKHR* surface, GLFWwindow* windowIn);
@@ -126,7 +127,8 @@ namespace ignis_internal{extern "C" {
 	void LoadView();
 
 #ifdef __cplusplus
-}}
+	}
+}
 #endif
 
 
