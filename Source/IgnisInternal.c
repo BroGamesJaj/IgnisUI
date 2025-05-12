@@ -164,3 +164,55 @@ int IRatEmpty(bool* isEmpty, Rat* vector)
 }
 /////////////////////////////
 
+VkVertexInputBindingDescription GetBindingDescription() 
+{
+    VkVertexInputBindingDescription bindingDescription = {0};
+    bindingDescription.binding = 0;
+    bindingDescription.stride = sizeof(Vertex);
+    bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    return bindingDescription;
+}
+void GetAttributeDescriptions(VkVertexInputAttributeDescription* out) 
+{
+    out[0].binding = 0;
+    out[0].location = 0;
+    out[0].format = VK_FORMAT_R32G32_SFLOAT;
+    out[0].offset = offsetof(Vertex, pos);
+
+    out[1].binding = 0;
+    out[1].location = 1;
+    out[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+    out[1].offset = offsetof(Vertex, color);
+
+    out[2].binding = 0;
+    out[2].location = 2;
+    out[2].format = VK_FORMAT_R32G32_SFLOAT;
+    out[2].offset = offsetof(Vertex, uv);
+
+    out[3].binding = 0;
+    out[3].location = 3;
+    out[3].format = VK_FORMAT_R32_SINT;
+    out[3].offset = offsetof(Vertex, textureIndex);
+}
+
+size_t ReadFile(const char* filename, char** buffer) 
+{
+    FILE* file = fopen(filename, "rb");
+    if (!file) return 0;
+
+    fseek(file, 0, SEEK_END);
+    size_t fileSize = ftell(file);
+    rewind(file);
+
+    *buffer = (char*)malloc(fileSize);
+    if (!*buffer) {
+        fclose(file);
+        return 0;
+    }
+
+    fread(*buffer, 1, fileSize, file);
+    fclose(file);
+
+    return fileSize;
+}
+

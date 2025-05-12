@@ -38,4 +38,5 @@ void IgnisSetup(VkInstance* instance, VkSurfaceKHR* surface, GLFWwindow* windowI
     */
     IgnisSetupInternal(instance, surface, windowIn);
     MainLoop();
+    IgnisShutdownInternal();
 }

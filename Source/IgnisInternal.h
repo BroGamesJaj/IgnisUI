@@ -48,6 +48,8 @@ typedef struct Vertex {
     float uv[2];
     int textureIndex;
 } Vertex;
+VkVertexInputBindingDescription GetBindingDescription();
+void GetAttributeDescriptions(VkVertexInputAttributeDescription* out);
 
 typedef struct UniformBufferData {
     int testValue;
@@ -55,5 +57,8 @@ typedef struct UniformBufferData {
 
 int IgnisSetupInternal(VkInstance* instance, VkSurfaceKHR* surface, GLFWwindow* windowIn);
 void MainLoop();
+int IgnisShutdownInternal();
 /////////////////////////////
+
+size_t ReadFile(const char* filename, char** buffer);
 
