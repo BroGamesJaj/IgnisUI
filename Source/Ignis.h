@@ -70,6 +70,20 @@ public:
 #endif
 
 #ifdef __cplusplus
+class View : public UIElement {
+protected:
+    ViewMode viewMode = IGNIS_VIEW_CONTINOUS;
+    Relatives relative = IGNIS_RELATIVE_VIEW;
+public:
+    std::vector<UIElement> elements;
+
+    View() = default;
+    View(IgVec2 pos, IgVec2 size, ViewMode viewMode, Relatives relative = IGNIS_RELATIVE_NONE);
+    InsertionProxy operator[](size_t index);
+    View& operator<<(const UIElement el);
+	View_C* ToC(Element_C parent) const;
+};
+
 struct InsertionProxy {
     View& view;
     int index;
@@ -89,20 +103,6 @@ struct InsertionProxy {
         index++;
         return *this;
     }
-};
-
-class View : public UIElement {
-protected:
-    ViewMode viewMode = IGNIS_VIEW_CONTINOUS;
-    Relatives relative = IGNIS_RELATIVE_VIEW;
-public:
-    std::vector<UIElement> elements;
-
-    View() = default;
-    View(IgVec2 pos, IgVec2 size, ViewMode viewMode, Relatives relative = IGNIS_RELATIVE_NONE);
-    InsertionProxy operator[](size_t index);
-    View& operator<<(const UIElement el);
-	View_C* ToC(Element_C parent) const;
 };
 
 class MainView : public View {
