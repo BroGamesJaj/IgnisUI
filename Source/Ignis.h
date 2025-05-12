@@ -33,6 +33,10 @@ typedef enum {
 } Relatives;
 
 typedef struct Element_C Element_C;
+typedef struct Element{
+	UIElementType type;
+	void* ptr;
+} Element;
 typedef struct IgVec2_C {
     int x, y;
 } IgVec2_C;
@@ -78,7 +82,8 @@ protected:
     ViewMode viewMode = IGNIS_VIEW_CONTINOUS;
     Relatives relative = IGNIS_RELATIVE_VIEW;
 public:
-    std::vector<UIElement> vElements;
+    std::vector<Element> vElements;
+	int elementCount = 0;
 
     View() = default;
     View(IgVec2 pos, IgVec2 size, ViewMode viewMode, Relatives relative = IGNIS_RELATIVE_NONE);
@@ -102,8 +107,15 @@ struct InsertionProxy {
         if (index >= view.vElements.size()) {
             view.vElements.resize(index + 1);
         }
-        view.vElements.insert(view.vElements.begin() + index + 1, el);
+		Element toVt;
+		toVt.type = el.type;
+		if(toVt.type == IGNIS_TYPE_VIEW){
+			toVt.ptr = new View;
+			*((View*)toVt.ptr) = *(View*)&el;
+		}
+        view.vElements.insert(view.vElements.begin() + index + 1, toVt);
         index++;
+		view.elementCount++;
         return *this;
     }
 };

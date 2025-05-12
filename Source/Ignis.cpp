@@ -116,7 +116,14 @@ InsertionProxy View::operator[](size_t index)
 }
 View& View::operator<<(const UIElement el) 
 {
-    vElements.push_back(el);
+    Element toVt;
+	toVt.type = el.type;
+	if(toVt.type == IGNIS_TYPE_VIEW){
+		toVt.ptr = new View;
+		*((View*)toVt.ptr) = *(View*)&el;
+	}
+    vElements.push_back(toVt);
+    elementCount++;
     return *this;
 }
 View_C* View::ToC(Element_C parent) const 
@@ -140,10 +147,10 @@ View_C* View::ToC(Element_C parent) const
     kh_val(cache, k) = (UIElement_C*)view;
 
     IRat(&view->elements, 1, sizeof(Element_C));
-    for (size_t i = 0; i < vElements.size(); i++)
+    for (size_t i = 0; i < elementCount; i++)
     {
         Element_C element;
-        int elementId = vElements[i].id;
+        int elementId = (*(UIElement*)vElements[i].ptr).id;
         khiter_t k = kh_get(cPointers, cache, elementId);
         if (k != kh_end(cache)) {
             element.type = vElements[i].type;
@@ -156,11 +163,11 @@ View_C* View::ToC(Element_C parent) const
 
             if(vElements[i].type == IGNIS_TYPE_UIELEMENT){
                 element.type = IGNIS_TYPE_UIELEMENT;
-                element.ptr = vElements[i].ToC(parent);
+                element.ptr = (*(UIElement*)vElements[i].ptr).ToC(parent);
             }
             else if(vElements[i].type == IGNIS_TYPE_VIEW){
                 element.type = IGNIS_TYPE_VIEW;
-                element.ptr = (*(View*)&vElements[i]).ToC(parent);
+                element.ptr = (*(View*)vElements[i].ptr).ToC(parent);
             }
         }
 
@@ -209,7 +216,7 @@ MainView_C* MainView::ToC() const
     for (size_t i = 0; i < vElements.size(); i++)
     {
         Element_C element;
-        int elementId = vElements[i].id;
+        int elementId = (*(UIElement*)vElements[i].ptr).id;
         khiter_t k = kh_get(cPointers, cache, elementId);
         if (k != kh_end(cache)) {
             element.ptr = kh_val(cache, k);
@@ -222,11 +229,11 @@ MainView_C* MainView::ToC() const
 
             if(vElements[i].type == IGNIS_TYPE_UIELEMENT){
                 element.type = IGNIS_TYPE_UIELEMENT;
-                element.ptr = vElements[i].ToC(parent);
+                element.ptr = (*(UIElement*)vElements[i].ptr).ToC(parent);
             }
             else if(vElements[i].type == IGNIS_TYPE_VIEW){
                 element.type = IGNIS_TYPE_VIEW;
-                element.ptr = (*(View*)&vElements[i]).ToC(parent);
+                element.ptr = (*(View*)vElements[i].ptr).ToC(parent);
             }
         }
 
