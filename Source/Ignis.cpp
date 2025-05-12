@@ -69,7 +69,7 @@ int currentElementId = 0;
 #ifdef __cplusplus
 
 extern "C" {
-#include "khash.h"
+#include "khash/khash.h"
 }
 
 KHASH_MAP_INIT_INT(cPointers, UIElement_C*)
@@ -98,7 +98,7 @@ UIElement_C* UIElement::ToC(Element_C parent) const
 }
 
 
-View::View(IgVec2 pos, IgVec2 size, ViewMode viewMode, Relatives relative = IGNIS_RELATIVE_NONE) 
+View::View(IgVec2 pos, IgVec2 size, ViewMode viewMode, Relatives relative) 
 {
     this->id = currentElementId++;
     this->type = IGNIS_TYPE_VIEW;
@@ -167,7 +167,7 @@ View_C* View::ToC(Element_C parent) const
     return view;  
 }
 
-MainView::MainView(ViewMode viewMode, Relatives relative = IGNIS_RELATIVE_NONE) 
+MainView::MainView(ViewMode viewMode, Relatives relative) 
 {
     this->id = currentElementId++;
     this->type = IGNIS_TYPE_MAINVIEW;

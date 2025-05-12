@@ -41,17 +41,17 @@ typedef struct View_C View_C;
 typedef struct MainView_C MainView_C;
 
 #ifdef __cplusplus
-typedef struct IgVec2{
+struct IgVec2 {
     int x, y;
     IgVec2() = default;
     IgVec2(int xIn, int yIn) : x(xIn), y(yIn) {}
 
-	IgVec2_C ToC() const {
-		IgVec2_C out;
-		out.x = x;
-		out.y = y;
-		return out;
-	}
+    IgVec2_C ToC() const {
+        IgVec2_C out;
+        out.x = x;
+        out.y = y;
+        return out;
+    }
 };
 #endif
 
