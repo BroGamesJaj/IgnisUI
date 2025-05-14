@@ -42,25 +42,6 @@ void IgnisSetup(VkInstance* instance, VkSurfaceKHR* surface, GLFWwindow* windowI
 
 
 
-typedef struct UIElement_C {
-    int id;
-    char* uid; 
-    IgVec2_C position;
-    IgVec2_C size;
-    Element_C father;
-} UIElement_C;
-
-typedef struct View_C {
-    UIElement_C base;
-    ViewMode viewMode;
-    Relatives relative;
-    Rat/*Element_C*/ elements; 
-} View_C;
-
-typedef struct MainView_C {
-    View_C base;
-} MainView_C;
-
 int currentElementId = 0;
 
 MainView_C* root;

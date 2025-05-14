@@ -32,6 +32,8 @@ typedef enum {
     IGNIS_RELATIVE_VIEW
 } Relatives;
 
+typedef struct Rat Rat;
+
 typedef struct Element_C{
 	UIElementType type;
 	void* ptr;
@@ -39,9 +41,22 @@ typedef struct Element_C{
 typedef struct IgVec2_C {
     int x, y;
 } IgVec2_C;
-typedef struct UIElement_C UIElement_C;
-typedef struct View_C View_C;
-typedef struct MainView_C MainView_C;
+typedef struct UIElement_C {
+    int id;
+    char* uid; 
+    IgVec2_C position;
+    IgVec2_C size;
+    Element_C father;
+} UIElement_C;
+typedef struct View_C {
+    UIElement_C base;
+    ViewMode viewMode;
+    Relatives relative;
+    Rat/*Element_C*/ elements; 
+} View_C;
+typedef struct MainView_C {
+    View_C base;
+} MainView_C;
 
 #ifdef __cplusplus
 struct IgVec2 {
@@ -87,7 +102,7 @@ protected:
     ViewMode viewMode = IGNIS_VIEW_CONTINOUS;
     Relatives relative = IGNIS_RELATIVE_VIEW;
 public:
-    std::vector<Element> vElements;
+    std::vector<Element_C> vElements;
 	int elementCount = 0;
 
     View() = default;
@@ -105,7 +120,7 @@ public:
         return InsertionProxy(*this, index);
     }
     View& operator<<(const UIElement* el) {
-        Element toVt;
+        Element_C toVt;
         toVt.type = (*el).type;
         if(toVt.type == IGNIS_TYPE_VIEW){
             toVt.ptr = new View(*(View*)el);

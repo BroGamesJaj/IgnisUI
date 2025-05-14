@@ -1,15 +1,12 @@
 cmake_minimum_required(VERSION 3.20)
-project(Ignis C CXX)
+project(Ignis C)
 
 set(CMAKE_C_STANDARD 17)
-set(CMAKE_CXX_STANDARD 17)
 
 set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 file(GLOB_RECURSE SOURCES 
     "${CMAKE_SOURCE_DIR}/Source/*.c"
-    "${CMAKE_SOURCE_DIR}/Source/*.cpp"
 )
 
 if(MSVC)
