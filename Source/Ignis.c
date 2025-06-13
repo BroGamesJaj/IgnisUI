@@ -1,4 +1,4 @@
-#include "Ignis.h"
+#include "Ignis.hpp"
 #include "IgnisInternal.h"
 #include <threads.h>
 
@@ -41,26 +41,52 @@ void IgnisSetup(VkInstance* instance, VkSurfaceKHR* surface, GLFWwindow* windowI
 }
 
 
+typedef struct ElementData {
+    void* ptr;
+    UIElementType type;
+} ElementData;
+
+typedef struct Element {
+    int id;
+    IgVec2 pos;
+    IgVec2 size;
+    Element* father;
+    char* uid;
+    int uidSize;
+} Element;
+
+typedef struct View {
+    Element base;
+    ViewMode viewMode;
+    Relatives relative;
+    Rat* elements; 
+} View;
+typedef struct MainView {
+    Element base;
+} MainView;
 
 int currentElementId = 0;
+MainView* root;
 
-MainView_C* root;
 
+/*
 void PrintData(){
-    printf("Root size: %zd\n", root->base.elements.Size);
-    for (size_t i = 0; i < root->base.elements.Size; i++)
+    printf("Root size: %zd\n", root->base.elements->Size);
+    for (size_t i = 0; i < root->base.elements->Size; i++)
     {
-        Element_C current;
-        IRatGet(&current, &root->base.elements, i);
+        Element current;
+        IRatGet(&current, root->base.elements, i);
         if(current.type == IGNIS_TYPE_VIEW){
-            View_C view = *(View_C*)current.ptr;
+            View view = *(View*)current.ptr;
             printf("Element type: %d, id: %d\n", current.type, view.base.id);
         }
     }
     
 }
+*/
 
-void SetMainView(MainView_C* mainView)
+
+void SetMainView(MainView* mainView)
 {
     root = mainView;
     PrintData();
