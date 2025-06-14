@@ -72,12 +72,12 @@ IgVec2 maxSizeRatio;
 IgVec2 origin = {0};
 
 
-/*
+
 void PrintData(){
     printf("Root size: %zd\n", root->base.elements->Size);
     for (size_t i = 0; i < root->base.elements->Size; i++)
     {
-        Element current;
+        ElementData current;
         IRatGet(&current, root->base.elements, i);
         if(current.type == IGNIS_TYPE_VIEW){
             View view = *(View*)current.ptr;
@@ -86,7 +86,6 @@ void PrintData(){
     }
     
 }
-*/
 
 UIElementType ElementGetType(ElementData* e)
 {
