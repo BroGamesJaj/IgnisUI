@@ -170,7 +170,6 @@ public:
     MainView(ElementData* e) : View(e) {} 
 };
 
-namespace{
 UIElement* ElementFromData(ElementData* e){
     if(ElementGetType(e) == IGNIS_TYPE_MAINVIEW){
         return new MainView(e);
@@ -182,7 +181,7 @@ UIElement* ElementFromData(ElementData* e){
         return new UIElement(e);
     }
 }
-}
+
 ///////////////////////
 #endif
 
