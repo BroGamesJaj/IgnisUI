@@ -301,8 +301,11 @@ void ViewInsertElement(ElementData* e, ElementData* elementToAdd, int index){
     }
 }
 
-void SetMainView(MainView* mainView)
+void SetMainView(ElementData* mainView)
 {
-    root = mainView;
-    PrintData();
+    if(mainView->type == IGNIS_TYPE_MAINVIEW){
+        root = (MainView*)mainView->ptr;
+        PrintData();
+    }
+
 }

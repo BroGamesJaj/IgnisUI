@@ -192,7 +192,7 @@ namespace ignis_internal{
 #endif
 
 	void IgnisSetup(VkInstance* instance, VkSurfaceKHR* surface, GLFWwindow* windowIn);
-	void SetMainView(struct MainView* mainView);
+	void SetMainView(struct ElementData* mainView);
 	void LoadView();
 
 #ifdef __cplusplus
@@ -207,8 +207,8 @@ public:
 	static void IgnisSetup(VkInstance* instance, VkSurfaceKHR* surface, GLFWwindow* windowIn) {
 		ignis_internal::IgnisSetup(instance, surface, windowIn);
 	}
-	static void SetMainView(struct MainView* mainView){
-		ignis_internal::SetMainView(mainView);
+	static void SetMainView(MainView* mainView){
+		ignis_internal::SetMainView(mainView->GetData());
     }
 	static void LoadView(){
 		ignis_internal::LoadView();
