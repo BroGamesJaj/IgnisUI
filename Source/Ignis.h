@@ -99,7 +99,23 @@ void ViewInsertElement(ElementData* e, ElementData* elementToAdd, int index);
 UIElement* ElementFromData(ElementData* e);
 }
 
-struct InsertionProxy;
+struct InsertionProxy {
+    View& view;
+    int index;
+
+    InsertionProxy(View& v, int i) : view(v), index(i) {}
+
+    void operator--(int)
+    {
+        view.RemoveElement(index);
+    }
+
+    InsertionProxy& operator<<(UIElement* el){
+        view.InsertElement(index, el);
+        return *this;
+    }
+};
+
 class View : public UIElement {
 public:
     std::vector<UIElement*> elements;
@@ -142,23 +158,6 @@ public:
     View& operator<<(UIElement* element) {
         elements.push_back(element);
         ViewAddElement(data, element->GetData());
-        return *this;
-    }
-};
-
-struct InsertionProxy {
-    View& view;
-    int index;
-
-    InsertionProxy(View& v, int i) : view(v), index(i) {}
-
-    void operator--(int)
-    {
-        view.RemoveElement(index);
-    }
-
-    InsertionProxy& operator<<(UIElement* el){
-        view.InsertElement(index, el);
         return *this;
     }
 };
