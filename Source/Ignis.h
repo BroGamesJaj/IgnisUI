@@ -46,7 +46,6 @@ typedef struct MainView MainView;
 #ifdef __cplusplus
 
 ////// Elements ///////
-namespace {
 ElementData* ElementCreate(IgVec2 pos, IgVec2 size);
 UIElementType ElementGetType(ElementData* e);
 void ElementDestroy(ElementData* e);
@@ -56,7 +55,7 @@ IgVec2* ElementGetSize(ElementData* e);
 
 ElementData* ViewCreate(IgVec2 pos, IgVec2 size, ViewMode viewMode, Relatives relative);
 ElementData* MainViewCreate(ViewMode mode, Relatives relative);
-}
+
 
 class UIElement {
 protected:
@@ -84,8 +83,6 @@ protected:
 };
 
 //////// Views ////////
-namespace {
-
 void ViewDestroy(ElementData* e);
 void MainViewDestroy(ElementData* e);
 ViewMode ViewGetViewMode(ElementData* e);
@@ -97,7 +94,7 @@ void ViewDeleteElement(ElementData* e, int index);
 void ViewInsertElement(ElementData* e, ElementData* elementToAdd, int index);
 
 UIElement* ElementFromData(ElementData* e);
-}
+
 
 struct InsertionProxy;
 
@@ -138,7 +135,7 @@ public:
     }
 
     InsertionProxy operator[](size_t index);
-    
+
     View& operator<<(UIElement* element) {
         elements.push_back(element);
         ViewAddElement(data, element->GetData());
