@@ -39,6 +39,8 @@ int IRatPopFirst(Rat* vector);
 int IRatFree(Rat* vector);
 int IRatCheckSize(Rat* vector);
 int IRatEmpty(bool* isEmpty, Rat* vector);
+int IRatInsert(int index, void* value, Rat* vector);
+void IRatPrint(Rat* vector);
 /////////////////////////////
 
 ///////////Vulkan////////////

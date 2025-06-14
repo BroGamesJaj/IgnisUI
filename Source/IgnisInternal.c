@@ -113,6 +113,7 @@ int IRatFree(Rat* vector)
     if(!vector->data) return 1;
 
     free(vector->data);
+    free(vector);
 
     return 0;
 }
@@ -160,6 +161,50 @@ int IRatEmpty(bool* isEmpty, Rat* vector)
     }
 
     return 0;
+}
+int IRatInsert(int index, void* value, Rat* vector)
+{
+    if (!vector || index < 0 || index >= vector->Size) return 1;
+
+    if (index == vector->Size - 1) return IRatAdd(value, vector);
+
+    if (vector->Size+1 >= vector->capacity) IRatAlloc(vector, vector->capacity); 
+
+    vector->Size++;
+
+    for (int i = vector->Size-1; i > index + 1; i--) {
+        void* value = NULL;
+        IRatGet(value, vector, i-1);
+        IRatSet(value, vector, i);
+    }
+
+    IRatSet(value, vector, index+1);
+
+    return 0;
+}
+void IRatPrint(Rat* vector)
+{
+    char* result = malloc(1);
+    result[0] = '\0';
+    int len = 0;
+
+    for (int i = 0; i < vector->Size; i++)
+    {
+        char temp[128];
+
+        void* val = NULL;
+        IRatGet(val, vector, i);
+
+        snprintf(temp, sizeof(temp), "%p\n", val);
+
+        int addLen = strlen(temp);
+        result = realloc(result, len + addLen + 1);
+        strcpy(result + len, temp);
+        len += addLen;
+    }
+
+    printf("%s", result);
+    free(result);
 }
 /////////////////////////////
 

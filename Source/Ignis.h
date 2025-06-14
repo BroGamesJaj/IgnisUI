@@ -10,8 +10,8 @@
 #ifdef __cplusplus
 #include <vector>
 #else 
-#define IgVec2_C IgVec2
-#define UIElement_C UIElement
+//#define IgVec2_C IgVec2
+//#define UIElement_C UIElement
 #endif
 
 
@@ -39,16 +39,24 @@ typedef struct IgVec2 {
 } IgVec2;
 
 typedef struct ElementData ElementData;
+typedef struct Element Element;
+typedef struct View View;
+typedef struct MainView MainView;
 
 #ifdef __cplusplus
 
 ////// Elements ///////
-ElementData* ElementCreate();
+namespace {
+ElementData* ElementCreate(IgVec2 pos, IgVec2 size);
 UIElementType ElementGetType(ElementData* e);
 void ElementDestroy(ElementData* e);
 int ElementGetId(ElementData* e);
 IgVec2* ElementGetPos(ElementData* e);
 IgVec2* ElementGetSize(ElementData* e);
+
+ElementData* ViewCreate(IgVec2 pos, IgVec2 size, ViewMode viewMode, Relatives relative);
+ElementData* MainViewCreate(ViewMode mode, Relatives relative);
+}
 
 class UIElement {
 protected:
@@ -58,30 +66,38 @@ public:
     IgVec2& position;
     IgVec2& size;
 
-    UIElement() : data(ElementCreate()), id(ElementGetId(data)),
-    position(*ElementGetPos(data)), size(*ElementGetSize(data)){}
-
-    UIElement(ElementData* inData) : data(inData), id(ElementGetId(data)),
-    position(*ElementGetPos(data)), size(*ElementGetSize(data)){}
-
-    ~UIElement()  {ElementDestroy(data);}
-
     ElementData* GetData() const { return data; }
+
+    UIElement(ElementData* e) : data(e), id(ElementGetId(data)), 
+    position(*ElementGetPos(data)), size(*ElementGetSize(data)) {}  
+protected:
+    UIElement(IgVec2 posIn, IgVec2 sizeIn) : data(ElementCreate(posIn, sizeIn)), id(ElementGetId(data)), 
+    position(*ElementGetPos(data)), size(*ElementGetSize(data)) {}
+
+    //View
+    UIElement(IgVec2 posIn, IgVec2 sizeIn, ViewMode mode, Relatives relative) : data(ViewCreate(posIn, sizeIn, mode, relative)),  id(ElementGetId(data)), 
+    position(*ElementGetPos(data)), size(*ElementGetSize(data)) {}
+
+    //MainView
+    UIElement(ViewMode mode, Relatives relative) : data(MainViewCreate(mode, relative)),  id(ElementGetId(data)), 
+    position(*ElementGetPos(data)), size(*ElementGetSize(data)) {}
 };
 
 //////// Views ////////
-ElementData* ViewCreate(IgVec2 pos, IgVec2 size, ViewMode viewMode, Relatives relative);
+namespace {
+
 void ViewDestroy(ElementData* e);
+void MainViewDestroy(ElementData* e);
 ViewMode ViewGetViewMode(ElementData* e);
 Relatives ViewGetRelative(ElementData* e);
 ElementData** ViewGetElements(ElementData* e);
 int ViewGetElementsCount(ElementData* e);
-UIElement* ElementFromData(ElementData* e);
 void ViewAddElement(ElementData* e, ElementData* elementToAdd);
 void ViewDeleteElement(ElementData* e, int index);
 void ViewInsertElement(ElementData* e, ElementData* elementToAdd, int index);
 
-ElementData* MainViewCreate(ViewMode viewMode, Relatives relative);
+UIElement* ElementFromData(ElementData* e);
+}
 
 struct InsertionProxy;
 class View : public UIElement {
@@ -91,10 +107,8 @@ public:
     const Relatives relatives;
 
     View(IgVec2 pos, IgVec2 size, ViewMode viewModeIn, Relatives relativeIn = IGNIS_RELATIVE_NONE) : 
-        viewMode(viewModeIn), relatives(relativeIn) {
-        data = ViewCreate(pos, size, viewModeIn, relativeIn);
-    }
-    View(ElementData* dataIn) : viewMode(ViewGetViewMode(dataIn)), relatives(ViewGetRelative(dataIn)){
+        viewMode(viewModeIn), relatives(relativeIn), UIElement(pos, size, viewModeIn, relativeIn) {}
+    View(ElementData* dataIn) : viewMode(ViewGetViewMode(dataIn)), relatives(ViewGetRelative(dataIn)), UIElement(dataIn){
         data = dataIn;
         ElementData** childs = ViewGetElements(data);
         int childCount = ViewGetElementsCount(data);
@@ -104,9 +118,7 @@ public:
         }
     }
     View(ViewMode viewModeIn, Relatives relativeIn = IGNIS_RELATIVE_NONE) : 
-        viewMode(viewModeIn), relatives(relativeIn) {
-        data = MainViewCreate(viewModeIn, relativeIn);
-    }
+        viewMode(viewModeIn), relatives(relativeIn), UIElement(viewModeIn, relativeIn) {}
 
     void AddElement(UIElement* element){
         elements.push_back(ElementFromData(element->GetData()));
@@ -133,6 +145,7 @@ public:
         return *this;
     }
 };
+
 struct InsertionProxy {
     View& view;
     int index;
@@ -150,12 +163,25 @@ struct InsertionProxy {
     }
 };
 
-void ViewDestroy(ElementData* e);
-
 class MainView : public View {
 public:
     MainView(ViewMode viewModeIn, Relatives relativeIn = IGNIS_RELATIVE_NONE) : View(viewModeIn, relativeIn) {}
+    MainView(ElementData* e) : View(e) {} 
 };
+
+namespace{
+UIElement* ElementFromData(ElementData* e){
+    if(ElementGetType(e) == IGNIS_TYPE_MAINVIEW){
+        return new MainView(e);
+    }
+    else if(ElementGetType(e) == IGNIS_TYPE_VIEW){
+        return new View(e);
+    }
+    else if(ElementGetType(e) == IGNIS_TYPE_UIELEMENT){
+        return new UIElement(e);
+    }
+}
+}
 ///////////////////////
 #endif
 
@@ -166,7 +192,7 @@ namespace ignis_internal{
 #endif
 
 	void IgnisSetup(VkInstance* instance, VkSurfaceKHR* surface, GLFWwindow* windowIn);
-	void SetMainView(MainView* mainView);
+	void SetMainView(struct MainView* mainView);
 	void LoadView();
 
 #ifdef __cplusplus
@@ -181,8 +207,8 @@ public:
 	static void IgnisSetup(VkInstance* instance, VkSurfaceKHR* surface, GLFWwindow* windowIn) {
 		ignis_internal::IgnisSetup(instance, surface, windowIn);
 	}
-	static void SetMainView(MainView mainView){
-		ignis_internal::SetMainView(&mainView);
+	static void SetMainView(struct MainView* mainView){
+		ignis_internal::SetMainView(mainView);
     }
 	static void LoadView(){
 		ignis_internal::LoadView();
