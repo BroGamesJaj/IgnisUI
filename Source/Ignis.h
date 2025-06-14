@@ -44,6 +44,8 @@ typedef struct View View;
 typedef struct MainView MainView;
 
 #ifdef __cplusplus
+extern "C" {
+#endif
 
 ////// Elements ///////
 ElementData* ElementCreate(IgVec2 pos, IgVec2 size);
@@ -56,6 +58,24 @@ IgVec2* ElementGetSize(ElementData* e);
 ElementData* ViewCreate(IgVec2 pos, IgVec2 size, ViewMode viewMode, Relatives relative);
 ElementData* MainViewCreate(ViewMode mode, Relatives relative);
 
+//////// Views ////////
+void ViewDestroy(ElementData* e);
+void MainViewDestroy(ElementData* e);
+ViewMode ViewGetViewMode(ElementData* e);
+Relatives ViewGetRelative(ElementData* e);
+ElementData** ViewGetElements(ElementData* e);
+int ViewGetElementsCount(ElementData* e);
+void ViewAddElement(ElementData* e, ElementData* elementToAdd);
+void ViewDeleteElement(ElementData* e, int index);
+void ViewInsertElement(ElementData* e, ElementData* elementToAdd, int index);
+
+#ifdef __cplusplus
+}
+#endif
+
+
+
+#ifdef __cplusplus
 
 class UIElement {
 protected:
@@ -82,21 +102,8 @@ protected:
     position(*ElementGetPos(data)), size(*ElementGetSize(data)) {}
 };
 
-//////// Views ////////
-void ViewDestroy(ElementData* e);
-void MainViewDestroy(ElementData* e);
-ViewMode ViewGetViewMode(ElementData* e);
-Relatives ViewGetRelative(ElementData* e);
-ElementData** ViewGetElements(ElementData* e);
-int ViewGetElementsCount(ElementData* e);
-void ViewAddElement(ElementData* e, ElementData* elementToAdd);
-void ViewDeleteElement(ElementData* e, int index);
-void ViewInsertElement(ElementData* e, ElementData* elementToAdd, int index);
-
-UIElement* ElementFromData(ElementData* e);
-
-
 struct InsertionProxy;
+UIElement* ElementFromData(ElementData* e);
 
 class View : public UIElement {
 public:
