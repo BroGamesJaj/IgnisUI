@@ -124,3 +124,6 @@ packages/
 #additions
 IgnisLib/Output/*.lib
 IgnisLib/Output/*.a
+
+
+IgnisTester/Output/
