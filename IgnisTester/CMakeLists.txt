@@ -4,6 +4,9 @@ project(IgnisTester CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Make clangd happy
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 file(GLOB_RECURSE SOURCES "${CMAKE_SOURCE_DIR}/Source/*.cpp")
 add_subdirectory(../IgnisLib IgnisLibBuild)
 add_executable(IgnisTester ${SOURCES} "Dependencies/IgnisLib.h")
@@ -25,7 +28,6 @@ else()
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(GLFW REQUIRED glfw3)
     find_package(Vulkan REQUIRED)
-    set(GLFW_LIB ${GLFW_LIBRARIES})
     set(VULKAN_LIB Vulkan::Vulkan)
 endif()
 
