@@ -1,6 +1,126 @@
-/build/
-.vscode/
-.vs/
-*.exe
+## -------------------------------
+## Visual Studio & Build Artifacts
+## -------------------------------
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build results
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+[Bb]uild/
+x64/
+x86/
+ARM*/
+[Aa][Rr][Mm]64/
+ipch/
+
+# Intermediate files
+*.obj
+*.pch
 *.pdb
-*.lib
+*.idb
+*.ipdb
+*.iobj
+*.tmp
+*.log
+*.tlog
+*.lastbuildstate
+*.cache
+*.sdf
+*.db
+*.opendb
+
+# Static and dynamic libraries
+# *.lib
+*.a
+*.lo
+*.lai
+*.la
+*.dll
+*.so
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
+*.ipa
+
+# Generated files
+*.manifest
+*.res
+*.rc
+*.rsp
+
+# Auto-generated Visual Studio folders
+.vs/
+.ReSharper*/
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+
+# Crash dumps
+*.dmp
+
+# Profiling
+*.psess
+*.vsp
+*.vspx
+*.sap
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Testing/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+build/
+
+# Packages
+*.nupkg
+*.snupkg
+*.nuspec
+*.psmdcp
+.packages/
+packages/
+
+# Backup & Misc
+*.bak
+*.old
+*.orig
+*.tmp
+*.log
+*.swp
+*.swo
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# JetBrains Rider
+.idea/
+
+# Ignore local configuration files
+*.local
+*.env
+
+# Engine specific
+*.generated.h
+*.generated.cpp
+*.unity
+*.ipdb
+*.iobj
+
+#additions
+IgnisLib/Output/*.lib
+IgnisLib/Output/*.a
