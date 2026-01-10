@@ -5,7 +5,6 @@
 
 #define NOMINMAX
 
-#include <unordered_map>
 #include <filesystem>
 
 #define GLFW_INCLUDE_VULKAN

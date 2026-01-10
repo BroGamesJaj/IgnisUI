@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <fstream>
 #include <array>
+#include <string>
+#include <unordered_map>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -19,56 +21,54 @@ struct GLFWmonitor;
 
 namespace Ignis {
 
-
-
-    struct Vertex {
-        glm::vec3 pos;
-        glm::vec3 color;
-        glm::vec2 texCoord;
-        glm::uint texId; 
-    };
-
-    struct Window {
-        GLFWwindow* ptr;
-    };
-
-    struct CreateRenderPassInfo {
-        enum class Samples { x1, x2, x4, x8 };
-        enum class LoadOp { Clear, Load, DontCare };
-        enum class StoreOp { Store, DontCare };
-        enum class ImageLayout { Undefined, PresentSrcKHR };
-
-        Samples samples = Samples::x1;
-        LoadOp loadOp = LoadOp::Clear;
-        StoreOp storeOp = StoreOp::Store;
-        LoadOp stencilLoadOp = LoadOp::DontCare;
-        StoreOp stencilStoreOp = StoreOp::DontCare;
-        ImageLayout initialLayout = ImageLayout::Undefined;
-        ImageLayout finalLayout = ImageLayout::PresentSrcKHR;
-    };
-
-    struct CreateGraphicPipeLineInfo {
-        std::string vertexShader;
-        std::string fragmentShader;
-        std::string geometryShader;
-        
-        //it should have so much else, like
-        //multisampling, vertex setup, stuff like that
-    };
-
-    struct UIRenderData {
-        std::vector<Vertex> vertecies;
-        std::vector<uint32_t> indicies;
-        int surface;
-        bool changed = true;
-    };
-
-
     class Vulkan;
 
     class Render
     {
     public:
+        //Rendering structs
+        struct Vertex {
+            glm::vec3 pos;
+            glm::vec3 color;
+            glm::vec2 texCoord;
+            glm::uint texId;
+        };
+
+        struct Window {
+            GLFWwindow* ptr;
+        };
+
+        struct CreateRenderPassInfo {
+            enum class Samples { x1, x2, x4, x8 };
+            enum class LoadOp { Clear, Load, DontCare };
+            enum class StoreOp { Store, DontCare };
+            enum class ImageLayout { Undefined, PresentSrcKHR };
+
+            Samples samples = Samples::x1;
+            LoadOp loadOp = LoadOp::Clear;
+            StoreOp storeOp = StoreOp::Store;
+            LoadOp stencilLoadOp = LoadOp::DontCare;
+            StoreOp stencilStoreOp = StoreOp::DontCare;
+            ImageLayout initialLayout = ImageLayout::Undefined;
+            ImageLayout finalLayout = ImageLayout::PresentSrcKHR;
+        };
+
+        struct CreateGraphicPipeLineInfo {
+            std::string vertexShader;
+            std::string fragmentShader;
+            std::string geometryShader;
+
+            //it should have so much else, like
+            //multisampling, vertex setup, stuff like that
+        };
+
+        struct UIRenderData {
+            std::vector<Vertex> vertecies;
+            std::vector<uint32_t> indicies;
+            int surface;
+            bool changed = true;
+        };
+
         Render(bool debugging);
         ~Render();
     
@@ -86,17 +86,72 @@ namespace Ignis {
         friend class UI;
 
         int AddUIElementData(UIRenderData& data);
+
+        struct ProcessData {
+            Vec2 offset;
+            Vec2 size;
+
+            std::vector<Vertex> vertecies;
+            std::vector<uint32_t> indicies;
+        };
     };
 
     class UI {
     public:
+        struct Vec2 {
+            float x;
+            float y;
+        };
+
+        struct Color {
+            char r;
+            char g;
+            char b;
+        };
+
+        struct Element {
+            Vec2 position;
+            Vec2 size;
+            int id;
+
+            virtual ~Element() = default;
+        };
+
+        struct Text : Element {
+            std::string text;
+        };
+
+        struct Image : Element {
+            int textureId;
+            Color color;
+        };
+
+        struct Button : Element {
+            Text text;
+        };
+
+        struct View : Element {
+            std::vector<Element> elements;
+
+            void Add(Element& element) {
+                elements.push_back(element);
+            }
+
+            void Pop(Element& element) {
+                auto it = std::find_if(elements.begin(), elements.end(),
+                    [element](const Element& e) { return e.id == element.id;});
+                if (it != elements.end()) {
+                    elements.erase(it);
+                }
+            }
+        };
+        
+
         static inline void SetRender(Render* render) { renderInstance = render; }
 
         static inline void SetMainSurface(int surface) { mainSurface = surface; }
 
-        static inline int CreateButton() { return CreateButton(mainSurface); }
-
-        static int CreateButton(int surface) {
+        static int CreateButton(int surface = mainSurface) {
             if (!renderInstance) {
                 throw std::runtime_error("Render for UI has not been set");
             }
@@ -105,27 +160,32 @@ namespace Ignis {
                 throw std::runtime_error("Invalid surface for UI element");
             }
 
-            UIRenderData data;
-            data.vertecies = {
-                {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0}},
-                {{ 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {0}},
-                {{ 0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {0}},
-                {{-0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {0}}
+            Render::UIRenderData data{
+                .vertecies = {
+                    {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0}},
+                    {{ 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {0}},
+                    {{ 0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {0}},
+                    {{-0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {0}}
+                },
+                .indicies = { 
+                        0, 2, 1, 3, 2, 0
+                },
+                .surface = surface,
+                .changed = true,
             };
-            data.indicies = {
-                0, 2, 1, 3, 2, 0
-            };
-
-            data.surface = surface;
-            data.changed = true;
 
             return renderInstance->AddUIElementData(data);
         }
 
+        static void AddToSurface(Element& element, int surface = mainSurface);
+
+        static void SubmitSurface(int surface = mainSurface);
+
     private:
         static Render* renderInstance;
         static int mainSurface;
+        static std::unordered_map<int, std::vector<Element>> elements;
 
+        static Render::ProcessData ProcessVertecies(Render::ProcessData data, std::vector<Element>& elements);
     };
 }
-

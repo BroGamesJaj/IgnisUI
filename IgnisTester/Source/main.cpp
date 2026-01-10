@@ -24,6 +24,8 @@ int main() {
 	Ignis::UI::SetMainSurface(surface);
 	Ignis::UI::CreateButton();
 
+	Ignis::UI::Button button;
+
 	while (surfaces.size() != 0)
 	{
 		renderer.Event();
