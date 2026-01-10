@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 file(GLOB_RECURSE SOURCES "${CMAKE_SOURCE_DIR}/Source/*.cpp")
 add_subdirectory(../IgnisLib IgnisLibBuild)
-add_executable(IgnisTester ${SOURCES} "Dependencies/IgnisLib.h")
+add_executable(IgnisTester ${SOURCES} )
 
 set(outputDir ${CMAKE_SOURCE_DIR}/Output)
 set_target_properties(IgnisTester PROPERTIES

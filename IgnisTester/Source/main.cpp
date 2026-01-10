@@ -1,7 +1,7 @@
 #define GLFW_INCLUDE_VULKAN
 #include "glfw3.h"
 
-#include "IgnisLib.h"
+#include "../../IgnisLib/Source/IgnisLib.h"
 
 int main() {
 	std::vector<int> surfaces;
@@ -17,6 +17,8 @@ int main() {
 	Ignis::Window window1 = renderer.CreateAppWindow(500, 400, "Gup 1");
 	int surface = renderer.CreateSurface(window1, gpInfo);
 	surfaces.push_back(surface);
+
+	renderer.CreateTexture("../Resources/Textures/monikaTexture.jpg");
 
 	Ignis::UI::SetRender(&renderer);
 	Ignis::UI::SetMainSurface(surface);

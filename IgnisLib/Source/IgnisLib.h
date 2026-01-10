@@ -25,7 +25,7 @@ namespace Ignis {
         glm::vec3 pos;
         glm::vec3 color;
         glm::vec2 texCoord;
-        //glm::uint texId; 
+        glm::uint texId; 
     };
 
     struct Window {
@@ -60,7 +60,7 @@ namespace Ignis {
         std::vector<Vertex> vertecies;
         std::vector<uint32_t> indicies;
         int surface;
-        bool changed;
+        bool changed = true;
     };
 
 
@@ -74,7 +74,7 @@ namespace Ignis {
     
         Window CreateAppWindow(int width, int height, const char* title, GLFWmonitor* screen = nullptr, GLFWwindow* share = nullptr);
         int CreateSurface(Window window, CreateGraphicPipeLineInfo graphicPipeLineInfo, CreateRenderPassInfo renderPassInfo = {});
-        int CreateTexture();
+        int CreateTexture(std::string path);
 
         void Draw(int surface);
         void Event();
@@ -107,10 +107,10 @@ namespace Ignis {
 
             UIRenderData data;
             data.vertecies = {
-                {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-                {{ 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-                {{ 0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-                {{-0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
+                {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0}},
+                {{ 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {0}},
+                {{ 0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {0}},
+                {{-0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {0}}
             };
             data.indicies = {
                 0, 2, 1, 3, 2, 0

@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 file(GLOB_RECURSE SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/Source/*.cpp")
-add_library(Ignis STATIC ${SOURCES})
+add_library(Ignis STATIC ${SOURCES} "Source/UI.cpp")
 
 set(outputDir ${CMAKE_SOURCE_DIR}/Output)
 set_target_properties(Ignis PROPERTIES
