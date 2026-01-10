@@ -1,0 +1,3 @@
+[submodule "IgnisLib/Dependencies/glm"]
+	path = IgnisLib/Dependencies/glm
+	url = git@github.com:BroGamesJaj/glm.git
