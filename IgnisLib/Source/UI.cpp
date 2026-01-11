@@ -101,11 +101,11 @@ namespace Ignis {
 	Color& UI::GetColor(UIData* data) {
 		switch (data->type) {
 		case IMAGE:
-			return static_cast<ImageData*>(data->ptr)->color;
+			return static_cast<ImageData*>(data->ptr)->base.color;
 		case VIEW:
-			return static_cast<ViewData*>(data->ptr)->color;
+			return static_cast<ViewData*>(data->ptr)->base.color;
 		case BUTTON:
-			return static_cast<ButtonData*>(data->ptr)->color;
+			return static_cast<ButtonData*>(data->ptr)->base.color;
 		default:
 			throw std::runtime_error("Coudn't access color of the passed in data");
 		}
@@ -114,11 +114,11 @@ namespace Ignis {
 	int& UI::GetTexture(UIData* data) {
 		switch (data->type) {
 		case IMAGE:
-			return static_cast<ImageData*>(data->ptr)->textureId;
+			return static_cast<ImageData*>(data->ptr)->base.textureId;
 		case VIEW:
-			return static_cast<ViewData*>(data->ptr)->textureId;
+			return static_cast<ViewData*>(data->ptr)->base.textureId;
 		case BUTTON:
-			return static_cast<ButtonData*>(data->ptr)->textureId;
+			return static_cast<ButtonData*>(data->ptr)->base.textureId;
 		default:
 			throw std::runtime_error("Coudn't access texture of the passed in data");
 		}
@@ -216,15 +216,22 @@ namespace Ignis {
 	Render::UIRenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<Element>& elements) {
 		Render::UIRenderData returnData;
 
+		int additionIndex = 0;
+
 		for (auto& element : elements) {
-			/*
-			UIVertexData vertexData = GenerateVertecies(data.ofst.)
+			Vec2 elementSize = { data.size.x / 100 * element.size.x , data.size.y / 100 * element.size.y };
+			Vec2 elementOffset = { data.size.x / 100 * element.position.x, data.size.y / 100 * element.position.y };
+
+
+			UI::ProcessData calcData{ .ofst{data.size + elementSize}, .size{data.ofst + elementOffset} };
+
+			UI::UIVertexData vertexData = GenerateVertecies(calcData, element.textureId, element.color);
 
 			returnData.vertecies.insert(
 				returnData.vertecies.end(),
-				element.vertecies.begin(),
-				element.vertecies.end()
-			);*/
+				vertexData.vertecies.begin(),
+				vertexData.vertecies.end()
+			);
 		}
 
 		return returnData;

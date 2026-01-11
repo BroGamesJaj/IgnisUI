@@ -97,6 +97,11 @@ namespace Ignis {
 
             float x;
             float y;
+
+            Vec2 operator+(Vec2 other) {
+                this->x += other.x;
+                this->y += other.y;
+            }
         };
 
         struct Color {
@@ -128,6 +133,8 @@ namespace Ignis {
         struct ElementData {
             Vec2 position;
             Vec2 size;
+            int textureId;
+            Color color;
         };
 
         struct TextData {
@@ -137,23 +144,19 @@ namespace Ignis {
 
         struct ImageData {
             ElementData base;
-            int textureId;
-            Color color;
         };
 
         class Element;
 
         struct ViewData {
             ElementData base;
-            int textureId;
-            Color color;
             std::vector<Element> elements;
         };
 
         class Element {
         public:
             Element(UIType type) : data(CreateData(type)),
-                position(GetPosition(data)), size(GetSize(data)), id(nextId++) {}
+                position(GetPosition(data)), size(GetSize(data)), id(nextId++), textureId(GetTexture(data)), color(GetColor(data)) {}
 
             Vec2& position;
             Vec2& size;
@@ -167,6 +170,8 @@ namespace Ignis {
         protected:
             const int id;
             UIData* data;
+            int& textureId;
+            Color& color;
 
             friend class UI;
         };
@@ -182,6 +187,8 @@ namespace Ignis {
                 this->position = position;
                 this->size = size;
                 this->text = text;
+                this->textureId = -1;
+                this->color = Color{ (char)255, (char)255, (char)255 };
             }
 
             std::string& text;
@@ -192,8 +199,6 @@ namespace Ignis {
     private:
         struct ButtonData {
             ElementData base;
-            int textureId;
-            Color color;
             void* function;
             Text text;
         };
@@ -203,7 +208,7 @@ namespace Ignis {
         class Image : public Element {
         public:
             Image(Vec2 position, Vec2 size, std::optional<int> textureId, std::optional<Color> color) 
-                : Element(IMAGE), textureId(GetTexture(data)), color(GetColor(data)) {
+                : Element(IMAGE) {
 
                 if (textureId.has_value())
                     this->textureId = textureId.value();
@@ -222,15 +227,12 @@ namespace Ignis {
                 this->size = size;
             }
 
-            int& textureId;
-            Color& color;
-
             friend class UI;
         };
 
         class View : public Element {
             View(Vec2 position, Vec2 size, std::optional<int> textureId, std::optional<Color> color)
-                : Element(VIEW), textureId(GetTexture(data)), color(GetColor(data)), elements(GetChildrens(data)) {
+                : Element(VIEW), elements(GetChildrens(data)) {
                 if (textureId.has_value())
                     this->textureId = textureId.value();
                 else
@@ -243,8 +245,6 @@ namespace Ignis {
             }
 
             std::vector<Element>* elements;
-            int& textureId;
-            Color& color;
 
             void Add(Element& element) {
                 elements->push_back(element);
@@ -258,7 +258,7 @@ namespace Ignis {
 
         class Button : public Element {
             Button(Vec2 position, Vec2 size, void* function, std::optional<Text>& text, std::optional<int> textureId, std::optional<Color> color)
-                : Element(BUTTON), function(GetFunction(data)), text(GetTextElement(data)), textureId(GetTexture(data)), color(GetColor(data)) {
+                : Element(BUTTON), function(GetFunction(data)), text(GetTextElement(data)) {
                 if (text.has_value())
                     Bind(this->text, text.value());
 
@@ -278,8 +278,6 @@ namespace Ignis {
 
             Text& text;
             void*& function;
-            int& textureId;
-            Color& color;
 
             friend class UI;
         };
