@@ -13,12 +13,12 @@ namespace Ignis {
 	void UI::SubmitSurface(int surface) {
 		if (!elements.contains(surface)) return;
 
-		Render::ProcessData data{.offset{0,0},.size{100,100}};
+		//UI::ProcessData data{.offset{0,0},.size{100,100}};
 
-		ProcessVertecies(data, elements[surface]);
+		//ProcessVertecies(data, elements[surface]);
 	}
 
-	Render::ProcessData UI::ProcessVertecies(Render::ProcessData data, std::vector<Element>& elements) {
+	UI::ProcessData UI::ProcessVertecies(UI::ProcessData data, std::vector<Element>& elements) {
 
 		for (auto& element : elements) {
 		}
@@ -28,5 +28,6 @@ namespace Ignis {
 
 	int UI::mainSurface = -1;
 	Render* UI::renderInstance = nullptr;
+	int UI::nextId = 0;
 }
 

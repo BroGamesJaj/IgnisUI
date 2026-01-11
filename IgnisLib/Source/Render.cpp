@@ -14,6 +14,12 @@
 
 namespace Ignis {
 
+	using Vertex = Render::Vertex;
+	using CreateRenderPassInfo = Render::CreateRenderPassInfo;
+	using CreateGraphicPipeLineInfo = Render::CreateGraphicPipeLineInfo;
+	using UIRenderData = Render::UIRenderData;
+	using Window = Render::Window;
+
 	//need to align to the 16bit grid if it will go into a shader
 	struct UniformBufferObject {
 		alignas(16) glm::mat4 model;

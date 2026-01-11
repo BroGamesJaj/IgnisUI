@@ -86,22 +86,47 @@ namespace Ignis {
         friend class UI;
 
         int AddUIElementData(UIRenderData& data);
-
-        struct ProcessData {
-            Vec2 offset;
-            Vec2 size;
-
-            std::vector<Vertex> vertecies;
-            std::vector<uint32_t> indicies;
-        };
     };
 
     class UI {
     public:
         struct Vec2 {
+            Vec2() : x(0), y(0) {}
+
             float x;
             float y;
         };
+    private:
+        enum UIType {
+            TEXT,
+            BUTTON,
+            IMAGE,
+            VIEW
+        };
+
+        struct UIData{
+            void* ptr;
+            UIType type;
+        };
+
+        struct ElementData {
+            ElementData(Vec2 position, Vec2 size, int id) 
+                : position(position), size(size) {}
+
+            Vec2 position;
+            Vec2 size;
+        };
+
+        struct TextData {
+            TextData(Vec2 position, Vec2 size, int id, std::string text) 
+                : base(position,size,id), text(text) {}
+
+            ElementData base;
+            std::string text;
+        };
+
+        static int nextId;
+    public:
 
         struct Color {
             char r;
@@ -109,28 +134,39 @@ namespace Ignis {
             char b;
         };
 
-        struct Element {
-            Vec2 position;
-            Vec2 size;
-            int id;
+        class Element {
+        public:
+            Element(Vec2 position, Vec2 size, std::string text) : data(CreateTextData(position, size, text)),
+                position(*GetPosition(data)), size(*GetSize(data)), id(nextId++){}
+
+            Vec2& position;
+            Vec2& size;
 
             virtual ~Element() = default;
+
+        protected:
+            const int id;
+            UIData* data;
         };
 
-        struct Text : Element {
-            std::string text;
+        class Text : Element {
+
+            Text(Vec2 position, Vec2 size, std::string text) 
+                : Element(position, size, text), text(*GetText(data)) {}
+
+            std::string& text;
         };
 
-        struct Image : Element {
+        class Image : Element {
             int textureId;
             Color color;
         };
 
-        struct Button : Element {
+        class Button : Element {
             Text text;
         };
 
-        struct View : Element {
+        class View : Element {
             std::vector<Element> elements;
 
             void Add(Element& element) {
@@ -138,12 +174,22 @@ namespace Ignis {
             }
 
             void Pop(Element& element) {
+                /*
                 auto it = std::find_if(elements.begin(), elements.end(),
                     [element](const Element& e) { return e.id == element.id;});
                 if (it != elements.end()) {
                     elements.erase(it);
                 }
+                */
             }
+        };
+
+        struct ProcessData {
+            Vec2 offset;
+            Vec2 size;
+
+            std::vector<Render::Vertex> vertecies;
+            std::vector<uint32_t> indicies;
         };
         
 
@@ -186,6 +232,12 @@ namespace Ignis {
         static int mainSurface;
         static std::unordered_map<int, std::vector<Element>> elements;
 
-        static Render::ProcessData ProcessVertecies(Render::ProcessData data, std::vector<Element>& elements);
+        static ProcessData ProcessVertecies(ProcessData data, std::vector<Element>& elements);
+
+        static Vec2* GetPosition(UIData* data);
+        static Vec2* GetSize(UIData* data);
+        static std::string* GetText(UIData* data);
+
+        static UIData* CreateTextData(Vec2 position, Vec2 size, std::string text);
     };
 }
