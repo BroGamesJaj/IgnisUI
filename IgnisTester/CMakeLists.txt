@@ -24,6 +24,7 @@ if (WIN32)
     target_include_directories(IgnisTester PRIVATE
         $ENV{VULKAN_SDK}/Include
     )
+    target_link_directories(IgnisTester PRIVATE ${CMAKE_SOURCE_DIR}/Dependencies)
 else()
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(GLFW REQUIRED glfw3)

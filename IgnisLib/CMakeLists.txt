@@ -21,10 +21,7 @@ set_target_properties(Ignis PROPERTIES
 if (WIN32)
     target_include_directories(Ignis PRIVATE
         $ENV{VULKAN_SDK}/Include
-    )
-    target_link_libraries(Ignis PRIVATE
-        $ENV{VULKAN_SDK}/Lib/vulkan-1.lib
-        glfw3
+        ${CMAKE_CURRENT_SOURCE_DIR}/Dependencies
     )
 else()
     find_package(PkgConfig REQUIRED)
@@ -39,5 +36,6 @@ endif()
 
 target_include_directories(Ignis PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}/Dependencies
+    ${CMAKE_CURRENT_SOURCE_DIR}/Dependencies/glm
 )
 
