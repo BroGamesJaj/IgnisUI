@@ -19,6 +19,7 @@ set_target_properties(Ignis PROPERTIES
 )
 
 if (WIN32)
+    target_compile_options(Ignis PRIVATE /permissive-)
     target_include_directories(Ignis PRIVATE
         $ENV{VULKAN_SDK}/Include
         ${CMAKE_CURRENT_SOURCE_DIR}/Dependencies

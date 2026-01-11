@@ -10,6 +10,7 @@
 #include <array>
 #include <string>
 #include <unordered_map>
+#include <optional>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -96,6 +97,18 @@ namespace Ignis {
             float x;
             float y;
         };
+
+        struct Color {
+            Color(char r, char g, char b) 
+                : r(r), g(g), b(b) {}
+
+            Color() = default;
+
+            char r;
+            char g;
+            char b;
+        };
+
     private:
         enum UIType {
             TEXT,
@@ -105,83 +118,182 @@ namespace Ignis {
         };
 
         struct UIData{
+            UIData(void* ptr, UIType type);
+
             void* ptr;
             UIType type;
         };
 
         struct ElementData {
-            ElementData(Vec2 position, Vec2 size, int id) 
-                : position(position), size(size) {}
-
             Vec2 position;
             Vec2 size;
         };
 
         struct TextData {
-            TextData(Vec2 position, Vec2 size, int id, std::string text) 
-                : base(position,size,id), text(text) {}
-
             ElementData base;
             std::string text;
         };
 
-        static int nextId;
-    public:
+        struct ImageData {
+            ElementData base;
+            int textureId;
+            Color color;
+        };
 
-        struct Color {
-            char r;
-            char g;
-            char b;
+        class Element;
+
+        struct ViewData {
+            ElementData base;
+            int textureId;
+            Color color;
+            std::vector<Element> elements;
         };
 
         class Element {
         public:
-            Element(Vec2 position, Vec2 size, std::string text) : data(CreateTextData(position, size, text)),
-                position(*GetPosition(data)), size(*GetSize(data)), id(nextId++){}
+            Element(UIType type) : data(CreateData(type)),
+                position(GetPosition(data)), size(GetSize(data)), id(nextId++) {}
 
             Vec2& position;
             Vec2& size;
 
-            virtual ~Element() = default;
+            ~Element() {
+                DeleteData(data);
+            }
+
+            bool Valid() { return data; }
+
+            Element& operator=(const Element& other) {
+                if (this == &other) return *this;
+
+                *this->data = *other.data;
+
+                return *this;
+            }
 
         protected:
             const int id;
             UIData* data;
         };
 
+    public:
+
         class Text : Element {
+        public:
+            Text() : Element(TEXT), text(GetText(data)) {}
 
             Text(Vec2 position, Vec2 size, std::string text) 
-                : Element(position, size, text), text(*GetText(data)) {}
+                : Element(TEXT), text(GetText(data)) {
+                this->position = position;
+                this->size = size;
+                this->text = text;
+            }
+
+            Text& operator=(const Text& other) {
+                if (this == &other) return *this;
+
+                delete static_cast<TextData*>(data->ptr);
+
+                *this->data = *other.data;
+                this->position = GetPosition(this->data);
+                this->size = GetSize(this->data);
+                this->text = GetText(this->data);
+                //the other objects (with the old data) variables does not point to the new place yet
+
+
+                return *this;
+            }
 
             std::string& text;
         };
 
-        class Image : Element {
+    private:
+        struct ButtonData {
+            ElementData base;
             int textureId;
             Color color;
-        };
-
-        class Button : Element {
+            void* function;
             Text text;
         };
 
-        class View : Element {
-            std::vector<Element> elements;
+    public:
+
+        class Image : public Element {
+        public:
+            Image(Vec2 position, Vec2 size, std::optional<int> textureId, std::optional<Color> color) 
+                : Element(IMAGE), textureId(GetTexture(data)), color(GetColor(data)) {
+
+                if (textureId.has_value())
+                    this->textureId = textureId.value();
+                else
+                    this->textureId = -1;
+
+                if (color.has_value())
+                    this->color = color.value();
+                else
+                    this->color = Color{ 255, 255, 255 };
+
+                if (!textureId.has_value() && !color.has_value())
+                    throw std::runtime_error("No visual data has been set for the image");
+
+                this->position = position;
+                this->size = size;
+            }
+
+            int& textureId;
+            Color& color;
+        };
+
+        class View : public Element {
+            View(Vec2 position, Vec2 size, std::optional<int> textureId, std::optional<Color> color)
+                : Element(VIEW), textureId(GetTexture(data)), color(GetColor(data)), elements(GetChildrens(data)) {
+                if (textureId.has_value())
+                    this->textureId = textureId.value();
+                else
+                    this->textureId = -1;
+
+                if (color.has_value())
+                    this->color = color.value();
+                else
+                    this->color = Color{ 255, 255, 255 };
+            }
+
+            std::vector<Element>& elements;
+            int& textureId;
+            Color& color;
 
             void Add(Element& element) {
                 elements.push_back(element);
             }
 
             void Pop(Element& element) {
-                /*
-                auto it = std::find_if(elements.begin(), elements.end(),
-                    [element](const Element& e) { return e.id == element.id;});
-                if (it != elements.end()) {
-                    elements.erase(it);
-                }
-                */
             }
+        };
+
+        class Button : public Element {
+            Button(Vec2 position, Vec2 size, void* function, std::optional<Text> text, std::optional<int> textureId, std::optional<Color> color)
+                : Element(BUTTON), function(GetFunction(data)), text(GetTextElement(data)), textureId(GetTexture(data)), color(GetColor(data)) {
+                if (text.has_value())
+                    this->text = text.value();
+
+                this->position = position;
+                this->size = size;
+
+                if (textureId.has_value())
+                    this->textureId = textureId.value();
+                else
+                    this->textureId = -1;
+
+                if (color.has_value())
+                    this->color = color.value();
+                else
+                    this->color = Color{ 255, 255, 255 };
+            }
+
+            Text& text;
+            void*& function;
+            int& textureId;
+            Color& color;
         };
 
         struct ProcessData {
@@ -231,13 +343,30 @@ namespace Ignis {
         static Render* renderInstance;
         static int mainSurface;
         static std::unordered_map<int, std::vector<Element>> elements;
+        static int nextId;
 
         static ProcessData ProcessVertecies(ProcessData data, std::vector<Element>& elements);
 
-        static Vec2* GetPosition(UIData* data);
-        static Vec2* GetSize(UIData* data);
-        static std::string* GetText(UIData* data);
+        //Data Handling
+        static UIData* CreateData(UIType type);
+        static void DeleteData(UIData* data);
 
-        static UIData* CreateTextData(Vec2 position, Vec2 size, std::string text);
+        //Element
+        static Vec2& GetPosition(UIData* data);
+        static Vec2& GetSize(UIData* data);
+
+        //Text
+        static std::string& GetText(UIData* data);
+
+        //Image
+        static int& GetTexture(UIData* data);
+        static Color& GetColor(UIData* data);
+
+        //View
+        static std::vector<Element>& GetChildrens(UIData* data);
+
+        //Button
+        static void*& GetFunction(UIData* data);
+        static Text& GetTextElement(UIData* data);
     };
 }
