@@ -93,6 +93,7 @@ namespace Ignis {
     public:
         struct Vec2 {
             Vec2() : x(0), y(0) {}
+            Vec2(float x, float y) : x(x), y(y) {}
 
             float x;
             float y;
@@ -212,7 +213,7 @@ namespace Ignis {
                 if (color.has_value())
                     this->color = color.value();
                 else
-                    this->color = Color{ 255, 255, 255 };
+                    this->color = Color{ (char)255, (char)255, (char)255 };
 
                 if (!textureId.has_value() && !color.has_value())
                     throw std::runtime_error("No visual data has been set for the image");
@@ -238,15 +239,15 @@ namespace Ignis {
                 if (color.has_value())
                     this->color = color.value();
                 else
-                    this->color = Color{ 255, 255, 255 };
+                    this->color = Color{ (char)255, (char)255, (char)255 };
             }
 
-            std::vector<Element>& elements;
+            std::vector<Element>* elements;
             int& textureId;
             Color& color;
 
             void Add(Element& element) {
-                elements.push_back(element);
+                elements->push_back(element);
             }
 
             void Pop(Element& element) {
@@ -272,7 +273,7 @@ namespace Ignis {
                 if (color.has_value())
                     this->color = color.value();
                 else
-                    this->color = Color{ 255, 255, 255 };
+                    this->color = Color{ (char)255, (char)255, (char)255 };
             }
 
             Text& text;
@@ -281,14 +282,6 @@ namespace Ignis {
             Color& color;
 
             friend class UI;
-        };
-
-        struct ProcessData {
-            Vec2 offset;
-            Vec2 size;
-
-            std::vector<Render::Vertex> vertecies;
-            std::vector<uint32_t> indicies;
         };
         
 
@@ -313,7 +306,7 @@ namespace Ignis {
                     {{-0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {0}}
                 },
                 .indicies = { 
-                        0, 2, 1, 3, 2, 0
+                        0, 2, 1, 0, 3, 2
                 },
                 .surface = surface,
                 .changed = true,
@@ -334,7 +327,18 @@ namespace Ignis {
         static std::unordered_map<int, std::vector<Element>> elements;
         static int nextId;
 
-        static ProcessData ProcessVertecies(ProcessData data, std::vector<Element>& elements);
+        struct ProcessData {
+            Vec2 ofst;
+            Vec2 size;
+        };
+
+        struct UIVertexData {
+            std::vector<Render::Vertex> vertecies;
+            std::vector<uint32_t> indicies;
+        };
+
+        static Render::UIRenderData ProcessVertecies(ProcessData data, std::vector<Element>& elements);
+        static UIVertexData GenerateVertecies(UI::ProcessData procData, int textureId, Color color);
 
         //Data Handling
         static UIData* CreateData(UIType type);
@@ -352,7 +356,7 @@ namespace Ignis {
         static Color& GetColor(UIData* data);
 
         //View
-        static std::vector<Element>& GetChildrens(UIData* data);
+        static std::vector<Element>* GetChildrens(UIData* data);
 
         //Button
         static void*& GetFunction(UIData* data);

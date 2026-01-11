@@ -8,13 +8,13 @@ int main() {
 
 	glfwInit();
 
-	Ignis::CreateGraphicPipeLineInfo gpInfo{};
+	Ignis::Render::CreateGraphicPipeLineInfo gpInfo{};
 	gpInfo.vertexShader = "../Resources/Shaders/shader.vert";
 	gpInfo.fragmentShader = "../Resources/Shaders/shader.frag";
 
 	Ignis::Render renderer = Ignis::Render(true);
 
-	Ignis::Window window1 = renderer.CreateAppWindow(500, 400, "Gup 1");
+	Ignis::Render::Window window1 = renderer.CreateAppWindow(500, 400, "Gup 1");
 	int surface = renderer.CreateSurface(window1, gpInfo);
 	surfaces.push_back(surface);
 
@@ -23,8 +23,6 @@ int main() {
 	Ignis::UI::SetRender(&renderer);
 	Ignis::UI::SetMainSurface(surface);
 	Ignis::UI::CreateButton();
-
-	Ignis::UI::Button button;
 
 	while (surfaces.size() != 0)
 	{

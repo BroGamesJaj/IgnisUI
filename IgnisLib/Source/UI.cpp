@@ -126,10 +126,10 @@ namespace Ignis {
 
 	//View
 
-	std::vector<UI::Element>& UI::GetChildrens(UIData* data) {
+	std::vector<UI::Element>* UI::GetChildrens(UIData* data) {
 		switch (data->type) {
 		case VIEW:
-			return static_cast<ViewData*>(data->ptr)->elements;
+			return &static_cast<ViewData*>(data->ptr)->elements;
 		default:
 			throw std::runtime_error("Coudn't access childrends of the passed in data");
 		}
@@ -166,13 +166,14 @@ namespace Ignis {
 
 		switch (src.data->type)
 		{
-		case TEXT:
+		case TEXT: {
 			Text& textDst = static_cast<Text&>(dst);
 			textDst.position = GetPosition(dst.data);
 			textDst.size = GetSize(dst.data);
 			textDst.text = GetText(dst.data);
 			break;
-		case BUTTON:
+		}
+		case BUTTON: {
 			Button& btnDst = static_cast<Button&>(dst);
 			btnDst.position = GetPosition(dst.data);
 			btnDst.size = GetSize(dst.data);
@@ -181,14 +182,16 @@ namespace Ignis {
 			btnDst.function = GetFunction(dst.data);
 			Bind(btnDst.text, GetTextElement(dst.data));
 			break;
-		case IMAGE:
+		}
+		case IMAGE: {
 			Image& imgDst = static_cast<Image&>(dst);
 			imgDst.position = GetPosition(dst.data);
 			imgDst.size = GetSize(dst.data);
 			imgDst.color = GetColor(dst.data);
 			imgDst.textureId = GetTexture(dst.data);
 			break;
-		case VIEW:
+		}
+		case VIEW: {
 			View& viewDst = static_cast<View&>(dst);
 			viewDst.position = GetPosition(dst.data);
 			viewDst.size = GetSize(dst.data);
@@ -196,30 +199,59 @@ namespace Ignis {
 			viewDst.textureId = GetTexture(dst.data);
 			viewDst.elements = GetChildrens(dst.data);
 			break;
-		}
+		}}
 	}
 
 	void UI::AddToSurface(Element& element, int surface) {
-		if (!elements.contains(surface)) return;
+		if (!renderInstance->IsValidSurface(surface)) return;
 		elements[surface].push_back(element);
 	}
 	void UI::SubmitSurface(int surface) {
 		if (!elements.contains(surface)) return;
 
-		//UI::ProcessData data{.offset{0,0},.size{100,100}};
+		UI::ProcessData data{.ofst{0,0},.size{2.0f,2.0f}};
 
-		//ProcessVertecies(data, elements[surface]);
+		ProcessVertecies(data, elements[surface]);
 	}
-	UI::ProcessData UI::ProcessVertecies(UI::ProcessData data, std::vector<Element>& elements) {
+	Render::UIRenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<Element>& elements) {
+		Render::UIRenderData returnData;
 
 		for (auto& element : elements) {
+			/*
+			UIVertexData vertexData = GenerateVertecies(data.ofst.)
+
+			returnData.vertecies.insert(
+				returnData.vertecies.end(),
+				element.vertecies.begin(),
+				element.vertecies.end()
+			);*/
 		}
 
-		return data;
+		return returnData;
+	}
+	
+	UI::UIVertexData UI::GenerateVertecies(UI::ProcessData procDt, int textureId, Color color) {
+
+		glm::vec3 vertexColor = glm::vec3((float)color.r / 255, (float)color.r / 255, (float)color.r / 255);
+		glm::uint texture = glm::uint(textureId);
+
+		UIVertexData returnData{
+			.vertecies = {
+				{ glm::vec3(-1 + procDt.ofst.x, -1 + procDt.ofst.y, 0.0f), vertexColor, glm::vec2(1.0f, 0.0f), texture},
+				{ glm::vec3(-1 + procDt.ofst.x + procDt.size.x, -1 + procDt.ofst.y, 0.0f), vertexColor, glm::vec2(1.0f, 1.0f), texture},
+				{ glm::vec3(-1 + procDt.ofst.x + procDt.size.x, -1 + procDt.ofst.y + procDt.size.y, 0.0f), vertexColor, glm::vec2(0.0f, 1.0f), texture},
+				{ glm::vec3(-1 + procDt.ofst.x, -1 + procDt.ofst.y + procDt.size.y, 0.0f), vertexColor, glm::vec2(0.0f, 1.0f), texture},
+			},
+			.indicies = {
+				0, 2, 1, 0, 3, 2
+			}
+		};
+		return returnData;
 	}
 
 	int UI::mainSurface = -1;
 	Render* UI::renderInstance = nullptr;
 	int UI::nextId = 0;
+	std::unordered_map<int, std::vector<UI::Element>> UI::elements;
 }
 
