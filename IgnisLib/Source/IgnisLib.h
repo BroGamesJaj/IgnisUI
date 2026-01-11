@@ -163,22 +163,16 @@ namespace Ignis {
 
             bool Valid() { return data; }
 
-            Element& operator=(const Element& other) {
-                if (this == &other) return *this;
-
-                *this->data = *other.data;
-
-                return *this;
-            }
-
         protected:
             const int id;
             UIData* data;
+
+            friend class UI;
         };
 
     public:
 
-        class Text : Element {
+        class Text : public Element {
         public:
             Text() : Element(TEXT), text(GetText(data)) {}
 
@@ -189,22 +183,9 @@ namespace Ignis {
                 this->text = text;
             }
 
-            Text& operator=(const Text& other) {
-                if (this == &other) return *this;
-
-                delete static_cast<TextData*>(data->ptr);
-
-                *this->data = *other.data;
-                this->position = GetPosition(this->data);
-                this->size = GetSize(this->data);
-                this->text = GetText(this->data);
-                //the other objects (with the old data) variables does not point to the new place yet
-
-
-                return *this;
-            }
-
             std::string& text;
+
+            friend class UI;
         };
 
     private:
@@ -242,6 +223,8 @@ namespace Ignis {
 
             int& textureId;
             Color& color;
+
+            friend class UI;
         };
 
         class View : public Element {
@@ -268,13 +251,15 @@ namespace Ignis {
 
             void Pop(Element& element) {
             }
+
+            friend class UI;
         };
 
         class Button : public Element {
-            Button(Vec2 position, Vec2 size, void* function, std::optional<Text> text, std::optional<int> textureId, std::optional<Color> color)
+            Button(Vec2 position, Vec2 size, void* function, std::optional<Text>& text, std::optional<int> textureId, std::optional<Color> color)
                 : Element(BUTTON), function(GetFunction(data)), text(GetTextElement(data)), textureId(GetTexture(data)), color(GetColor(data)) {
                 if (text.has_value())
-                    this->text = text.value();
+                    Bind(this->text, text.value());
 
                 this->position = position;
                 this->size = size;
@@ -294,6 +279,8 @@ namespace Ignis {
             void*& function;
             int& textureId;
             Color& color;
+
+            friend class UI;
         };
 
         struct ProcessData {
@@ -338,6 +325,8 @@ namespace Ignis {
         static void AddToSurface(Element& element, int surface = mainSurface);
 
         static void SubmitSurface(int surface = mainSurface);
+
+        static void Bind(Element& dst, Element& src);
 
     private:
         static Render* renderInstance;

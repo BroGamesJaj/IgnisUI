@@ -40,12 +40,23 @@ namespace Ignis {
 
 		switch (data->type)
 		{
-		case TEXT:
+		case Ignis::UI::TEXT:
 			delete static_cast<TextData*>(data->ptr);
+			break;
+		case Ignis::UI::BUTTON:
+			delete static_cast<ButtonData*>(data->ptr);
+			break;
+		case Ignis::UI::IMAGE:
+			delete static_cast<ImageData*>(data->ptr);
+			break;
+		case Ignis::UI::VIEW:
+			delete static_cast<ViewData*>(data->ptr);
 			break;
 		default:
 			throw std::runtime_error("Coudn't clean up UIData pointer");
 		}
+
+		data->ptr = nullptr;
 
 		delete data;
 		data = nullptr;
@@ -141,6 +152,50 @@ namespace Ignis {
 			return static_cast<ButtonData*>(data->ptr)->text;
 		default:
 			throw std::runtime_error("Coudn't access Text of the passed in data");
+		}
+	}
+
+	//Other
+
+	void UI::Bind(Element& dst, Element& src) {
+		if (dst.data->type != src.data->type)
+			throw std::runtime_error("Tried to bind together two different type of element");
+
+		DeleteData(dst.data);
+		dst.data = src.data;
+
+		switch (src.data->type)
+		{
+		case TEXT:
+			Text& textDst = static_cast<Text&>(dst);
+			textDst.position = GetPosition(dst.data);
+			textDst.size = GetSize(dst.data);
+			textDst.text = GetText(dst.data);
+			break;
+		case BUTTON:
+			Button& btnDst = static_cast<Button&>(dst);
+			btnDst.position = GetPosition(dst.data);
+			btnDst.size = GetSize(dst.data);
+			btnDst.color = GetColor(dst.data);
+			btnDst.textureId = GetTexture(dst.data);
+			btnDst.function = GetFunction(dst.data);
+			Bind(btnDst.text, GetTextElement(dst.data));
+			break;
+		case IMAGE:
+			Image& imgDst = static_cast<Image&>(dst);
+			imgDst.position = GetPosition(dst.data);
+			imgDst.size = GetSize(dst.data);
+			imgDst.color = GetColor(dst.data);
+			imgDst.textureId = GetTexture(dst.data);
+			break;
+		case VIEW:
+			View& viewDst = static_cast<View&>(dst);
+			viewDst.position = GetPosition(dst.data);
+			viewDst.size = GetSize(dst.data);
+			viewDst.color = GetColor(dst.data);
+			viewDst.textureId = GetTexture(dst.data);
+			viewDst.elements = GetChildrens(dst.data);
+			break;
 		}
 	}
 
