@@ -18,6 +18,12 @@ set_target_properties(Ignis PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${outputDir}
 )
 
+# HarfBuzz
+# This is for making smaller font files, currently useless for use so 
+# its turned off
+set(HB_BUILD_SUBSET OFF CACHE BOOL "" FORCE)
+add_subdirectory(Dependencies/harfbuzz)
+
 if (WIN32)
     target_compile_options(Ignis PRIVATE /permissive-)
     target_include_directories(Ignis PRIVATE
@@ -31,9 +37,12 @@ else()
     target_include_directories(Ignis PRIVATE
         ${VULKAN_INCLUDE_DIRS}
         ${GLFW_INCLUDE_DIRS}
+        ${HARFBUZZ_INCLUDE_DIRS}
     )
     target_link_libraries(Ignis PRIVATE Vulkan::Vulkan ${GLFW_LIBRARIES})
 endif()
+
+target_link_libraries(Ignis PRIVATE harfbuzz)
 
 target_include_directories(Ignis PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}/Dependencies
