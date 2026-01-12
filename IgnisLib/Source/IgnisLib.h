@@ -108,14 +108,14 @@ namespace Ignis {
         };
 
         struct Color {
-            Color(char r, char g, char b) 
+            Color(unsigned char r, unsigned char g, unsigned char b)
                 : r(r), g(g), b(b) {}
 
             Color() = default;
 
-            char r;
-            char g;
-            char b;
+            unsigned char r;
+            unsigned char g;
+            unsigned char b;
         };
 
     private:
@@ -157,6 +157,8 @@ namespace Ignis {
         };
 
         class Element {
+        protected:
+            UIData* data;
         public:
             Element(UIType type) : data(CreateData(type)),
                 position(GetPosition(data)), size(GetSize(data)), id(nextId++), textureId(GetTexture(data)), color(GetColor(data)) {}
@@ -164,15 +166,12 @@ namespace Ignis {
             Vec2& position;
             Vec2& size;
 
-            ~Element() {
-                DeleteData(data);
-            }
+            //  DeleteData(data); should implement later
 
             bool Valid() { return data; }
 
         protected:
             const int id;
-            UIData* data;
             int& textureId;
             Color& color;
 
@@ -191,7 +190,7 @@ namespace Ignis {
                 this->size = size;
                 this->text = text;
                 this->textureId = -1;
-                this->color = Color{ (char)255, (char)255, (char)255 };
+                this->color = Color{ (unsigned char)255, (unsigned char)255, (unsigned char)255 };
             }
 
             std::string& text;
@@ -210,7 +209,8 @@ namespace Ignis {
 
         class Image : public Element {
         public:
-            Image(Vec2 position, Vec2 size, std::optional<int> textureId, std::optional<Color> color) 
+            Image(Vec2 position, Vec2 size, std::optional<int> textureId = std::nullopt,
+                std::optional<Color> color = std::nullopt)
                 : Element(IMAGE) {
 
                 if (textureId.has_value())
@@ -221,7 +221,7 @@ namespace Ignis {
                 if (color.has_value())
                     this->color = color.value();
                 else
-                    this->color = Color{ (char)255, (char)255, (char)255 };
+                    this->color = Color{ (unsigned char)255, (unsigned char)255, (unsigned char)255 };
 
                 if (!textureId.has_value() && !color.has_value())
                     throw std::runtime_error("No visual data has been set for the image");
@@ -244,7 +244,7 @@ namespace Ignis {
                 if (color.has_value())
                     this->color = color.value();
                 else
-                    this->color = Color{ (char)255, (char)255, (char)255 };
+                    this->color = Color{ (unsigned char)255, (unsigned char)255, (unsigned char)255 };
             }
 
             std::vector<Element>* elements;
@@ -276,7 +276,7 @@ namespace Ignis {
                 if (color.has_value())
                     this->color = color.value();
                 else
-                    this->color = Color{ (char)255, (char)255, (char)255 };
+                    this->color = Color{ (unsigned char)255, (unsigned char)255, (unsigned char)255 };
             }
 
             Text& text;
@@ -316,7 +316,7 @@ namespace Ignis {
             return renderInstance->AddUIElementData(data);
         }
 
-        static void AddToSurface(Element& element, int surface = mainSurface);
+        static void AddToSurface(Element element, int surface = mainSurface);
 
         static void SubmitSurface(int surface = mainSurface);
 
@@ -363,4 +363,6 @@ namespace Ignis {
         static void*& GetFunction(UIData* data);
         static Text& GetTextElement(UIData* data);
     };
+
+    using Image = UI::Image;
 }

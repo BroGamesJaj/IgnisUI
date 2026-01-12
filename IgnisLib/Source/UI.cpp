@@ -68,6 +68,12 @@ namespace Ignis {
 		switch (data->type) {
 		case TEXT:
 			return static_cast<TextData*>(data->ptr)->base.position;
+		case IMAGE:
+			return static_cast<ImageData*>(data->ptr)->base.position;
+		case VIEW:
+			return static_cast<ViewData*>(data->ptr)->base.position;
+		case BUTTON:
+			return static_cast<ButtonData*>(data->ptr)->base.position;
 		default:
 			throw std::runtime_error("Coudn't access position of the passed in data");
 		}
@@ -79,6 +85,10 @@ namespace Ignis {
 			return static_cast<TextData*>(data->ptr)->base.size;
 		case IMAGE:
 			return static_cast<ImageData*>(data->ptr)->base.size;
+		case VIEW:
+			return static_cast<ViewData*>(data->ptr)->base.size;
+		case BUTTON:
+			return static_cast<ButtonData*>(data->ptr)->base.size;
 		default:
 			throw std::runtime_error("Coudn't access size of the passed in data");
 		}
@@ -106,6 +116,8 @@ namespace Ignis {
 			return static_cast<ViewData*>(data->ptr)->base.color;
 		case BUTTON:
 			return static_cast<ButtonData*>(data->ptr)->base.color;
+		case TEXT:
+			return static_cast<TextData*>(data->ptr)->base.color;
 		default:
 			throw std::runtime_error("Coudn't access color of the passed in data");
 		}
@@ -119,6 +131,8 @@ namespace Ignis {
 			return static_cast<ViewData*>(data->ptr)->base.textureId;
 		case BUTTON:
 			return static_cast<ButtonData*>(data->ptr)->base.textureId;
+		case TEXT:
+			return static_cast<TextData*>(data->ptr)->base.textureId;
 		default:
 			throw std::runtime_error("Coudn't access texture of the passed in data");
 		}
@@ -202,16 +216,19 @@ namespace Ignis {
 		}}
 	}
 
-	void UI::AddToSurface(Element& element, int surface) {
+	void UI::AddToSurface(Element element, int surface) {
 		if (!renderInstance->IsValidSurface(surface)) return;
 		elements[surface].push_back(element);
 	}
 	void UI::SubmitSurface(int surface) {
 		if (!elements.contains(surface)) return;
 
-		UI::ProcessData data{.ofst{0,0},.size{2.0f,2.0f}};
+		UI::ProcessData data{.ofst{0,0},.size{2,2}};
 
-		ProcessVertecies(data, elements[surface]);
+		Render::UIRenderData outputData = ProcessVertecies(data, elements[surface]);
+		outputData.surface = surface;
+		outputData.changed = true;
+		renderInstance->AddUIElementData(outputData);
 	}
 	Render::UIRenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<Element>& elements) {
 		Render::UIRenderData returnData;
@@ -223,7 +240,7 @@ namespace Ignis {
 			Vec2 elementOffset = { data.size.x / 100 * element.position.x, data.size.y / 100 * element.position.y };
 
 
-			UI::ProcessData calcData{ .ofst{data.size + elementSize}, .size{data.ofst + elementOffset} };
+			UI::ProcessData calcData{ .ofst{data.ofst.x + elementOffset.x, data.ofst.y + elementOffset.y}, .size{elementSize} };
 
 			UI::UIVertexData vertexData = GenerateVertecies(calcData, element.textureId, element.color);
 
@@ -232,6 +249,38 @@ namespace Ignis {
 				vertexData.vertecies.begin(),
 				vertexData.vertecies.end()
 			);
+
+			//i wont look it up how they write it, I BELIIIIVEEEEE
+			for (auto& indicy : vertexData.indicies) {
+				returnData.indicies.push_back(indicy + additionIndex);
+			}
+			additionIndex += 4;
+
+			Render::UIRenderData childData;
+
+			if (element.data->type == VIEW) {
+				auto& view = static_cast<View&>(element);
+				childData = UI::ProcessVertecies(calcData, *view.elements);
+			}
+			else if (element.data->type == BUTTON) {
+				auto& button = static_cast<Button&>(element);
+				std::vector<Element> text = { button.text };
+				childData = UI::ProcessVertecies(calcData, text);
+			}
+
+			if (childData.vertecies.size() > 0) {
+				returnData.vertecies.insert(
+					returnData.vertecies.end(),
+					childData.vertecies.begin(),
+					childData.vertecies.end()
+				);
+
+				for (auto& indicy : childData.indicies) {
+					returnData.indicies.push_back(indicy + additionIndex);
+				}
+
+				additionIndex += childData.vertecies.size();
+			}
 		}
 
 		return returnData;
@@ -239,7 +288,7 @@ namespace Ignis {
 	
 	UI::UIVertexData UI::GenerateVertecies(UI::ProcessData procDt, int textureId, Color color) {
 
-		glm::vec3 vertexColor = glm::vec3((float)color.r / 255, (float)color.r / 255, (float)color.r / 255);
+		glm::vec3 vertexColor = glm::vec3((float)color.r / 255, (float)color.g / 255, (float)color.b / 255);
 		glm::uint texture = glm::uint(textureId);
 
 		UIVertexData returnData{
