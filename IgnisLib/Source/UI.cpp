@@ -121,10 +121,6 @@ namespace Ignis {
 		}
 	}
 
-	void UI::AddToSurface(Element& element, int surface) {
-		if (!renderInstance->IsValidSurface(surface)) return;
-		elements[surface].push_back(element);
-	}
 	void UI::SubmitSurface(int surface) {
 		if (!elements.contains(surface)) return;
 

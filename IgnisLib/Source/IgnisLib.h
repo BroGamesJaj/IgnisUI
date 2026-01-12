@@ -11,6 +11,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <concepts>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -125,7 +126,7 @@ namespace Ignis {
             Color(unsigned char r, unsigned char g, unsigned char b)
                 : r(r), g(g), b(b) {}
 
-            Color() = default;
+            Color() : r(1), g(1), b(1) {}
 
             unsigned char r;
             unsigned char g;
@@ -204,7 +205,7 @@ namespace Ignis {
                 this->size = size;
                 this->text = text;
                 this->textureId = -1;
-                this->color = Color{ (unsigned char)255, (unsigned char)255, (unsigned char)255 };
+                this->color = Color();
             }
 
             std::string& text;
@@ -221,27 +222,25 @@ namespace Ignis {
 
     public:
         class Image : public Element {
-        public:
-            Image(Vec2 position, Vec2 size, std::optional<int> textureId = std::nullopt,
-                std::optional<Color> color = std::nullopt)
+        private:
+            Image(Vec2 position, Vec2 size, int textureId, Color color, bool dummy)
                 : Element(IMAGE) {
-
-                if (textureId.has_value())
-                    this->textureId = textureId.value();
-                else
-                    this->textureId = -1;
-
-                if (color.has_value())
-                    this->color = color.value();
-                else
-                    this->color = Color{ (unsigned char)255, (unsigned char)255, (unsigned char)255 };
-
-                if (!textureId.has_value() && !color.has_value())
-                    throw std::runtime_error("No visual data has been set for the image");
-
                 this->position = position;
                 this->size = size;
+
+                this->textureId = textureId;
+                this->color = color;
             }
+
+        public:
+            Image(Vec2 position, Vec2 size, int textureId, Color color)
+                : Image(position, size, textureId, color, true) {}
+
+            Image(Vec2 position, Vec2 size, Color color)
+                : Image(position, size, -1, color, true) {}
+
+            Image(Vec2 position, Vec2 size, int textureId)
+                : Image(position, size, textureId, Color(), true) {}
 
             friend class UI;
         };
@@ -257,7 +256,7 @@ namespace Ignis {
                 if (color.has_value())
                     this->color = color.value();
                 else
-                    this->color = Color{ (unsigned char)255, (unsigned char)255, (unsigned char)255 };
+                    this->color = Color();
             }
 
             std::vector<Element>* elements;
@@ -289,7 +288,7 @@ namespace Ignis {
                 if (color.has_value())
                     this->color = color.value();
                 else
-                    this->color = Color{ (unsigned char)255, (unsigned char)255, (unsigned char)255 };
+                    this->color = Color();
             }
 
             Text& text;
@@ -329,7 +328,11 @@ namespace Ignis {
             return renderInstance->AddUIElementData(data);
         }
 
-        static void AddToSurface(Element& element, int surface = mainSurface);
+        template<std::derived_from<UI::Element>... Args>
+        static void AddToSurface(int surface, Args&... args) {
+            if (!renderInstance->IsValidSurface(surface)) return;
+            (elements[surface].push_back(args), ...);
+        }
 
         static void SubmitSurface(int surface = mainSurface);
 
