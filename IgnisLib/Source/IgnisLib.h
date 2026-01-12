@@ -40,6 +40,8 @@ namespace Ignis {
         };
 
         struct CreateRenderPassInfo {
+            CreateRenderPassInfo(){};
+
             enum class Samples { x1, x2, x4, x8 };
             enum class LoadOp { Clear, Load, DontCare };
             enum class StoreOp { Store, DontCare };
@@ -101,6 +103,7 @@ namespace Ignis {
             Vec2 operator+(Vec2 other) {
                 this->x += other.x;
                 this->y += other.y;
+                return *this;
             }
         };
 
