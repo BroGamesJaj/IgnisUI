@@ -20,10 +20,13 @@
 struct GLFWwindow;
 struct GLFWmonitor;
 
+//tmp definitions, so its not all grayed out
+#define IGNIS_UI
+#define IGNIS_NAMES
+
 namespace Ignis {
 
-    class Vulkan;
-
+#if defined(IGNIS_RENDER) || defined(IGNIS_UI)
     class Render
     {
     public:
@@ -82,13 +85,17 @@ namespace Ignis {
         bool IsValidSurface(int surfaceIndex);
     
     private:
+        class Vulkan;
+
         Vulkan* instance;
 
         friend class UI;
 
         int AddUIElementData(UIRenderData& data);
     };
+#endif
 
+#ifdef IGNIS_UI
     class UI {
     public:
         struct Vec2 {
@@ -156,13 +163,25 @@ namespace Ignis {
         class Element {
         public:
             Element(UIType type) : data(CreateData(type)),
-                position(GetPosition(data)), size(GetSize(data)), id(nextId++), textureId(GetTexture(data)), color(GetColor(data)) {}
+                position(GetPosition(data)), size(GetSize(data)), id(nextId++), textureId(GetTexture(data)), color(GetColor(data)) {
+                if (dataPtrs.contains(data))
+                    dataPtrs[data]++;
+                else
+                    dataPtrs[data] = 1;
+            }
 
             Vec2& position;
             Vec2& size;
 
             ~Element() {
-                DeleteData(data);
+                if (!data) return;
+
+                dataPtrs[data]--;
+
+                if (dataPtrs[data] <= 0) {
+                    dataPtrs.erase(data);
+                    DeleteData(data);
+                }
             }
 
             bool Valid() { return data; }
@@ -177,7 +196,6 @@ namespace Ignis {
         };
 
     public:
-
         class Text : public Element {
         public:
             Text() : Element(TEXT), text(GetText(data)) {}
@@ -204,7 +222,6 @@ namespace Ignis {
         };
 
     public:
-
         class Image : public Element {
         public:
             Image(Vec2 position, Vec2 size, std::optional<int> textureId, std::optional<Color> color) 
@@ -324,6 +341,7 @@ namespace Ignis {
         static int mainSurface;
         static std::unordered_map<int, std::vector<Element>> elements;
         static int nextId;
+        static std::unordered_map<UIData*, int> dataPtrs;
 
         struct ProcessData {
             Vec2 ofst;
@@ -360,4 +378,5 @@ namespace Ignis {
         static void*& GetFunction(UIData* data);
         static Text& GetTextElement(UIData* data);
     };
+#endif
 }

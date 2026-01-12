@@ -693,6 +693,7 @@ namespace Ignis {
 			CreateFramebuffers(data->swapChainFramebuffers, data->swapChainImageViews, data->renderPass, windows[window], data->depthImageView);
 		}
 
+		//assumes one element per surface
 		void UpdateElementBuffers() {
 			for (auto& [surfaceId, element] : renderData)
 			{
@@ -842,24 +843,21 @@ namespace Ignis {
 			VertexData data;
 			uint32_t index = 0;
 
-			for (auto& [surface, element] : renderData)
-			{
-				if (surfaceId == surface) {
-					data.vertecies.insert(
-						data.vertecies.end(),
-						element.vertecies.begin(),
-						element.vertecies.end()
-					);
+			UIRenderData& element = renderData[surfaceId];
 
-					for (auto i : element.indicies) {
-						data.indicies.push_back(i + index);
-					}
+			data.vertecies.insert(
+				data.vertecies.end(),
+				element.vertecies.begin(),
+				element.vertecies.end()
+			);
 
-					index += static_cast<uint32_t>(element.vertecies.size());
-
-					element.changed = false;
-				}
+			for (auto i : element.indicies) {
+				data.indicies.push_back(i + index);
 			}
+
+			index += static_cast<uint32_t>(element.vertecies.size());
+
+			element.changed = false;
 
 			return data;
 		}

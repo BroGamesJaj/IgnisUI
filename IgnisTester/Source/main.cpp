@@ -1,12 +1,15 @@
 #define GLFW_INCLUDE_VULKAN
 #include "glfw3.h"
 
+#define IGNIS_UI
+#define IGNIS_NAMES
 #include "../../IgnisLib/Source/IgnisLib.h"
 
 int main() {
 	std::vector<int> surfaces;
 
 	glfwInit();
+
 
 	Ignis::Render::CreateGraphicPipeLineInfo gpInfo{};
 	gpInfo.vertexShader = "../Resources/Shaders/shader.vert";
