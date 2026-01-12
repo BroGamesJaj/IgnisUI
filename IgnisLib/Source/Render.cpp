@@ -261,7 +261,7 @@ namespace Ignis {
 		return output;
 	}
 
-	class Vulkan {
+	class Render::Vulkan {
 	public:
 		Vulkan(bool debuging = false) {
 			if (debuging) enableValidationLayers = true;
@@ -2141,7 +2141,7 @@ namespace Ignis {
 
 	Render::Render(bool debugging)
 	{
-		instance = new Vulkan(debugging);
+		instance = new Render::Vulkan(debugging);
 	}
 
 	Ignis::Render::~Render() {

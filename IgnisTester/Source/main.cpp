@@ -2,7 +2,8 @@
 #include "glfw3.h"
 
 #define IGNIS_UI
-#define IGNIS_NAMES
+#define IGNIS_UI_NAMES
+#define IGNIS_RENDER_NAMES
 #include "../../IgnisLib/Source/IgnisLib.h"
 
 using namespace Ignis;
@@ -13,26 +14,26 @@ int main() {
 	glfwInit();
 
 
-	Ignis::Render::CreateGraphicPipeLineInfo gpInfo{};
+	CreateGraphicPipeLineInfo gpInfo{};
 	gpInfo.vertexShader = "../Resources/Shaders/shader.vert";
 	gpInfo.fragmentShader = "../Resources/Shaders/shader.frag";
 
-	Ignis::Render renderer = Ignis::Render(true);
+	Render renderer = Render(true);
 
-	Ignis::Render::Window window1 = renderer.CreateAppWindow(500, 400, "Gup 1");
+	Window window1 = renderer.CreateAppWindow(500, 400, "Gup 1");
 	int surface = renderer.CreateSurface(window1, gpInfo);
 	surfaces.push_back(surface);
 
 	renderer.CreateTexture("../Resources/Textures/monikaTexture.jpg");
 
-	Ignis::UI::SetRender(&renderer);
-	Ignis::UI::SetMainSurface(surface);
+	UI::SetRender(&renderer);
+	UI::SetMainSurface(surface);
 
-	UI::Color tip(255,0,255);
-	UI::Color base(255,0,0);
+	Color tip(255,0,255);
+	Color base(255,0,0);
 
-	Image image = Image( UI::Vec2( 20,30 ), UI::Vec2( 20, 40 ), std::nullopt, base);
-	Image image2 = Image(UI::Vec2(25, 40), UI::Vec2(50, 20), std::nullopt, tip);
+	Image image = Image( Vec2( 20,30 ), Vec2( 20, 40 ), std::nullopt, base);
+	Image image2 = Image( Vec2(25, 40), Vec2(50, 20), std::nullopt, tip);
 	UI::AddToSurface(image);
 	UI::AddToSurface(image2);
 	UI::SubmitSurface();
@@ -49,4 +50,6 @@ int main() {
 			else it = surfaces.erase(it);
 		}
 	}
+
+	UI::Clean();
 }

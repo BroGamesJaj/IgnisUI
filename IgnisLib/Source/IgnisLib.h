@@ -10,7 +10,7 @@
 #include <array>
 #include <string>
 #include <unordered_map>
-#include <optional>
+#include <unordered_set>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -22,7 +22,8 @@ struct GLFWmonitor;
 
 //tmp definitions, so its not all grayed out
 #define IGNIS_UI
-#define IGNIS_NAMES
+#define IGNIS_UI_NAMES
+#define IGNIS_RENDER_NAMES
 
 namespace Ignis {
 
@@ -95,6 +96,12 @@ namespace Ignis {
 
         int AddUIElementData(UIRenderData& data);
     };
+
+#ifdef IGNIS_RENDER_NAMES
+    using Window = Render::Window;
+    using CreateGraphicPipeLineInfo = Render::CreateGraphicPipeLineInfo;
+#endif
+
 #endif
 
 #ifdef IGNIS_UI
@@ -169,25 +176,12 @@ namespace Ignis {
         public:
             Element(UIType type) : data(CreateData(type)),
                 position(GetPosition(data)), size(GetSize(data)), id(nextId++), textureId(GetTexture(data)), color(GetColor(data)) {
-                if (dataPtrs.contains(data))
-                    dataPtrs[data]++;
-                else
-                    dataPtrs[data] = 1;
+                if (!dataPtrs.contains(data))
+                    dataPtrs.insert(data);
             }
 
             Vec2& position;
             Vec2& size;
-
-            ~Element() {
-                if (!data) return;
-
-                dataPtrs[data]--;
-
-                if (dataPtrs[data] <= 0) {
-                    dataPtrs.erase(data);
-                    DeleteData(data);
-                }
-            }
 
             bool Valid() { return data; }
 
@@ -335,18 +329,22 @@ namespace Ignis {
             return renderInstance->AddUIElementData(data);
         }
 
-        static void AddToSurface(Element element, int surface = mainSurface);
+        static void AddToSurface(Element& element, int surface = mainSurface);
 
         static void SubmitSurface(int surface = mainSurface);
 
         static void Bind(Element& dst, Element& src);
+
+        static void Delete(Element& element);
+
+        static void Clean();
 
     private:
         static Render* renderInstance;
         static int mainSurface;
         static std::unordered_map<int, std::vector<Element>> elements;
         static int nextId;
-        static std::unordered_map<UIData*, int> dataPtrs;
+        static std::unordered_set<UIData*> dataPtrs;
 
         struct ProcessData {
             Vec2 ofst;
@@ -383,5 +381,16 @@ namespace Ignis {
         static void*& GetFunction(UIData* data);
         static Text& GetTextElement(UIData* data);
     };
+
+#ifdef IGNIS_UI_NAMES
+    using Color = UI::Color;
+    using Vec2 = UI::Vec2;
+
+    using Image = UI::Image;
+    using Text = UI::Text;
+    using View = UI::View;
+    using Button = UI::Button;
+#endif
+
 #endif
 }

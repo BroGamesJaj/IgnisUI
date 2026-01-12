@@ -10,6 +10,22 @@ namespace Ignis {
 
 	UI::UIData::UIData(void* ptr, UIType type) : ptr(ptr), type(type) {}
 
+	void UI::Delete(Element& element) {
+		dataPtrs.erase(element.data);
+		DeleteData(element.data);
+	}
+
+	void UI::Clean() {
+		for (auto& dataPtr : dataPtrs) {
+			if (dataPtr)
+				DeleteData(dataPtr);
+		}
+
+		dataPtrs.clear();
+
+		std::cout << "UI data has been freed" << std::endl;
+	}
+
 	UI::UIData* UI::CreateData(UIType type) {
 		UIData* data;
 
@@ -34,10 +50,7 @@ namespace Ignis {
 
 		return data;
 	}
-
 	void UI::DeleteData(UIData* data) {
-		if (!data) return;
-
 		switch (data->type)
 		{
 		case Ignis::UI::TEXT:
@@ -60,6 +73,141 @@ namespace Ignis {
 
 		delete data;
 		data = nullptr;
+	}
+
+	void UI::Bind(Element& dst, Element& src) {
+		if (dst.data->type != src.data->type)
+			throw std::runtime_error("Tried to bind together two different type of element");
+
+		DeleteData(dst.data);
+		dst.data = src.data;
+
+		switch (src.data->type)
+		{
+		case TEXT: {
+			Text& textDst = static_cast<Text&>(dst);
+			textDst.position = GetPosition(dst.data);
+			textDst.size = GetSize(dst.data);
+			textDst.text = GetText(dst.data);
+			break;
+		}
+		case BUTTON: {
+			Button& btnDst = static_cast<Button&>(dst);
+			btnDst.position = GetPosition(dst.data);
+			btnDst.size = GetSize(dst.data);
+			btnDst.color = GetColor(dst.data);
+			btnDst.textureId = GetTexture(dst.data);
+			btnDst.function = GetFunction(dst.data);
+			Bind(btnDst.text, GetTextElement(dst.data));
+			break;
+		}
+		case IMAGE: {
+			Image& imgDst = static_cast<Image&>(dst);
+			imgDst.position = GetPosition(dst.data);
+			imgDst.size = GetSize(dst.data);
+			imgDst.color = GetColor(dst.data);
+			imgDst.textureId = GetTexture(dst.data);
+			break;
+		}
+		case VIEW: {
+			View& viewDst = static_cast<View&>(dst);
+			viewDst.position = GetPosition(dst.data);
+			viewDst.size = GetSize(dst.data);
+			viewDst.color = GetColor(dst.data);
+			viewDst.textureId = GetTexture(dst.data);
+			viewDst.elements = GetChildrens(dst.data);
+			break;
+		}
+		}
+	}
+
+	void UI::AddToSurface(Element& element, int surface) {
+		if (!renderInstance->IsValidSurface(surface)) return;
+		elements[surface].push_back(element);
+	}
+	void UI::SubmitSurface(int surface) {
+		if (!elements.contains(surface)) return;
+
+		UI::ProcessData data{ .ofst{0,0},.size{2,2} };
+
+		Render::UIRenderData outputData = ProcessVertecies(data, elements[surface]);
+		outputData.surface = surface;
+		outputData.changed = true;
+		renderInstance->AddUIElementData(outputData);
+	}
+
+	Render::UIRenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<Element>& elements) {
+		Render::UIRenderData returnData;
+
+		int additionIndex = 0;
+
+		for (auto& element : elements) {
+			Vec2 elementSize = { data.size.x / 100 * element.size.x , data.size.y / 100 * element.size.y };
+			Vec2 elementOffset = { data.size.x / 100 * element.position.x, data.size.y / 100 * element.position.y };
+
+
+			UI::ProcessData calcData{ .ofst{data.ofst.x + elementOffset.x, data.ofst.y + elementOffset.y}, .size{elementSize} };
+
+			UI::UIVertexData vertexData = GenerateVertecies(calcData, element.textureId, element.color);
+
+			returnData.vertecies.insert(
+				returnData.vertecies.end(),
+				vertexData.vertecies.begin(),
+				vertexData.vertecies.end()
+			);
+
+			//i wont look it up how they write it, I BELIIIIVEEEEE
+			for (auto& indicy : vertexData.indicies) {
+				returnData.indicies.push_back(indicy + additionIndex);
+			}
+			additionIndex += 4;
+
+			Render::UIRenderData childData;
+
+			if (element.data->type == VIEW) {
+				auto& view = static_cast<View&>(element);
+				childData = UI::ProcessVertecies(calcData, *view.elements);
+			}
+			else if (element.data->type == BUTTON) {
+				auto& button = static_cast<Button&>(element);
+				std::vector<Element> text = { button.text };
+				childData = UI::ProcessVertecies(calcData, text);
+			}
+
+			if (childData.vertecies.size() > 0) {
+				returnData.vertecies.insert(
+					returnData.vertecies.end(),
+					childData.vertecies.begin(),
+					childData.vertecies.end()
+				);
+
+				for (auto& indicy : childData.indicies) {
+					returnData.indicies.push_back(indicy + additionIndex);
+				}
+
+				additionIndex += childData.vertecies.size();
+			}
+		}
+
+		return returnData;
+	}
+	UI::UIVertexData UI::GenerateVertecies(UI::ProcessData procDt, int textureId, Color color) {
+
+		glm::vec3 vertexColor = glm::vec3((float)color.r / 255, (float)color.g / 255, (float)color.b / 255);
+		glm::uint texture = glm::uint(textureId);
+
+		UIVertexData returnData{
+			.vertecies = {
+				{ glm::vec3(-1 + procDt.ofst.x, -1 + procDt.ofst.y, 0.0f), vertexColor, glm::vec2(1.0f, 0.0f), texture},
+				{ glm::vec3(-1 + procDt.ofst.x + procDt.size.x, -1 + procDt.ofst.y, 0.0f), vertexColor, glm::vec2(1.0f, 1.0f), texture},
+				{ glm::vec3(-1 + procDt.ofst.x + procDt.size.x, -1 + procDt.ofst.y + procDt.size.y, 0.0f), vertexColor, glm::vec2(0.0f, 1.0f), texture},
+				{ glm::vec3(-1 + procDt.ofst.x, -1 + procDt.ofst.y + procDt.size.y, 0.0f), vertexColor, glm::vec2(0.0f, 1.0f), texture},
+			},
+			.indicies = {
+				0, 2, 1, 0, 3, 2
+			}
+		};
+		return returnData;
 	}
 
 	//Element
@@ -169,145 +317,12 @@ namespace Ignis {
 		}
 	}
 
-	//Other
-
-	void UI::Bind(Element& dst, Element& src) {
-		if (dst.data->type != src.data->type)
-			throw std::runtime_error("Tried to bind together two different type of element");
-
-		DeleteData(dst.data);
-		dst.data = src.data;
-
-		switch (src.data->type)
-		{
-		case TEXT: {
-			Text& textDst = static_cast<Text&>(dst);
-			textDst.position = GetPosition(dst.data);
-			textDst.size = GetSize(dst.data);
-			textDst.text = GetText(dst.data);
-			break;
-		}
-		case BUTTON: {
-			Button& btnDst = static_cast<Button&>(dst);
-			btnDst.position = GetPosition(dst.data);
-			btnDst.size = GetSize(dst.data);
-			btnDst.color = GetColor(dst.data);
-			btnDst.textureId = GetTexture(dst.data);
-			btnDst.function = GetFunction(dst.data);
-			Bind(btnDst.text, GetTextElement(dst.data));
-			break;
-		}
-		case IMAGE: {
-			Image& imgDst = static_cast<Image&>(dst);
-			imgDst.position = GetPosition(dst.data);
-			imgDst.size = GetSize(dst.data);
-			imgDst.color = GetColor(dst.data);
-			imgDst.textureId = GetTexture(dst.data);
-			break;
-		}
-		case VIEW: {
-			View& viewDst = static_cast<View&>(dst);
-			viewDst.position = GetPosition(dst.data);
-			viewDst.size = GetSize(dst.data);
-			viewDst.color = GetColor(dst.data);
-			viewDst.textureId = GetTexture(dst.data);
-			viewDst.elements = GetChildrens(dst.data);
-			break;
-		}}
-	}
-
-	void UI::AddToSurface(Element element, int surface) {
-		if (!renderInstance->IsValidSurface(surface)) return;
-		elements[surface].push_back(element);
-	}
-	void UI::SubmitSurface(int surface) {
-		if (!elements.contains(surface)) return;
-
-		UI::ProcessData data{.ofst{0,0},.size{2,2}};
-
-		Render::UIRenderData outputData = ProcessVertecies(data, elements[surface]);
-		outputData.surface = surface;
-		outputData.changed = true;
-		renderInstance->AddUIElementData(outputData);
-	}
-	Render::UIRenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<Element>& elements) {
-		Render::UIRenderData returnData;
-
-		int additionIndex = 0;
-
-		for (auto& element : elements) {
-			Vec2 elementSize = { data.size.x / 100 * element.size.x , data.size.y / 100 * element.size.y };
-			Vec2 elementOffset = { data.size.x / 100 * element.position.x, data.size.y / 100 * element.position.y };
-
-
-			UI::ProcessData calcData{ .ofst{data.ofst.x + elementOffset.x, data.ofst.y + elementOffset.y}, .size{elementSize} };
-
-			UI::UIVertexData vertexData = GenerateVertecies(calcData, element.textureId, element.color);
-
-			returnData.vertecies.insert(
-				returnData.vertecies.end(),
-				vertexData.vertecies.begin(),
-				vertexData.vertecies.end()
-			);
-
-			//i wont look it up how they write it, I BELIIIIVEEEEE
-			for (auto& indicy : vertexData.indicies) {
-				returnData.indicies.push_back(indicy + additionIndex);
-			}
-			additionIndex += 4;
-
-			Render::UIRenderData childData;
-
-			if (element.data->type == VIEW) {
-				auto& view = static_cast<View&>(element);
-				childData = UI::ProcessVertecies(calcData, *view.elements);
-			}
-			else if (element.data->type == BUTTON) {
-				auto& button = static_cast<Button&>(element);
-				std::vector<Element> text = { button.text };
-				childData = UI::ProcessVertecies(calcData, text);
-			}
-
-			if (childData.vertecies.size() > 0) {
-				returnData.vertecies.insert(
-					returnData.vertecies.end(),
-					childData.vertecies.begin(),
-					childData.vertecies.end()
-				);
-
-				for (auto& indicy : childData.indicies) {
-					returnData.indicies.push_back(indicy + additionIndex);
-				}
-
-				additionIndex += childData.vertecies.size();
-			}
-		}
-
-		return returnData;
-	}
-	
-	UI::UIVertexData UI::GenerateVertecies(UI::ProcessData procDt, int textureId, Color color) {
-
-		glm::vec3 vertexColor = glm::vec3((float)color.r / 255, (float)color.g / 255, (float)color.b / 255);
-		glm::uint texture = glm::uint(textureId);
-
-		UIVertexData returnData{
-			.vertecies = {
-				{ glm::vec3(-1 + procDt.ofst.x, -1 + procDt.ofst.y, 0.0f), vertexColor, glm::vec2(1.0f, 0.0f), texture},
-				{ glm::vec3(-1 + procDt.ofst.x + procDt.size.x, -1 + procDt.ofst.y, 0.0f), vertexColor, glm::vec2(1.0f, 1.0f), texture},
-				{ glm::vec3(-1 + procDt.ofst.x + procDt.size.x, -1 + procDt.ofst.y + procDt.size.y, 0.0f), vertexColor, glm::vec2(0.0f, 1.0f), texture},
-				{ glm::vec3(-1 + procDt.ofst.x, -1 + procDt.ofst.y + procDt.size.y, 0.0f), vertexColor, glm::vec2(0.0f, 1.0f), texture},
-			},
-			.indicies = {
-				0, 2, 1, 0, 3, 2
-			}
-		};
-		return returnData;
-	}
+	//Variables
 
 	int UI::mainSurface = -1;
 	Render* UI::renderInstance = nullptr;
 	int UI::nextId = 0;
 	std::unordered_map<int, std::vector<UI::Element>> UI::elements;
+	std::unordered_set<UI::UIData*> UI::dataPtrs;
 }
 
