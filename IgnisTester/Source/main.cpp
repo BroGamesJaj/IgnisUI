@@ -5,6 +5,8 @@
 #define IGNIS_NAMES
 #include "../../IgnisLib/Source/IgnisLib.h"
 
+using namespace Ignis;
+
 int main() {
 	std::vector<int> surfaces;
 
@@ -25,7 +27,15 @@ int main() {
 
 	Ignis::UI::SetRender(&renderer);
 	Ignis::UI::SetMainSurface(surface);
-	Ignis::UI::CreateButton();
+
+	UI::Color tip(255,0,255);
+	UI::Color base(255,0,0);
+
+	Image image = Image( UI::Vec2( 20,30 ), UI::Vec2( 20, 40 ), std::nullopt, base);
+	Image image2 = Image(UI::Vec2(25, 40), UI::Vec2(50, 20), std::nullopt, tip);
+	UI::AddToSurface(image);
+	UI::AddToSurface(image2);
+	UI::SubmitSurface();
 
 	while (surfaces.size() != 0)
 	{
