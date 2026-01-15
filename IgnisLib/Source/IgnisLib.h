@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <concepts>
+#include <memory>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -26,8 +27,16 @@ struct GLFWmonitor;
 #define IGNIS_UI_NAMES
 #define IGNIS_RENDER_NAMES
 
-namespace Ignis {
 
+namespace Ignis {
+namespace Font {
+enum class TextDirection { LTR, RTL, BTT, TTB, GUESS };
+enum class TextAlign { LEFT, CENTER, RIGHT, GUESS };
+enum class Script { LATIN, CYRILLIC, ARABIC, DEVANAGARI, THAI, GREEK, HANGUL, HIRAGANA, KATAKANA, HAN, TAMIL, GUESS };
+enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
+
+    class Font;
+}
 #if defined(IGNIS_RENDER) || defined(IGNIS_UI)
     class Render
     {
@@ -38,6 +47,13 @@ namespace Ignis {
             glm::vec3 color;
             glm::vec2 texCoord;
             glm::uint texId;
+        };
+
+        struct GlyphInstance {
+            glm::vec2 pos;
+            glm::vec2 size;
+            glm::vec4 uvRect; 
+            glm::uint pageId;
         };
 
         struct Window {
@@ -73,6 +89,11 @@ namespace Ignis {
         struct UIRenderData {
             std::vector<Vertex> vertecies;
             std::vector<uint32_t> indicies;
+             // ? idk about this one yet
+            std::vector<Vertex> glyphVertecies;
+            std::vector<uint32_t> glyphIndicies;
+            std::vector<GlyphInstance> glyphInstances;
+
             int surface;
             bool changed = true;
         };
@@ -84,6 +105,10 @@ namespace Ignis {
         int CreateSurface(Window window, CreateGraphicPipeLineInfo graphicPipeLineInfo, CreateRenderPassInfo renderPassInfo = {});
         int CreateTexture(std::string path);
 
+        int CreateFontPage(const std::vector<uint8_t> &rgbaData, uint32_t width, uint32_t height);
+
+        int AddFont(const std::string path);
+
         void Draw(int surface);
         void Event();
         bool IsValidSurface(int surfaceIndex);
@@ -94,8 +119,10 @@ namespace Ignis {
         Vulkan* instance;
 
         friend class UI;
+    
 
         int AddUIElementData(UIRenderData& data);
+
     };
 
 #ifdef IGNIS_RENDER_NAMES
@@ -105,7 +132,9 @@ namespace Ignis {
 
 #endif
 
+
 #ifdef IGNIS_UI
+
     class UI {
     public:
         struct Vec2 {
@@ -155,6 +184,7 @@ namespace Ignis {
             Color color;
         };
 
+
         struct TextData {
             ElementData base;
             std::string text;
@@ -181,6 +211,7 @@ namespace Ignis {
                     dataPtrs.insert(data);
             }
 
+            virtual ~Element() = default;
             Vec2& position;
             Vec2& size;
 
@@ -199,16 +230,29 @@ namespace Ignis {
         public:
             Text() : Element(TEXT), text(GetText(data)) {}
 
-            Text(Vec2 position, Vec2 size, std::string text) 
-                : Element(TEXT), text(GetText(data)) {
+            Text(Vec2 position, Vec2 size, std::string text, Font::TextAlign textAlign = Font::TextAlign::LEFT, Font::TextDirection textDirection = Font::TextDirection::LTR) 
+                : Element(TEXT), text(GetText(data)), align(textAlign), direction(textDirection), font(UI::fonts[UI::fonts.size()]) {
                 this->position = position;
                 this->size = size;
                 this->text = text;
                 this->textureId = -1;
                 this->color = Color();
+                std::cout << "hello\n";
+                std::cout << this->text << "\n";
+
             }
 
-            std::string& text;
+            Font::Font *font;
+
+            uint FontSize{16};
+            Vec2 bounds{size};
+            Font::TextDirection direction{Font::TextDirection::LTR};
+            Font::TextAlign align{Font::TextAlign::LEFT};
+            // Style style{REGULAR};
+            // Color outline;
+            int outlineThickness{-1};
+
+            std::string &text;
 
             friend class UI;
         };
@@ -302,6 +346,8 @@ namespace Ignis {
 
         static inline void SetMainSurface(int surface) { mainSurface = surface; }
 
+        static int LoadFont(const std::string& fontPath, uint32_t size = 16);
+
         static int CreateButton(int surface = mainSurface) {
             if (!renderInstance) {
                 throw std::runtime_error("Render for UI has not been set");
@@ -313,10 +359,10 @@ namespace Ignis {
 
             Render::UIRenderData data{
                 .vertecies = {
-                    {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0}},
-                    {{ 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {0}},
-                    {{ 0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {0}},
-                    {{-0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {0}}
+                    {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, 0},
+                    {{ 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, 0},
+                    {{ 0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, 0},
+                    {{-0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, 0}
                 },
                 .indicies = { 
                         0, 2, 1, 0, 3, 2
@@ -331,6 +377,8 @@ namespace Ignis {
         template<std::derived_from<UI::Element>... Args>
         static void AddToSurface(int surface, Args&... args) {
             if (!renderInstance->IsValidSurface(surface)) return;
+        std::cout << "added smth\n";
+
             (elements[surface].push_back(args), ...);
         }
 
@@ -344,10 +392,13 @@ namespace Ignis {
 
     private:
         static Render* renderInstance;
+    
         static int mainSurface;
         static std::unordered_map<int, std::vector<Element>> elements;
         static int nextId;
         static std::unordered_set<UIData*> dataPtrs;
+        static std::unordered_map<int, Font::Font*> fonts;
+        static int nextFontId;
 
         struct ProcessData {
             Vec2 ofst;
@@ -359,8 +410,15 @@ namespace Ignis {
             std::vector<uint32_t> indicies;
         };
 
+        struct UITextVertexData {
+            std::vector<Render::Vertex> vertecies;
+            std::vector<uint32_t> indicies;
+            std::vector<Render::GlyphInstance> instances;
+        };
         static Render::UIRenderData ProcessVertecies(ProcessData data, std::vector<Element>& elements);
         static UIVertexData GenerateVertecies(UI::ProcessData procData, int textureId, Color color);
+
+        static UIVertexData GenerateTextQuad(UI::Color color);
 
         //Data Handling
         static UIData* CreateData(UIType type);
@@ -372,6 +430,7 @@ namespace Ignis {
 
         //Text
         static std::string& GetText(UIData* data);
+        static std::vector<Render::GlyphInstance> GenerateGlyphInstances(UI::Text &text, UI::ProcessData proc);
 
         //Image
         static int& GetTexture(UIData* data);

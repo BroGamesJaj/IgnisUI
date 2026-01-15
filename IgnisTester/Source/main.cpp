@@ -5,50 +5,57 @@
 #define IGNIS_UI_NAMES
 #define IGNIS_RENDER_NAMES
 #include "../../IgnisLib/Source/IgnisLib.h"
+#include "../../IgnisLib/Source/Font.h"
 
 using namespace Ignis;
 
 int main() {
-	std::vector<int> surfaces;
+    std::vector<int> surfaces;
 
-	glfwInit();
+    glfwInit();
 
+    CreateGraphicPipeLineInfo gpInfo{};
+    gpInfo.vertexShader = "../Resources/Shaders/shader.vert";
+    gpInfo.fragmentShader = "../Resources/Shaders/shader.frag";
 
-	CreateGraphicPipeLineInfo gpInfo{};
-	gpInfo.vertexShader = "../Resources/Shaders/shader.vert";
-	gpInfo.fragmentShader = "../Resources/Shaders/shader.frag";
+    CreateGraphicPipeLineInfo gpInfoGlyph{};
+    gpInfoGlyph.vertexShader = "../Resources/Shaders/glyphShader.vert";
+    gpInfoGlyph.fragmentShader = "../Resources/Shaders/glyphShader.frag";
 
-	Render renderer = Render(true);
+    Render renderer = Render(true);
 
-	Window window1 = renderer.CreateAppWindow(500, 400, "Gup 1");
-	int surface = renderer.CreateSurface(window1, gpInfo);
-	surfaces.push_back(surface);
+    Window window1 = renderer.CreateAppWindow(500, 400, "Gup 1");
+    int surface = renderer.CreateSurface(window1, gpInfo);
+    surfaces.push_back(surface);
 
-	renderer.CreateTexture("../Resources/Textures/monikaTexture.jpg");
+    renderer.CreateTexture("../Resources/Textures/monikaTexture.jpg");
 
-	UI::SetRender(&renderer);
-	UI::SetMainSurface(surface);
+    UI::SetRender(&renderer);
+    UI::SetMainSurface(surface);
 
-	Color tip(255,0,255);
-	Color base(255,0,0);
+    UI::LoadFont("../unifont-17.0.03.otf");
 
-	Image image = Image( Vec2(20, 30), Vec2(20, 40), base);
-	Image image2 = Image( Vec2(25, 40), Vec2(50, 20), tip);
-	UI::AddToSurface(surface, image, image2);
-	UI::SubmitSurface();
+    Color tip(255, 0, 255);
+    Color base(255, 0, 0);
 
-	while (surfaces.size() != 0)
-	{
-		renderer.Event();
+    Image image = Image(Vec2(25, 25), Vec2(50, 50),1, base);
+    //Image image2 = Image(Vec2(25, 40), Vec2(50, 20), tip);
+    Text text = Text(Vec2(20, 30), Vec2(20, 40),"This shit better work!");
+    UI::AddToSurface(surface, image);
+    UI::AddToSurface(surface, text);
+    UI::SubmitSurface();
 
-		for (auto it = surfaces.begin(); it != surfaces.end(); ) {
-			if (renderer.IsValidSurface(*it)) {
-				renderer.Draw(*it);
-				it++;
-			}
-			else it = surfaces.erase(it);
-		}
-	}
+    while (surfaces.size() != 0) {
+        renderer.Event();
 
-	UI::Clean();
+        for (auto it = surfaces.begin(); it != surfaces.end();) {
+            if (renderer.IsValidSurface(*it)) {
+                renderer.Draw(*it);
+                it++;
+            } else
+                it = surfaces.erase(it);
+        }
+    }
+
+    UI::Clean();
 }
