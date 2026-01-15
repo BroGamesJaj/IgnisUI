@@ -126,7 +126,7 @@ namespace Ignis {
             Color(unsigned char r, unsigned char g, unsigned char b)
                 : r(r), g(g), b(b) {}
 
-            Color() : r(1), g(1), b(1) {}
+            Color() : r(255), g(255), b(255) {}
 
             unsigned char r;
             unsigned char g;
@@ -399,6 +399,47 @@ namespace Ignis {
 
     class Network {
     public:
+        enum HTTPMethod {
+            GET,
+            POST,
+            PUT,
+            PATCH,
+            DEL
+        };
+
+        enum ContentType {
+            ANY,
+            PLAIN,
+            JSON
+        };
+
+        enum ConnectionState {
+            CLOSE,
+            KEEP
+        };
+
+        struct Request {
+            HTTPMethod method = GET;
+            std::string location = "/";
+            ContentType contentType = ANY;
+            ConnectionState connectionState = CLOSE;
+        };
+
+        struct Response {
+            unsigned int status_code;
+            std::string status_message;
+            std::string body;
+            std::string redirect;
+        };
+
         static void Test();
+        static Response Request(std::string address, struct Request request);
+
+    private:
+        struct Context;
+        struct Socket;
+
+        static Context* io;
+        static Socket* socket;
     };
 }
