@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 file(GLOB_RECURSE SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/Source/*.cpp")
-add_library(Ignis STATIC ${SOURCES} "Source/UI.cpp")
+add_library(Ignis STATIC ${SOURCES})
 
 set(outputDir ${CMAKE_SOURCE_DIR}/Output)
 set_target_properties(Ignis PROPERTIES
@@ -23,6 +23,11 @@ set_target_properties(Ignis PROPERTIES
 # its turned off
 set(HB_BUILD_SUBSET OFF CACHE BOOL "" FORCE)
 add_subdirectory(Dependencies/harfbuzz)
+
+target_include_directories(Ignis PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/Dependencies/asio
+)
+add_subdirectory(Dependencies/boringssl)
 
 if (WIN32)
     target_compile_options(Ignis PRIVATE /permissive-)
@@ -42,7 +47,7 @@ else()
     target_link_libraries(Ignis PRIVATE Vulkan::Vulkan ${GLFW_LIBRARIES})
 endif()
 
-target_link_libraries(Ignis PRIVATE harfbuzz)
+target_link_libraries(Ignis PRIVATE harfbuzz ssl crypto)
 
 target_include_directories(Ignis PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}/Dependencies

@@ -37,6 +37,8 @@ int main() {
 	UI::AddToSurface(surface, image, image2);
 	UI::SubmitSurface();
 
+	Network::Test();
+	
 	while (surfaces.size() != 0)
 	{
 		renderer.Event();
@@ -47,8 +49,10 @@ int main() {
 				it++;
 			}
 			else it = surfaces.erase(it);
+
 		}
 	}
+	
 
 	UI::Clean();
 }

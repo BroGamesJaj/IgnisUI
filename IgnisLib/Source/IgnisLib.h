@@ -396,4 +396,9 @@ namespace Ignis {
 #endif
 
 #endif
+
+    class Network {
+    public:
+        static void Test();
+    };
 }
