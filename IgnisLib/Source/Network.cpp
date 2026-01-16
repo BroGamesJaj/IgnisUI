@@ -12,6 +12,40 @@
 #include "nlohmann/json.hpp"
 
 namespace Ignis {
+
+    struct Network::Response {
+
+        unsigned int status_code;
+        std::string status_message;
+        nlohmann::json body;
+        RedirectInfo redirect;
+    };
+
+    Network::Response  Network::RedirectInfo::Redirect(Network::HTTPMethod method) {
+        std::string url = redirectString;
+        
+        if (url.find("http://", 0) == 0)
+            url.erase(0, 7);
+        else if (url.find("https://", 0) == 0)
+            url.erase(0, 8);
+
+        struct Network::Request rqs;
+        rqs.method = method;
+
+        std::string host;
+
+        auto slash = url.find('/');
+        if (slash == std::string::npos) {
+            host = url;
+        }
+        else {
+            host = url.substr(0, slash);
+            rqs.location = url.substr(slash);
+        }
+
+        return Network::Request(host, rqs);
+    }
+
     struct Network::Context {
         Context() : ctx(asio::ssl::context::tls_client), io() {
             ctx.set_default_verify_paths();
@@ -34,12 +68,8 @@ namespace Ignis {
         rqs.location = "/redirect";
         Response rsp = Request("25.32.203.59", rqs);
 
-        struct Request rqs2;
-        rqs2.location = rsp.redirect;
-        std::cout << rsp.redirect << std::endl;
-        rsp = Request("25.32.203.59", rqs2);
-
-        std::cout << rsp.body << std::endl;
+        rsp = rsp.redirect.Redirect(); //torequest for request generation from urls
+        std::cout << rsp.body.dump(4) << std::endl;
     }
 
     Network::Response Network::Request(std::string address, struct Request request) {
@@ -66,7 +96,18 @@ namespace Ignis {
                 break;
             }
 
-            asio::ip::address addressData = asio::ip::make_address(address);
+            asio::ip::tcp::endpoint endpoint;
+
+            try {
+                asio::ip::address addressData = asio::ip::make_address(address);
+                endpoint = asio::ip::tcp::endpoint(addressData, 443);
+            }
+            catch (std::system_error e) {
+                asio::ip::tcp::resolver resolver(io->io);
+                asio::ip::tcp::resolver::results_type endpoints = resolver.resolve(address, "https");
+                endpoint = *endpoints.begin();
+            }
+
 
             std::string content;
             switch (request.contentType)
@@ -89,8 +130,9 @@ namespace Ignis {
 
             socket->socket.lowest_layer().close();
             socket = new Network::Socket(io);
-            asio::ip::tcp::endpoint endpoint(addressData, 443);
             socket->socket.lowest_layer().connect(endpoint);
+
+            SSL_set_tlsext_host_name(socket->socket.native_handle(), address.c_str());
             socket->socket.handshake(asio::ssl::stream_base::client);
 
             std::string requestString =
@@ -126,9 +168,9 @@ namespace Ignis {
                 }
                 else if (responseData.status_code >= 300 && responseData.status_code < 400 &&
                     header.rfind("Location:", 0) == 0) {
-                    responseData.redirect = header.substr(9);
-                    responseData.redirect.erase(
-                        responseData.redirect.find_last_not_of("\r\n") + 1);
+                    responseData.redirect.redirectString = header.substr(10);
+                    responseData.redirect.redirectString.erase(
+                        responseData.redirect.redirectString.find_last_not_of("\r\n") + 1);
                 }
             }
 
@@ -159,7 +201,13 @@ namespace Ignis {
                 bodyStream << &response;
             }
 
-            responseData.body = bodyStream.str();
+            try {
+                responseData.body = nlohmann::json::parse(bodyStream.str());
+            }
+            catch (const nlohmann::json::parse_error& e) {
+                responseData.body["message"] = bodyStream.str();
+            }
+
             return responseData;
         }
         catch (std::system_error e) {

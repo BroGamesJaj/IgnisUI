@@ -425,11 +425,12 @@ namespace Ignis {
             ConnectionState connectionState = CLOSE;
         };
 
-        struct Response {
-            unsigned int status_code;
-            std::string status_message;
-            std::string body;
-            std::string redirect;
+        struct Response;
+
+        struct RedirectInfo {
+            std::string redirectString;
+
+            Response Redirect(Network::HTTPMethod method = Network::HTTPMethod::GET);
         };
 
         static void Test();
