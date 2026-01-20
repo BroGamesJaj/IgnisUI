@@ -32,10 +32,15 @@ int main() {
 	Color tip(255,0,255);
 	Color base(255,0,0);
 
-	Image image = Image( Vec2(20, 30), Vec2(20, 40), base);
+	//Image image = Image( Vec2(20, 30), Vec2(20, 40), base);
 	Image image2 = Image( Vec2(25, 40), Vec2(50, 20), tip);
-	UI::AddToSurface(surface, image, image2);
+	UI::AddToSurface(surface, image2);
 	UI::SubmitSurface();
+
+	Audio::Test("../Resources/Audios/LA MARSEILLAISE.mp3");
+	int tmp;
+	std::cin >> tmp;
+
 
 	while (surfaces.size() != 0)
 	{

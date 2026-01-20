@@ -396,4 +396,9 @@ namespace Ignis {
 #endif
 
 #endif
+
+    class Audio {
+    public:
+        static void Test(std::string path);
+    };
 }
