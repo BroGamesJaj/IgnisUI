@@ -1,3 +1,5 @@
+#include <vulkan/vulkan_core.h>
+
 #include "IgnisLib.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -49,7 +51,6 @@ struct SurfaceVulkanData {
     VkRenderPass renderPass;
     VkPipeline pipeline;
     VkPipelineLayout layout;
-    VkPipeline glyphPipeLine;
 
     std::vector<VkCommandBuffer> commandBuffers;
 
@@ -59,8 +60,7 @@ struct SurfaceVulkanData {
     std::vector<VkSemaphore> renderFinishedSemaphores;
     std::vector<VkFence> inFlightFences;
 
-
-    //TODO: change all these to struct buffer
+    // TODO: change all these to struct buffer
     VkBuffer vertexBuffer;
     VkDeviceMemory vertexBufferMemory;
     bool haveVertexData;
@@ -68,19 +68,6 @@ struct SurfaceVulkanData {
     VkBuffer indexBuffer;
     VkDeviceMemory indexBufferMemory;
     uint32_t indiceCount;
-
-    VkBuffer textVertexBuffer;
-    VkDeviceSize textVertexBufferSize;
-    VkDeviceMemory textVertexBufferMemory;
-    bool haveTextVertexData;
-
-    VkBuffer instanceBuffer;
-    VkDeviceMemory instanceBufferMemory;
-    uint32_t instanceCount;
-
-    VkBuffer textIndexBuffer;
-    VkDeviceMemory textIndexBufferMemory;
-    bool textIndiceCount;
 
     Buffer dummyBuffer;
 
@@ -112,20 +99,18 @@ struct VertexData {
     std::vector<GlyphInstance> instances;
 };
 
-static std::array<VkVertexInputBindingDescription, 2> GetVertexBindingDescription() {
-    std::array<VkVertexInputBindingDescription, 2> bindingDescription{};
+static std::array<VkVertexInputBindingDescription, 1> GetVertexBindingDescription() {
+    std::array<VkVertexInputBindingDescription, 1> bindingDescription{};
 
     bindingDescription[0].binding = 0;
     bindingDescription[0].stride = sizeof(Vertex);
     bindingDescription[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-    bindingDescription[1] = {.binding = 1, .stride = sizeof(Render::GlyphInstance), .inputRate = VK_VERTEX_INPUT_RATE_INSTANCE};
-
     return bindingDescription;
 }
 
-static std::array<VkVertexInputAttributeDescription, 8> GetVertexAttributeDescriptions() {
-    std::array<VkVertexInputAttributeDescription, 8> attributeDescriptions{};
+static std::array<VkVertexInputAttributeDescription, 4> GetVertexAttributeDescriptions() {
+    std::array<VkVertexInputAttributeDescription, 4> attributeDescriptions{};
 
     attributeDescriptions[0].binding = 0;
     attributeDescriptions[0].location = 0;
@@ -147,14 +132,8 @@ static std::array<VkVertexInputAttributeDescription, 8> GetVertexAttributeDescri
     attributeDescriptions[3].format = VK_FORMAT_R32_UINT;
     attributeDescriptions[3].offset = offsetof(Vertex, texId);
 
-    attributeDescriptions[4] = {4, 1, VK_FORMAT_R32G32_SFLOAT, offsetof(Render::GlyphInstance, pos)};
-    attributeDescriptions[5] = {5, 1, VK_FORMAT_R32G32_SFLOAT, offsetof(Render::GlyphInstance, size)};
-    attributeDescriptions[6] = {6, 1, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(Render::GlyphInstance, uvRect)};
-    attributeDescriptions[7] = {7, 1, VK_FORMAT_R32_UINT, offsetof(Render::GlyphInstance, pageId)};
-
     return attributeDescriptions;
 }
-
 
 static std::vector<char> readFile(const std::string &filename) {
     // std::ios::ate - start reading from end
@@ -359,7 +338,6 @@ class Render::Vulkan {
         SurfaceVulkanData *surface = &(windows[curWindow].surfaces[curSurface]);
 
         surface->haveVertexData = false;
-        surface->haveTextVertexData = false;
 
         // creates the swapchain, the images that are rendered onto the screen
         CreateSwapChain(surface->swapChain, surface->swapChainImages, windows[curWindow], curWindow, curSurface);
@@ -490,7 +468,7 @@ class Render::Vulkan {
 
     std::unordered_map<int, TextureData> textureData;
     VkSampler textureSampler;
-    int nextTexture = 0;
+    int nextTexture = 1;
     uint32_t MAX_TEXTURES;
 
     VkImageView dummyImageView;
@@ -530,20 +508,11 @@ class Render::Vulkan {
         vkDestroyDescriptorSetLayout(device, data->descriptorSetLayout, nullptr);
         vkDestroyDescriptorPool(device, data->descriptorPool, nullptr);
 
-        vkDestroyBuffer(device, data->instanceBuffer, nullptr);
-        vkFreeMemory(device, data->instanceBufferMemory, nullptr);
-
         vkDestroyBuffer(device, data->vertexBuffer, nullptr);
         vkFreeMemory(device, data->vertexBufferMemory, nullptr);
 
         vkDestroyBuffer(device, data->indexBuffer, nullptr);
         vkFreeMemory(device, data->indexBufferMemory, nullptr);
-
-        vkDestroyBuffer(device, data->textVertexBuffer, nullptr);
-        vkFreeMemory(device, data->textVertexBufferMemory, nullptr);
-
-        vkDestroyBuffer(device, data->textIndexBuffer, nullptr);
-        vkFreeMemory(device, data->textIndexBufferMemory, nullptr);
 
         vkDestroyBuffer(device, data->dummyBuffer.buffer, nullptr);
         vkFreeMemory(device, data->dummyBuffer.memory, nullptr);
@@ -627,7 +596,7 @@ class Render::Vulkan {
     // update
     void DrawFrame(GLFWwindow *window, VkSurfaceKHR *surface) {
         SurfaceVulkanData *data = &windows[window].surfaces[*surface];
-        if (!data->haveVertexData && !data->haveTextVertexData) return;
+        if (!data->haveVertexData) return;
         // waits for last frame to complete (for the fence), then resets it
         vkWaitForFences(device, 1, &data->inFlightFences[data->currentFrame], VK_TRUE, UINT64_MAX);
 
@@ -649,19 +618,9 @@ class Render::Vulkan {
         // updating the uniform buffer for the frame
         UpdateUniformBuffer(data, &windows[window]);
 
-        if(data->haveVertexData){
         // resets and records the command buffer
         vkResetCommandBuffer(data->commandBuffers[data->currentFrame], 0);
         RecordCommandBuffer(data, windows[window].swapChainExtent, imageIndex);
-        }
-
-        if(data->haveTextVertexData){
-            std::cout << "have text data\n";
-            // resets and records the command buffer
-            vkResetCommandBuffer(data->commandBuffers[data->currentFrame], 0);
-            RecordCommandBufferText(data, windows[window].swapChainExtent, imageIndex);
-        }
-
 
         // submiting it to the graphics family queue
         VkSubmitInfo submitInfo{};
@@ -756,22 +715,19 @@ class Render::Vulkan {
             if (element.changed) {
                 SurfaceAccess acces = surfaceAccess[surfaceId];
                 SurfaceVulkanData *surfaceData = &windows[acces.window].surfaces[acces.surface];
-                VertexData glyphData{}; // this leaches data hehe
-                VertexData data = GetVertexData(surfaceId, surfaceData, &glyphData);
+                VertexData data = GetVertexData(surfaceId, surfaceData);
                 std::cout << "hi\n";
-                CreateVertexBuffer(surfaceData->vertexBuffer, surfaceData->vertexBufferMemory, surfaceData->haveVertexData,nullptr, data.vertecies);
-                CreateIndexBuffer(surfaceData->indexBuffer, surfaceData->indexBufferMemory, data.indicies);
-                //this for text
-                if(glyphData.vertecies.size() != 0) {
-                    std::cout << "please\n";
-                CreateVertexBuffer(surfaceData->textVertexBuffer, surfaceData->textVertexBufferMemory, surfaceData->haveTextVertexData, &surfaceData->textVertexBufferSize, glyphData.vertecies);
-                CreateIndexBuffer(surfaceData->textIndexBuffer, surfaceData->indexBufferMemory, glyphData.indicies);
-                CreateInstanceBuffer(surfaceData, element.glyphInstances);
+                if (!data.vertecies.empty()) {
+                    CreateVertexBuffer(surfaceData->vertexBuffer, surfaceData->vertexBufferMemory, surfaceData->haveVertexData, 0, data.vertecies);
+                    CreateIndexBuffer(surfaceData->indexBuffer, surfaceData->indexBufferMemory, data.indicies);
                 }
-                if(surfaceData->dummyBuffer.buffer == VK_NULL_HANDLE) CreateDummyBuffer(surfaceData->dummyBuffer.buffer, surfaceData->dummyBuffer.memory);
+
+                if (surfaceData->dummyBuffer.buffer == VK_NULL_HANDLE) {
+                    CreateDummyBuffer(surfaceData->dummyBuffer.buffer, surfaceData->dummyBuffer.memory);
+                }
 
                 surfaceData->indiceCount = data.indicies.size();
-                surfaceData->textIndiceCount = glyphData.indicies.size();
+                element.changed = false;
             }
         }
     }
@@ -899,7 +855,7 @@ class Render::Vulkan {
     }
 
     // gets the verticies and indexes for the said surface so we can create the vertex buffer
-    VertexData GetVertexData(int surfaceId, SurfaceVulkanData *surfaceData, VertexData *textVertexData) { // TODO: not return this as a param
+    VertexData GetVertexData(int surfaceId, SurfaceVulkanData *surfaceData) {
         VertexData data;
         uint32_t index = 0;
 
@@ -910,14 +866,6 @@ class Render::Vulkan {
         for (auto i : element.indicies) {
             data.indicies.push_back(i + index);
         }
-
-        // this should be a very temp solution  01.15
-        textVertexData->vertecies.insert(textVertexData->vertecies.end(), element.glyphVertecies.begin(), element.glyphVertecies.end());
-        for (auto i : element.glyphIndicies) {
-            textVertexData->indicies.push_back(i + index);
-        }
-        textVertexData->instances.insert(textVertexData->instances.end(), element.glyphInstances.begin(), element.glyphInstances.end());
-
 
         index += static_cast<uint32_t>(element.vertecies.size());
 
@@ -936,10 +884,9 @@ class Render::Vulkan {
 
         haveVertexData = true;
 
-
         VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 
-        if(vertexBufferSize) (*vertexBufferSize) = bufferSize;
+        if (vertexBufferSize) (*vertexBufferSize) = bufferSize;
         // stage buffer so we can move the data to the GPU
         VkBuffer stagingBuffer;
         VkDeviceMemory stagingBufferMemory;
@@ -958,33 +905,6 @@ class Render::Vulkan {
         CopyBuffer(stagingBuffer, vertexBuffer, bufferSize);
 
         // cleans up stuff we dont need anymore
-        vkDestroyBuffer(device, stagingBuffer, nullptr);
-        vkFreeMemory(device, stagingBufferMemory, nullptr);
-    }
-
-    // instance buffer creation
-    void CreateInstanceBuffer(SurfaceVulkanData *surface, std::vector<GlyphInstance> &instances) {
-        if (surface->instanceBuffer != VK_NULL_HANDLE) {
-            vkDestroyBuffer(device, surface->instanceBuffer, nullptr);
-            vkFreeMemory(device, surface->instanceBufferMemory, nullptr);
-            surface->instanceBuffer = VK_NULL_HANDLE;
-        }
-
-        VkDeviceSize bufferSize = sizeof(GlyphInstance) * instances.size();
-
-        VkBuffer stagingBuffer;
-        VkDeviceMemory stagingBufferMemory;
-        CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
-
-        void *data;
-        vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
-        memcpy(data, instances.data(), (size_t)bufferSize);
-        vkUnmapMemory(device, stagingBufferMemory);
-
-        CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, surface->instanceBuffer, surface->instanceBufferMemory);
-
-        CopyBuffer(stagingBuffer, surface->instanceBuffer, bufferSize);
-
         vkDestroyBuffer(device, stagingBuffer, nullptr);
         vkFreeMemory(device, stagingBufferMemory, nullptr);
     }
@@ -1022,7 +942,7 @@ class Render::Vulkan {
             vkFreeMemory(device, dummyBufferMemory, nullptr);
             dummyBuffer = VK_NULL_HANDLE;
         }
-        CreateBuffer(16, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT , dummyBuffer, dummyBufferMemory);
+        CreateBuffer(16, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, dummyBuffer, dummyBufferMemory);
     }
 
     // uniform buffer creation
@@ -1124,7 +1044,9 @@ class Render::Vulkan {
             for (uint32_t t = 0; t < MAX_TEXTURES; t++) {
                 imageInfos[t].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-                if (nextTexture > t)
+                if (t == 0)
+                    imageInfos[t].imageView = dummyImageView;
+                else if (nextTexture > t)
                     imageInfos[t].imageView = textureData[t].textureImageView;
                 else
                     imageInfos[t].imageView = dummyImageView;
@@ -1254,20 +1176,22 @@ class Render::Vulkan {
     }
     // records command to commandbuffer, also need the image's index that you want to write to
     void RecordCommandBuffer(SurfaceVulkanData *surface, VkExtent2D extent, uint32_t imageIndex) {
+        /*
         VkBufferCreateInfo bufferInfo{};
         bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         bufferInfo.size = 16;  // Tiny is fine
-        bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        bufferInfo.usage = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
         bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        
+        */
+
         int frame = surface->currentFrame;
         VkCommandBuffer cmdBuffer = surface->commandBuffers[frame];
 
         // start the recording to a buffer with some specifications (if called on a buffer, it will reset it)
         VkCommandBufferBeginInfo beginInfo{};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        beginInfo.flags = 0;                   // Optional
-        beginInfo.pInheritanceInfo = nullptr;  // Optional
+        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;  // Optional
+        beginInfo.pInheritanceInfo = nullptr;                            // Optional
 
         if (vkBeginCommandBuffer(cmdBuffer, &beginInfo) != VK_SUCCESS) {
             throw std::runtime_error("failed to begin recording command buffer!");
@@ -1291,9 +1215,6 @@ class Render::Vulkan {
 
         vkCmdBeginRenderPass(cmdBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-        // commands to record
-        vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, surface->pipeline);
-
         // the dynamic states need to be set
         VkViewport viewport{};
         viewport.x = 0.0f;
@@ -1309,101 +1230,23 @@ class Render::Vulkan {
         scissor.extent = extent;
         vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
-        // binds the vertex buffers to the said bindings
+        vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, surface->pipeline);
+
         VkBuffer buffers[] = {surface->vertexBuffer, surface->dummyBuffer.buffer};
-        VkDeviceSize offsets[] = {0, 0};  // set where to start reading vertex data from
+        VkDeviceSize offsets[] = {0, 0};
         vkCmdBindVertexBuffers(cmdBuffer, 0, 2, buffers, offsets);
 
-        // binds the index buffer to the said binding
         vkCmdBindIndexBuffer(cmdBuffer, surface->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-        vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, surface->layout, 0, 1, &surface->descriptorSets[frame], 0, nullptr);
+        vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, surface->layout, 0, 1, &surface->descriptorSets[surface->currentFrame], 0, nullptr);
 
-        // draw call
-        vkCmdDrawIndexed(cmdBuffer, static_cast<uint32_t>(surface->indiceCount), 1, 0, 0, 0);
+        vkCmdDrawIndexed(cmdBuffer, surface->indiceCount, 1, 0, 0, 0);
 
-        // ending the render pass
         vkCmdEndRenderPass(cmdBuffer);
-
-        // ending the command recording
         if (vkEndCommandBuffer(cmdBuffer) != VK_SUCCESS) {
             throw std::runtime_error("failed to record command buffer!");
         }
     }
-    // records command to commandbuffer, also need the image's index that you want to write to
-    void RecordCommandBufferText(SurfaceVulkanData *surface, VkExtent2D extent, uint32_t imageIndex) {
-        std::cout << "Record text\n";
-        int frame = surface->currentFrame;
-        VkCommandBuffer cmdBuffer = surface->commandBuffers[frame];
-
-        // start the recording to a buffer with some specifications (if called on a buffer, it will reset it)
-        VkCommandBufferBeginInfo beginInfo{};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        beginInfo.flags = 0;                   // Optional
-        beginInfo.pInheritanceInfo = nullptr;  // Optional
-
-        if (vkBeginCommandBuffer(cmdBuffer, &beginInfo) != VK_SUCCESS) {
-            throw std::runtime_error("failed to begin recording command buffer!");
-        }
-
-        // begining the render pass on the framebuffer
-        VkRenderPassBeginInfo renderPassInfo{};
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        renderPassInfo.renderPass = surface->renderPass;
-        renderPassInfo.framebuffer = surface->swapChainFramebuffers[imageIndex];
-
-        renderPassInfo.renderArea.offset = {0, 0};
-        renderPassInfo.renderArea.extent = extent;
-
-        std::array<VkClearValue, 2> clearValues{};
-        clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
-        clearValues[1].depthStencil = {1.0f, 0};
-
-        renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-        renderPassInfo.pClearValues = clearValues.data();
-
-        vkCmdBeginRenderPass(cmdBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-        // commands to record
-        vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, surface->pipeline);
-
-        // the dynamic states need to be set
-        VkViewport viewport{};
-        viewport.x = 0.0f;
-        viewport.y = 0.0f;
-        viewport.width = static_cast<float>(extent.width);
-        viewport.height = static_cast<float>(extent.height);
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
-        vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
-
-        VkRect2D scissor{};
-        scissor.offset = {0, 0};
-        scissor.extent = extent;
-        vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
-
-        // binds the vertex buffers to the said bindings
-        VkBuffer buffers[] = {surface->textVertexBuffer, surface->instanceBuffer };
-        VkDeviceSize offsets[] = {0, surface->textVertexBufferSize};  // set where to start reading vertex data from
-        vkCmdBindVertexBuffers(cmdBuffer, 0, 2, buffers, offsets);
-
-        // binds the index buffer to the said binding
-        vkCmdBindIndexBuffer(cmdBuffer, surface->textIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
-
-        vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, surface->layout, 0, 1, &surface->descriptorSets[frame], 0, nullptr);
-
-        // draw call
-        vkCmdDrawIndexed(cmdBuffer, static_cast<uint32_t>(surface->textIndiceCount), surface->instanceCount, 0, 0, 0);
-
-        // ending the render pass
-        vkCmdEndRenderPass(cmdBuffer);
-
-        // ending the command recording
-        if (vkEndCommandBuffer(cmdBuffer) != VK_SUCCESS) {
-            throw std::runtime_error("failed to record command buffer!");
-        }
-    }
-
 
     // texture magic
     void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage &image, VkDeviceMemory &imageMemory) {
@@ -1473,51 +1316,21 @@ class Render::Vulkan {
     void CreateTextureImageFromMemory(const uint8_t *rgba, uint32_t width, uint32_t height, VkImage &image, VkDeviceMemory &memory) {
         VkDeviceSize imageSize = width * height * 4;
 
+        if (!rgba) throw std::runtime_error("failed to load texture image from memory!");
+
         VkBuffer stagingBuffer;
         VkDeviceMemory stagingBufferMemory;
         CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
         void *data;
         vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
-        memcpy(data, rgba, imageSize);
+        memcpy(data, rgba, static_cast<size_t>(imageSize));
         vkUnmapMemory(device, stagingBufferMemory);
 
         CreateImage(width, height, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, image, memory);
 
         TransitionImageLayout(image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
         CopyBufferToImage(stagingBuffer, image, width, height);
-        TransitionImageLayout(image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-        vkDestroyBuffer(device, stagingBuffer, nullptr);
-        vkFreeMemory(device, stagingBufferMemory, nullptr);
-    }
-
-    void CreateTextureText(Font::Font *text, VkImage &image, VkDeviceMemory &memory) {
-        int texWidth, texHeight, texChannels;
-        uint8_t *pixels = nullptr;                          // TODO: bring this
-        VkDeviceSize imageSize = texWidth * texHeight * 4;  // TODO: set size
-
-        if (!pixels) throw std::runtime_error("failed to load texture text!");
-
-        VkBuffer stagingBuffer;
-        VkDeviceMemory stagingBufferMemory;
-        CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
-
-        void *data;
-        vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
-        memcpy(data, pixels, static_cast<size_t>(imageSize));
-        vkUnmapMemory(device, stagingBufferMemory);
-
-        // stbi_image_free(pixels);
-
-        // TODO: set the flags for text
-        CreateImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, image, memory);
-
-        // TODO: set the flags for text
-        TransitionImageLayout(image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-        CopyBufferToImage(stagingBuffer, image, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
-
-        // TODO: set the flags for text
         TransitionImageLayout(image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
         vkDestroyBuffer(device, stagingBuffer, nullptr);

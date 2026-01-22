@@ -152,39 +152,24 @@ namespace Ignis {
 			UI::ProcessData calcData{ .ofst{data.ofst.x + elementOffset.x, data.ofst.y + elementOffset.y}, .size{elementSize} };
             if (element.data->type == TEXT) {
                 std::cout << "text processing\n";
-                if (UI::Text* textPtr = dynamic_cast<UI::Text*>(&element)) {
-                    std::cout << "good\n";
-                } else {
-                    std::cout << "bad\n";
-                }
-
-                UI::Text &text = dynamic_cast<UI::Text&>(element);
-                std::cout << "a text: "<< text.text << "\n";
                
-                auto glyphs = GenerateGlyphInstances(text,calcData);
+                std::cout << "vsize before: " << returnData.vertecies.size() << "\n";
+                UIVertexData textVertexData = GenerateTextVertecies(calcData,element.data,GetColor(element.data));
                 
-                if (!glyphs.empty()) {
-                std::cout << "not empty\n";
-                    UIVertexData quadData = GenerateTextQuad(text.color);
-                    
-                    returnData.glyphVertecies.insert(
-                        returnData.glyphVertecies.end(),
-                        quadData.vertecies.begin(),
-                        quadData.vertecies.end()
-                    );
-                    
-                    // fun word
-                    for (auto indicy : quadData.indicies) {
-                        returnData.glyphIndicies.push_back(indicy + additionIndex);
-                    }
-                    additionIndex += 4;
-                    
-                    returnData.glyphInstances.insert(
-                        returnData.glyphInstances.end(),
-                        glyphs.begin(),
-                        glyphs.end()
-                    );
+                returnData.vertecies.insert(
+                    returnData.vertecies.end(),
+                    textVertexData.vertecies.begin(),
+                    textVertexData.vertecies.end()
+                );
+                
+                std::cout << "vsize: " << returnData.vertecies.size() << "\n";
+                // fun word 
+                for (auto indicy : textVertexData.indicies) {
+                    returnData.indicies.push_back(indicy + additionIndex);
                 }
+                additionIndex += textVertexData.indicies.size();
+                std::cout << "additionIndex: " << textVertexData.indicies.size() << "\n";
+
             } else {
                 UI::UIVertexData vertexData = GenerateVertecies(calcData, element.textureId, element.color);
 
@@ -238,10 +223,10 @@ namespace Ignis {
 
 		UIVertexData returnData{
 			.vertecies = {
-				{ glm::vec3(-1 + procDt.ofst.x, -1 + procDt.ofst.y, 0.0f), vertexColor, glm::vec2(1.0f, 0.0f), texture},
-				{ glm::vec3(-1 + procDt.ofst.x + procDt.size.x, -1 + procDt.ofst.y, 0.0f), vertexColor, glm::vec2(1.0f, 1.0f), texture},
-				{ glm::vec3(-1 + procDt.ofst.x + procDt.size.x, -1 + procDt.ofst.y + procDt.size.y, 0.0f), vertexColor, glm::vec2(0.0f, 1.0f), texture},
-				{ glm::vec3(-1 + procDt.ofst.x, -1 + procDt.ofst.y + procDt.size.y, 0.0f), vertexColor, glm::vec2(0.0f, 1.0f), texture},
+                { glm::vec3(-1 + procDt.ofst.x, -1 + procDt.ofst.y, 0.0f), vertexColor, glm::vec2(0.0f, 0.0f), texture},
+                { glm::vec3(-1 + procDt.ofst.x + procDt.size.x, -1 + procDt.ofst.y, 0.0f), vertexColor, glm::vec2(1.0f, 0.0f), texture},
+                { glm::vec3(-1 + procDt.ofst.x + procDt.size.x, -1 + procDt.ofst.y + procDt.size.y, 0.0f), vertexColor, glm::vec2(1.0f, 1.0f), texture},
+                { glm::vec3(-1 + procDt.ofst.x, -1 + procDt.ofst.y + procDt.size.y, 0.0f), vertexColor, glm::vec2(0.0f, 1.0f), texture},
 			},
 			.indicies = {
 				0, 2, 1, 0, 3, 2
@@ -250,58 +235,78 @@ namespace Ignis {
 		return returnData;
 	}
 
-    UI::UIVertexData UI::GenerateTextQuad(UI::Color color) {
-        glm::vec3 vertexColor(color.r/255.0f, color.g/255.0f, color.b/255.0f);
-        glm::uint dummyTexId = 0;  // ignored for text
+    // TODO: change the whole position and sizing shit
+    UI::UIVertexData UI::GenerateTextVertecies(UI::ProcessData procDt, UIData *data, UI::Color color){
+        UIVertexData returnData;
+		glm::vec3 vertexColor = glm::vec3((float)color.r / 255, (float)color.g / 255, (float)color.b / 255);
+        glm::vec2 norm(100);
 
-        // UNIT QUAD (-0.5 to 0.5) - positioning comes from GlyphInstance.pos
-        return {
-            .vertecies = {
-                {glm::vec3(-0.5f,  0.5f, 0.0f), vertexColor, glm::vec2(0.0f, 0.0f), dummyTexId},
-                {glm::vec3( 0.5f,  0.5f, 0.0f), vertexColor, glm::vec2(1.0f, 0.0f), dummyTexId},
-                {glm::vec3( 0.5f, -0.5f, 0.0f), vertexColor, glm::vec2(1.0f, 1.0f), dummyTexId},
-                {glm::vec3(-0.5f, -0.5f, 0.0f), vertexColor, glm::vec2(0.0f, 1.0f), dummyTexId}
-            },
-            .indicies = {0, 1, 2, 0, 2, 3}
-        };
-    }
-    std::vector<Render::GlyphInstance> UI::GenerateGlyphInstances(UI::Text &text, UI::ProcessData proc) {
-        std::vector<Render::GlyphInstance> instances;
-    
-
-        if (!text.font || text.text.empty()) {
+        if (!GetFont(data) || GetText(data).empty()) {
             std::cout << "sad\n";
-            std::cout << "text: " << text.text << "\n";
-            return instances;
+            std::cout << "text: " << GetText(data) << "\n";
+            return {};
         }
+        Font::Font *font = GetFont(data);
+        std::string &text = GetText(data);
 
-        glm::vec2 pen(proc.ofst.x, proc.ofst.y);
-        float scale = text.FontSize / 64.0f;  // adjust for your font units
-
-        auto glyphs = text.font->shapeText(Font::sToU32s(text.text), text.FontSize, text.bounds.x, text.bounds.y, text.align, text.direction);
-        for (auto sg : glyphs) {
+        glm::vec2 pen(procDt.ofst.x, procDt.ofst.y);
+        std::cout << "pen: ("<< pen.x << "," << pen.y << ")\n";
+        float scale = 1.0f / (64.0f * norm.x);
+    
+        auto glyphs = font->shapeText(Font::sToU32s(text), font->defaultSize, Font::TextAlign::GUESS, Font::TextDirection::GUESS);
+        std::cout << "shapedGlyphs size: " << glyphs.size() << "\n";
+        uint32_t indiceOffset = 0;
+        float baseline = font->defaultSize;
+        for (auto &sg : glyphs) {
             const Font::Glyph* g = sg.glyph;
-            if (!g) continue;
+            if (!g) {
+                std::cout << "skipped\n";
+                continue;
+            }
 
             // Position: pen + shaped offsets
             glm::vec2 glyphPos = pen + 
-                glm::vec2(sg.xOffset * scale, -sg.yOffset * scale);
-            
+                glm::vec2((float)(sg.xOffset + sg.getLeft()), baseline + ((float)(-sg.yOffset + (font->defaultSize * 64 - g->bearingY)))) * scale;
             // Size: from glyph rect, scaled
-            glm::vec2 glyphSize = glm::vec2(g->w, g->h) * scale;
+            glm::vec2 glyphSize = glm::vec2(g->w, g->h) / norm;
 
-            instances.push_back({
-                glyphPos, 
-                glyphSize,
-                glm::vec4(g->u0, g->v0, g->u1, g->v1), 
-                static_cast<glm::uint>(sg.pId)
-            });
+            std::cout << "values\n";
+            std::cout << (char)g->getUnicode() << " glyph\n";
+            std::cout << "scale: " << scale << "\n";
+            std::cout << "pos: ("<<glyphPos.x << "," << glyphPos.y <<")\n";
+            std::cout << "size: ("<<glyphSize.x << "," << glyphSize.y <<")\n";
+            std::cout << "g size: (" << g->w << "," << g->h << ")\n";
+            std::cout << "uv: ("<<g->u0 << "," << g->v0 <<"),("<<g->u1 << "," << g->v1 << ")\n";
+            std::cout << "pId: " << sg.pId << "\n";
+            std::cout << "bearing: (" << g->bearingX << "," << g->bearingY << ")\n";
+            std::cout << "advance: (" << g->advanceX << "," << g->advanceY << ")\n";
+            std::cout << "pen: (" << pen.x << "," << pen.y << ")\n";
+            uint32_t pageId = sg.pId;
             
-            pen.x += sg.xAdvance * scale;
+            std::cout << "top-left: (" << -1 + glyphPos.x << "," << -1 + glyphPos.y << ")\n";
+            std::cout << "top-right: (" << -1 + glyphSize.x + glyphPos.x << "," << -1 + glyphPos.y << ")\n";
+            std::cout << "bottom-right: (" << -1 + glyphSize.x + glyphPos.x << "," << -1 + glyphPos.y + glyphSize.y << ")\n";
+            std::cout << "bottom-left: (" << -1 + glyphPos.x << "," << -1 + glyphPos.y + glyphSize.y << ")\n";
+
+            returnData.vertecies.insert(returnData.vertecies.end(),
+                {
+                    { glm::vec3(-1 + glyphPos.x              ,-1 + glyphPos.y              , 0.0f), vertexColor, glm::vec2(g->u0, g->v0), pageId},
+                    { glm::vec3(-1 + glyphPos.x + glyphSize.x,-1 + glyphPos.y              , 0.0f), vertexColor, glm::vec2(g->u1, g->v0), pageId},
+                    { glm::vec3(-1 + glyphPos.x + glyphSize.x,-1 + glyphPos.y + glyphSize.y, 0.0f), vertexColor, glm::vec2(g->u1, g->v1), pageId},
+                    { glm::vec3(-1 + glyphPos.x              ,-1 + glyphPos.y + glyphSize.y, 0.0f), vertexColor, glm::vec2(g->u0, g->v1), pageId},
+                });
+            returnData.indicies.insert(
+                returnData.indicies.end(),
+                {0 + indiceOffset, 2 + indiceOffset, 1 + indiceOffset, 0 + indiceOffset, 3 + indiceOffset, 2 + indiceOffset}
+               );
+
+            pen.x += (float)sg.xAdvance*scale;
+            indiceOffset += 4;
+
         }
-        std::cout << "instance count: " << instances.size() << "\n";
-        return instances;
-    }    
+        std::cout << "icount: " << returnData.indicies.size() << "\n";
+        return returnData;
+    }
 
     int UI::LoadFont(const std::string& fontPath, uint32_t size) {
         Font::Font *font = new Font::Font();
@@ -361,6 +366,15 @@ namespace Ignis {
 		}
 	}
 
+    Font::Font*& UI::GetFont(UIData* data) {
+		switch (data->type) {
+		case TEXT:
+			return static_cast<TextData*>(data->ptr)->font;
+			break;
+		default:
+			throw std::runtime_error("Coudn't access text of the passed in data");
+		}
+	}
 	//Image
 
 	Color& UI::GetColor(UIData* data) {
@@ -430,7 +444,7 @@ namespace Ignis {
 	Render* UI::renderInstance = nullptr;
     std::unordered_map<int, Font::Font*> UI::fonts;
 	int UI::nextId = 0;
-    int UI::nextFontId = 0;
+    int UI::nextFontId = 1;
 	std::unordered_map<int, std::vector<UI::Element>> UI::elements;
 	std::unordered_set<UI::UIData*> UI::dataPtrs;
 }

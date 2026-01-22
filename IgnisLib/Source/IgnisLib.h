@@ -89,10 +89,6 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
         struct UIRenderData {
             std::vector<Vertex> vertecies;
             std::vector<uint32_t> indicies;
-             // ? idk about this one yet
-            std::vector<Vertex> glyphVertecies;
-            std::vector<uint32_t> glyphIndicies;
-            std::vector<GlyphInstance> glyphInstances;
 
             int surface;
             bool changed = true;
@@ -155,7 +151,7 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
             Color(unsigned char r, unsigned char g, unsigned char b)
                 : r(r), g(g), b(b) {}
 
-            Color() : r(1), g(1), b(1) {}
+            Color() : r(255), g(255), b(255) {}
 
             unsigned char r;
             unsigned char g;
@@ -188,6 +184,7 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
         struct TextData {
             ElementData base;
             std::string text;
+            Font::Font *font;
         };
 
         struct ImageData {
@@ -228,29 +225,30 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
     public:
         class Text : public Element {
         public:
-            Text() : Element(TEXT), text(GetText(data)) {}
+            Text() : Element(TEXT), text(GetText(data)), font(GetFont(data)) {}
 
-            Text(Vec2 position, Vec2 size, std::string text, Font::TextAlign textAlign = Font::TextAlign::LEFT, Font::TextDirection textDirection = Font::TextDirection::LTR) 
-                : Element(TEXT), text(GetText(data)), align(textAlign), direction(textDirection), font(UI::fonts[UI::fonts.size()]) {
+            Text(Vec2 position, Vec2 size, std::string text, int fontId, Font::TextAlign textAlign = Font::TextAlign::LEFT, Font::TextDirection textDirection = Font::TextDirection::LTR) 
+                : Element(TEXT), text(GetText(data)),/* align(textAlign), direction(textDirection),*/ font(GetFont(data)) {
                 this->position = position;
                 this->size = size;
                 this->text = text;
-                this->textureId = -1;
+                this->font = UI::fonts[fontId];
+                this->textureId = 0;
                 this->color = Color();
                 std::cout << "hello\n";
                 std::cout << this->text << "\n";
 
             }
 
-            Font::Font *font;
+            Font::Font *&font;
 
-            uint FontSize{16};
-            Vec2 bounds{size};
-            Font::TextDirection direction{Font::TextDirection::LTR};
-            Font::TextAlign align{Font::TextAlign::LEFT};
+            //uint32_t FontSize{16};
+            //Vec2 bounds{size};
+            //Font::TextDirection direction{Font::TextDirection::LTR};
+            //Font::TextAlign align{Font::TextAlign::LEFT};
             // Style style{REGULAR};
             // Color outline;
-            int outlineThickness{-1};
+            //int outlineThickness{-1};
 
             std::string &text;
 
@@ -281,7 +279,7 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
                 : Image(position, size, textureId, color, true) {}
 
             Image(Vec2 position, Vec2 size, Color color)
-                : Image(position, size, -1, color, true) {}
+                : Image(position, size, 0, color, true) {}
 
             Image(Vec2 position, Vec2 size, int textureId)
                 : Image(position, size, textureId, Color(), true) {}
@@ -295,7 +293,7 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
                 if (textureId.has_value())
                     this->textureId = textureId.value();
                 else
-                    this->textureId = -1;
+                    this->textureId = 0;
 
                 if (color.has_value())
                     this->color = color.value();
@@ -327,7 +325,7 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
                 if (textureId.has_value())
                     this->textureId = textureId.value();
                 else
-                    this->textureId = -1;
+                    this->textureId = 0;
 
                 if (color.has_value())
                     this->color = color.value();
@@ -410,15 +408,8 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
             std::vector<uint32_t> indicies;
         };
 
-        struct UITextVertexData {
-            std::vector<Render::Vertex> vertecies;
-            std::vector<uint32_t> indicies;
-            std::vector<Render::GlyphInstance> instances;
-        };
         static Render::UIRenderData ProcessVertecies(ProcessData data, std::vector<Element>& elements);
         static UIVertexData GenerateVertecies(UI::ProcessData procData, int textureId, Color color);
-
-        static UIVertexData GenerateTextQuad(UI::Color color);
 
         //Data Handling
         static UIData* CreateData(UIType type);
@@ -430,7 +421,9 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
 
         //Text
         static std::string& GetText(UIData* data);
-        static std::vector<Render::GlyphInstance> GenerateGlyphInstances(UI::Text &text, UI::ProcessData proc);
+        static Font::Font*& GetFont(UIData* data);
+
+        static UIVertexData GenerateTextVertecies(UI::ProcessData procData, UIData *data, UI::Color color);
 
         //Image
         static int& GetTexture(UIData* data);

@@ -28,27 +28,30 @@ class Font;
 std::u32string sToU32s(const std::string_view &utf8);
 
 struct Glyph {
-    Glyph(uint32_t codepoint, uint16_t _x, uint16_t _y) : glyphIndex(codepoint), x(_x), y(_y) {}
-    Glyph() = default;
-    stbrp_rect toRect();
+    Glyph(uint32_t unicode, uint32_t codepoint, uint16_t _x, uint16_t _y) : unicode(unicode), glyphIndex(codepoint), x(_x), y(_y) {}
     const hb_codepoint_t getIdx() const noexcept { return glyphIndex; }
+    const hb_codepoint_t getUnicode() const noexcept { return unicode; }
 
+    uint32_t unicode;
     hb_codepoint_t glyphIndex;
 
     uint16_t x;
     uint16_t y;
     uint16_t w;
     uint16_t h;
-    int advance;
+    int16_t bearingX, bearingY;
+    // TODO: remove because its the same as in shapedGlyph but maybe worse.
+    int16_t advanceX, advanceY;
 
-    float u0, u1;
-    float v0, v1;
+    float u0 = -1, u1 = -1;
+    float v0 = -1, v1 = -1;
 };
 
 struct ShapedGlyph {
-    ShapedGlyph(const Glyph *g, const uint32_t pageId, const int xOff, const int yOff, const int xAdv, const int yAdv, const uint32_t clustering) : glyph(g), pId(pageId), xOffset(xOff), yOffset(yOff), xAdvance(xAdv), yAdvance(xAdv), cluster(clustering) {};
+    ShapedGlyph(Glyph *g, const uint32_t pageId, const int xOff, const int yOff, const int xAdv, const int yAdv, const uint32_t clustering) : glyph(g), pId(pageId), xOffset(xOff), yOffset(yOff), xAdvance(xAdv), yAdvance(xAdv), cluster(clustering) {};
 
-    const Glyph *glyph;
+    const int getLeft() { return glyph->bearingX;}
+    Glyph *glyph;
     uint32_t pId;
     int xOffset, yOffset;
     int xAdvance, yAdvance;
@@ -63,44 +66,14 @@ class Page {
     void addBitmap(FT_Bitmap &bmp);
 
     // private:
-    int textureId;
+    uint32_t textureId;
     uint16_t fontSize;
     Style style;
     uint16_t w;
     uint16_t h;
     uint32_t gS, gE;
-    std::unordered_map<hb_codepoint_t, Glyph> glyphs;
+    std::unordered_map<hb_codepoint_t, Glyph> glyphs{};
 };
-
-/*
-struct TextFontData {
-    TextFontData(const std::string text, const Font *fnt, TextAlign textAlign = LEFT, TextDirection textDirection = LTR) : string(text), font(fnt), align(textAlign), direction(textDirection){};
-
-    TextFontData(const Font *fnt, TextAlign textAlign = LEFT, TextDirection textDirection = LTR) : font(fnt), align(textAlign), direction(textDirection){};
-
-    void setString(std::string s) noexcept { string = s;};
-
-    std::string string;
-    const Font *font;
-
-    struct Bounds{
-        int x,y;
-    };
-    uint size{16};
-    Bounds bounds;
-    TextDirection direction{LTR};
-    TextAlign align{LEFT};
-    // Script script{LATIN};
-    // Style style{REGULAR};
-    // Color fill;
-    // Color outline;
-    int outlineThickness{-1};
-    // std::vector<int> clustering;
-    // std::vector<ShapedGlyph> shapedGlyphs;
-
-    bool changed{true};
-};
-*/
 
 class Font {
    public:
@@ -111,7 +84,7 @@ class Font {
 
     void createBitmapFromText(const std::string text);
 
-    std::vector<ShapedGlyph> shapeText(const std::u32string &text, const float x, const float y, const int FontSize = -1, TextAlign align = TextAlign::GUESS, TextDirection direction = TextDirection::GUESS, const Style style = Style::REGULAR);
+    std::vector<ShapedGlyph> shapeText(const std::u32string &text, int FontSize = -1, TextAlign align = TextAlign::GUESS, TextDirection direction = TextDirection::GUESS, const Style style = Style::REGULAR);
     void generateTextVertecies(const std::string text, const float x, const float y, const TextAlign align = TextAlign::LEFT, const Style style = Style::REGULAR, const int fontSize = -1, const TextDirection direction = TextDirection::GUESS);
 
     // dont set maxCharPerPage and autoPageSize if you want behaviour to be optimized
@@ -121,7 +94,7 @@ class Font {
 
     //   private:
     Render *renderer;
-    uint defaultSize = 16;
+    uint32_t defaultSize = 16;
 
     hb_buffer_t *buf;
 
