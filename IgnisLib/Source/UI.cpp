@@ -1,10 +1,27 @@
 #include "IgnisLib.h"
 
-using Vec2 = Ignis::UI::Vec2;
 using Vertex = Ignis::Render::Vertex;
 using Color = Ignis::UI::Color;
 
 namespace Ignis {
+
+	//Vector
+
+	//Color
+
+	auto hexToFloat = [](const std::string& s) -> float {
+        return static_cast<float>(std::stoi(s, nullptr, 16)) / 255.0f;
+    };
+
+	Color::Color(std::string hex) {
+		if(hex.empty() || hex[0] != '#' || hex.length() != 7)
+			throw std::invalid_argument("Invalid hex color");
+		
+		r = hexToFloat(hex.substr(1,2));
+        g = hexToFloat(hex.substr(3,2));
+        b = hexToFloat(hex.substr(5,2));
+	}
+
 
 	//Data Handling
 
@@ -138,8 +155,8 @@ namespace Ignis {
 		int additionIndex = 0;
 
 		for (auto& element : elements) {
-			Vec2 elementSize = { data.size.x / 100 * element.size.x , data.size.y / 100 * element.size.y };
-			Vec2 elementOffset = { data.size.x / 100 * element.position.x, data.size.y / 100 * element.position.y };
+			Vec2i elementSize = { data.size.x / 100 * element.size.x , data.size.y / 100 * element.size.y };
+			Vec2i elementOffset = { data.size.x / 100 * element.position.x, data.size.y / 100 * element.position.y };
 
 
 			UI::ProcessData calcData{ .ofst{data.ofst.x + elementOffset.x, data.ofst.y + elementOffset.y}, .size{elementSize} };

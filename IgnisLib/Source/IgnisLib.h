@@ -108,29 +108,46 @@ namespace Ignis {
 #ifdef IGNIS_UI
     class UI {
     public:
+        template<T> 
         struct Vec2 {
             Vec2() : x(0), y(0) {}
-            Vec2(float x, float y) : x(x), y(y) {}
+            Vec2(T x, T y) : x(x), y(y) {}
 
-            float x;
-            float y;
+            T x;
+            T y;
 
-            Vec2 operator+(Vec2 other) {
-                this->x += other.x;
-                this->y += other.y;
-                return *this;
-            }
+            Vec2 operator+(const Vec2& other) const { return Vec2{x + other.x, y + other.y}; }
+            Vec2 operator-(const Vec2& other) const { return Vec2{x - other.x, y - other.y}; }
+            Vec2& operator+=(const Vec2& other) { x += other.x; y += other.y; return *this; }
+            Vec2& operator-=(const Vec2& other) { x -= other.x; y -= other.y; return *this; }
+            Vec2 operator*(const Vec2& other) const { return Vec2{x * other.x, y * other.y}; }
+            Vec2 operator/(const Vec2& other) const { return Vec2{x / other.x, y / other.y}; }
+            Vec2& operator*=(const Vec2& other) { x *= other.x; y *= other.y; return *this; }
+            Vec2& operator/=(const Vec2& other) { x /= other.x; y /= other.y; return *this; }
+            
         };
+
+        using Vec2f = Vec2<float>;
+        using Vec2i = Vec2<int>;
 
         struct Color {
             Color(unsigned char r, unsigned char g, unsigned char b)
+                : r((float)r/255), g((float)r/255), b((float)r/255) {}
+
+            Color(float r, float g, float b)
                 : r(r), g(g), b(b) {}
 
             Color() : r(1), g(1), b(1) {}
 
-            unsigned char r;
-            unsigned char g;
-            unsigned char b;
+            Color(std::string hex);
+
+            float r;
+            float g;
+            float b;
+
+            Color operator+(const Color& other) const;
+            Color operator-(const Color& other) const;
+            Color Inverted();
         };
 
     private:
@@ -388,6 +405,8 @@ namespace Ignis {
 #ifdef IGNIS_UI_NAMES
     using Color = UI::Color;
     using Vec2 = UI::Vec2;
+    using Vec2i = UI::Vec2i;
+    using Vec2f = UI::Vec2f
 
     using Image = UI::Image;
     using Text = UI::Text;
