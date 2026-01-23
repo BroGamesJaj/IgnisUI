@@ -445,11 +445,12 @@ using Button = UI::Button;
 
 #if defined(IGNIS_INPUT) || defined(IGNIS_UI)
 class Input {
-private:
+public:
     typedef void (*HookFunction)(Window& window);
 
+private:
     using Action = std::pair<GLFWwindow*, int>;
-    using Callback = void*;
+    using Callback = HookFunction;
 
     struct Callbacks;
 
@@ -461,9 +462,8 @@ private:
 
     static std::unordered_map<Action, Callback, KeyHash> customCallbacks;
     static std::unordered_map <GLFWwindow*, std::unordered_set<Callbacks>> windowCallbacks;
+
 public:
-
-
     static void Init();
     static void Event();
 

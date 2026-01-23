@@ -18,6 +18,13 @@ set_target_properties(IgnisTester PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${outputDir}
 )
 
+# Being strict
+target_compile_options(Ignis PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/permissive->
+    $<$<CXX_COMPILER_ID:GNU>:-Wall -Wextra -Wpedantic -Werror>
+    $<$<CXX_COMPILER_ID:Clang>:-Wall -Wextra -Wpedantic -Werror>
+)
+
 target_include_directories(IgnisTester PRIVATE
     ${CMAKE_SOURCE_DIR}/Dependencies
 )

@@ -19,6 +19,13 @@ set_target_properties(Ignis PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${outputDir}
 )
 
+# Being strict
+target_compile_options(Ignis PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/permissive->
+    $<$<CXX_COMPILER_ID:GNU>:-Wall -Wextra -Wpedantic -Werror>
+    $<$<CXX_COMPILER_ID:Clang>:-Wall -Wextra -Wpedantic -Werror>
+)
+
 # Freetype
 add_subdirectory(Dependencies/freetype)
 
@@ -39,13 +46,14 @@ set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
 set(GLFW_VULKAN_STATIC ON CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
+# GLFW
 add_subdirectory(Dependencies/GLFW)
 target_link_libraries(Ignis PRIVATE glfw)
 target_include_directories(Ignis PRIVATE Dependencies/GLFW/include)
 target_compile_definitions(Ignis PRIVATE GLFW_STATIC GLFW_VULKAN_STATIC)
 
+# Vulkan
 if(WIN32)
-    target_compile_options(Ignis PRIVATE /permissive-)
     target_include_directories(Ignis PRIVATE $ENV{VULKAN_SDK}/Include)
     target_link_libraries(Ignis PRIVATE $ENV{VULKAN_SDK}/Lib/vulkan-1.lib)
 else()

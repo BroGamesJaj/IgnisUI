@@ -46,5 +46,5 @@ void Input::Event() {
 	glfwPollEvents();
 }
 
-std::unordered_map<std::pair<GLFWwindow*, int>,void*,Ignis::Input::KeyHash> Ignis::Input::customCallbacks;
+std::unordered_map<std::pair<GLFWwindow*, int>, Input::HookFunction, Ignis::Input::KeyHash> Ignis::Input::customCallbacks;
 };
