@@ -33,7 +33,7 @@ enum Callbacks {
 	Error					//Not implemented
 };
 
-void Input::HookFramebufferSizeCallback(Render::Window window, void* function) {
+void Input::HookFramebufferSizeCallback(Render::Window window, HookFunction function) {
 	customCallbacks[{window.ptr, FramebufferSize}] = function;
 }
 

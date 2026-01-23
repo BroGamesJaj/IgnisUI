@@ -298,14 +298,18 @@ class Render::Vulkan {
         ptr->vulkanData = windows[windowOut].get();
         glfwSetWindowUserPointer(windowOut, ptr);
 
+        Window win;
+        win.ptr = windowOut;
+
 #ifdef IGNIS_INPUT
-        Input::HookFramebufferSizeCallback({ windowOut }, FramebufferResizeCallback);
+
+        Input::HookFramebufferSizeCallback(win, FramebufferResizeCallback);
 #else 
         glfwSetFramebufferSizeCallback(windowOut, FramebufferResizeCallback);
 #endif
 
 
-        return {windowOut};
+        return win;
     }
 
     int CreateFontPage(const std::vector<uint8_t> &rgbaData, uint32_t width, uint32_t height) {
@@ -417,8 +421,8 @@ class Render::Vulkan {
         return nextTexture++;
     }
 
-    static void FramebufferResizeCallback(GLFWwindow *windowIn, int width, int height) {
-        auto window = reinterpret_cast<WindowUserPointer *>(glfwGetWindowUserPointer(windowIn));
+    static void FramebufferResizeCallback(Window& windowIn) {
+        auto window = reinterpret_cast<WindowUserPointer*>(glfwGetWindowUserPointer(windowIn.ptr));
         ((WindowVulkanData *)window->vulkanData)->framebufferResized = true;
     }
 
@@ -614,7 +618,7 @@ class Render::Vulkan {
         for (auto &[window, windowData] : windows) {
             void *exists = glfwGetWindowUserPointer(window);
             if (exists != nullptr) {
-                delete exists;
+                delete static_cast<WindowUserPointer*>(exists);
                 glfwSetWindowUserPointer(window, nullptr);
             }
             glfwDestroyWindow(window);
@@ -1500,6 +1504,8 @@ class Render::Vulkan {
 
             throw std::runtime_error("failed to find supported format!");
         }
+
+        return candidates[0];
     }
     VkFormat findDepthFormat() { return findSupportedFormat({VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT}, VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT); }
     bool hasStencilComponent(VkFormat format) { return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT; }

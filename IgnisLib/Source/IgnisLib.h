@@ -57,7 +57,12 @@ class Render {
     };
 
     struct Window {
+    private:
         GLFWwindow *ptr;
+        
+        friend class Vulkan;
+        friend class Render;
+        friend class Input;
     };
 
     struct CreateRenderPassInfo {
@@ -441,6 +446,8 @@ using Button = UI::Button;
 #if defined(IGNIS_INPUT) || defined(IGNIS_UI)
 class Input {
 private:
+    typedef void (*HookFunction)(Window& window);
+
     using Action = std::pair<GLFWwindow*, int>;
     using Callback = void*;
 
@@ -456,9 +463,32 @@ private:
     static std::unordered_map <GLFWwindow*, std::unordered_set<Callbacks>> windowCallbacks;
 public:
 
+
     static void Init();
     static void Event();
-    static void HookFramebufferSizeCallback(Render::Window window, void* function);
+
+    static void HookWindowPosCallback(Render::Window window, HookFunction function);
+    static void HookWindowSizeCallback(Render::Window window, HookFunction function);
+    static void HookWindowcloseCallback(Render::Window window, HookFunction function);
+    static void HookWindowRefreshCallback(Render::Window window, HookFunction function);
+    static void HookWindowFocusCallback(Render::Window window, HookFunction function);
+    static void HookWindowIconifyCallback(Render::Window window, HookFunction function);
+    static void HookWindowMaximizeCallback(Render::Window window, HookFunction function);
+    static void HookFramebufferSizeCallback(Render::Window window, HookFunction function);
+    //static void HookWindowContentScaleCallback(Render::Window window, HookFunction function);
+
+    static void HookInputKeyCallback(Render::Window window, HookFunction function);
+    static void HookInputCharCallback(Render::Window window, HookFunction function);
+    static void HookInputCharModsCallback(Render::Window window, HookFunction function);
+    static void HookInputMouseButtonCallback(Render::Window window, HookFunction function);
+    static void HookInputCursorEnterCallback(Render::Window window, HookFunction function);
+    static void HookInputScrollCallback(Render::Window window, HookFunction function);
+    static void HookInputDropCallback(Render::Window window, HookFunction function);
+
+    //static void HookMonitorCallback(Render::Window window, void* function);
+
+    //static void HookErrorCallback(Render::Window window, void* function);
+    
 };
 #endif
 }  // namespace Ignis
