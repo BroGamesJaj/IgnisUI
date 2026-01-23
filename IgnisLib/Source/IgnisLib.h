@@ -38,6 +38,42 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
 
 class Font;
 }  // namespace Font
+
+template <typename T>
+    requires std::is_arithmetic_v<T>
+struct Vec2 {
+    Vec2() : x(0), y(0) {}
+    Vec2(T x, T y) : x(x), y(y) {}
+
+    T x;
+    T y;
+
+    Vec2 operator+(const Vec2& other) const { return Vec2{ x + other.x, y + other.y }; }
+    Vec2 operator-(const Vec2& other) const { return Vec2{ x - other.x, y - other.y }; }
+    Vec2& operator+=(const Vec2& other) {
+        x += other.x;
+        y += other.y;
+        return *this;
+    }
+    Vec2& operator-=(const Vec2& other) {
+        x -= other.x;
+        y -= other.y;
+        return *this;
+    }
+    Vec2 operator*(const Vec2& other) const { return Vec2{ x * other.x, y * other.y }; }
+    Vec2 operator/(const Vec2& other) const { return Vec2{ x / other.x, y / other.y }; }
+    Vec2& operator*=(const Vec2& other) {
+        x *= other.x;
+        y *= other.y;
+        return *this;
+    }
+    Vec2& operator/=(const Vec2& other) {
+        x /= other.x;
+        y /= other.y;
+        return *this;
+    }
+};
+
 #if defined(IGNIS_RENDER) || defined(IGNIS_UI)
 class Render {
    public:
@@ -133,41 +169,6 @@ using CreateGraphicPipeLineInfo = Render::CreateGraphicPipeLineInfo;
 
 class UI {
    public:
-    template <typename T>
-        requires std::is_arithmetic_v<T>
-    struct Vec2 {
-        Vec2() : x(0), y(0) {}
-        Vec2(T x, T y) : x(x), y(y) {}
-
-        T x;
-        T y;
-
-        Vec2 operator+(const Vec2 &other) const { return Vec2{x + other.x, y + other.y}; }
-        Vec2 operator-(const Vec2 &other) const { return Vec2{x - other.x, y - other.y}; }
-        Vec2 &operator+=(const Vec2 &other) {
-            x += other.x;
-            y += other.y;
-            return *this;
-        }
-        Vec2 &operator-=(const Vec2 &other) {
-            x -= other.x;
-            y -= other.y;
-            return *this;
-        }
-        Vec2 operator*(const Vec2 &other) const { return Vec2{x * other.x, y * other.y}; }
-        Vec2 operator/(const Vec2 &other) const { return Vec2{x / other.x, y / other.y}; }
-        Vec2 &operator*=(const Vec2 &other) {
-            x *= other.x;
-            y *= other.y;
-            return *this;
-        }
-        Vec2 &operator/=(const Vec2 &other) {
-            x /= other.x;
-            y /= other.y;
-            return *this;
-        }
-    };
-
     using Vec2f = Vec2<float>;
     using Vec2i = Vec2<int>;
 
@@ -213,6 +214,8 @@ class UI {
     };
 
     struct ElementData {
+        ElementData() = default;
+
         Vec2f position;
         Vec2f size;
         int textureId;
@@ -448,6 +451,24 @@ class Input {
 public:
     typedef void (*HookFunction)(Window& window);
 
+    struct Keydata {
+        int key;
+        int scancode;
+        int action;
+    };
+    struct ModifierData {
+        int codepoint;
+        int mods;
+    };
+    struct MouseData {
+        int action;
+        int mods;
+    };
+    struct DropData {
+        int count;
+        const char** paths;
+    };
+
 private:
     using Action = std::pair<GLFWwindow*, int>;
     using Callback = HookFunction;
@@ -488,6 +509,22 @@ public:
     //static void HookMonitorCallback(Render::Window window, void* function);
 
     //static void HookErrorCallback(Render::Window window, void* function);
+
+    static Vec2i windowPosition;
+    static Vec2i windowSize;
+    static Vec2i frameBuffersize;
+
+    static Keydata Key;
+    static unsigned int Char;
+    static Vec2<double> cursorPosition;
+    static bool cursorEntered;
+    static Vec2<double> scrollOffset;
+    static DropData dropElements;
+
+
+
+
+
     
 };
 #endif

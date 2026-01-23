@@ -496,7 +496,7 @@ class Render::Vulkan {
 
     std::unordered_map<int, TextureData> textureData;
     VkSampler textureSampler;
-    int nextTexture = 1;
+    unsigned int nextTexture = 1;
     uint32_t MAX_TEXTURES;
 
     VkImageView dummyImageView;
@@ -542,7 +542,7 @@ class Render::Vulkan {
         vkDestroyBuffer(device, data->indexBuffer, nullptr);
         vkFreeMemory(device, data->indexBufferMemory, nullptr);
 
-        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             vkDestroyBuffer(device, data->uniformBuffers[i], nullptr);
             vkFreeMemory(device, data->uniformBuffersMemory[i], nullptr);
         }
@@ -551,7 +551,7 @@ class Render::Vulkan {
         vkDestroyPipelineLayout(device, data->layout, nullptr);
         vkDestroyRenderPass(device, data->renderPass, nullptr);
 
-        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             vkDestroySemaphore(device, data->imageAvailableSemaphores[i], nullptr);
             vkDestroySemaphore(device, data->renderFinishedSemaphores[i], nullptr);
             vkDestroyFence(device, data->inFlightFences[i], nullptr);
@@ -796,9 +796,6 @@ class Render::Vulkan {
             createInfo.pNext = nullptr;
         }
 
-        // instancing
-        VkResult result = vkCreateInstance(&createInfo, nullptr, &instance);
-
         if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {
             throw std::runtime_error("failed to create instance!");
         }
@@ -831,7 +828,7 @@ class Render::Vulkan {
         fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]) != VK_SUCCESS || vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS || vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences[i]) != VK_SUCCESS) {
                 throw std::runtime_error("failed to create synchronization objects for a frame!");
             }
@@ -969,7 +966,7 @@ class Render::Vulkan {
         surface->uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
         surface->uniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
 
-        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, surface->uniformBuffers[i], surface->uniformBuffersMemory[i]);
 
             vkMapMemory(device, surface->uniformBuffersMemory[i], 0, bufferSize, 0, &surface->uniformBuffersMapped[i]);
@@ -1049,7 +1046,7 @@ class Render::Vulkan {
 
         // idk what the pp happening here
         // update: now i know what the pp is happening
-        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             VkDescriptorBufferInfo bufferInfo{};
             bufferInfo.buffer = surface->uniformBuffers[i];
             bufferInfo.offset = 0;
@@ -1098,7 +1095,7 @@ class Render::Vulkan {
 
         for (auto &[window, windowData] : windows) {
             for (auto &[surface, surfaceData] : windowData->surfaces) {
-                for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+                for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
                     VkWriteDescriptorSet write{};
                     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
                     write.dstSet = surfaceData.descriptorSets[i];
@@ -1684,6 +1681,8 @@ class Render::Vulkan {
         viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
         viewportState.viewportCount = 1;
         viewportState.scissorCount = 1;
+        viewportState.pViewports = &viewport;
+        viewportState.pScissors = &scissor;
 
         // rasterizer data
         VkPipelineRasterizationStateCreateInfo rasterizer{};
