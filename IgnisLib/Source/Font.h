@@ -85,12 +85,11 @@ class Font {
     void createBitmapFromText(const std::string text);
 
     std::vector<ShapedGlyph> shapeText(const std::u32string &text, int FontSize = -1, TextAlign align = TextAlign::GUESS, TextDirection direction = TextDirection::GUESS, const Style style = Style::REGULAR);
-    void generateTextVertecies(const std::string text, const float x, const float y, const TextAlign align = TextAlign::LEFT, const Style style = Style::REGULAR, const int fontSize = -1, const TextDirection direction = TextDirection::GUESS);
 
     // dont set maxCharPerPage and autoPageSize if you want behaviour to be optimized
     // not autoPageSize is not implemented
     //
-    void packUnicodeRange(const uint32_t UnicodeStart, const uint32_t UnicodeEnd, int16_t fontSize = -1, const Style style = Style::REGULAR, const TextDirection direction = TextDirection::GUESS, const int maxCharPerPage = -1, const bool autoPageSize = true, const uint16_t pSize = 64);
+    void packUnicodeRange(const uint32_t UnicodeStart, const uint32_t UnicodeEnd, int16_t fontSize = -1, const Style style = Style::REGULAR, const TextDirection direction = TextDirection::GUESS, const int maxCharPerPage = -1, const bool autoPageSize = true, const uint16_t pSize = 128);
 
     //   private:
     Render *renderer;

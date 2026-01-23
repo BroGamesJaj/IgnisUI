@@ -1,5 +1,5 @@
 #version 450
-
+#extension GL_EXT_nonuniform_qualifier : require
 #define MAX_TEXTURES 1028
 
 layout(location = 0) in vec3 fragColor;
@@ -15,7 +15,7 @@ void main() {
     
     // Regular geometry: use original texId logic
     if (fragTexId < MAX_TEXTURES && fragTexId > 0) {
-        texColor = texture(textures[fragTexId], fragTexCoord);
+        texColor = texture(textures[nonuniformEXT(fragTexId)], fragTexCoord);
         outColor = texColor * vec4(fragColor, 1.0);
     } 
     // No texture case

@@ -185,6 +185,7 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
             ElementData base;
             std::string text;
             Font::Font *font;
+            std::vector<uint32_t> clusters;
         };
 
         struct ImageData {
@@ -225,19 +226,16 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
     public:
         class Text : public Element {
         public:
-            Text() : Element(TEXT), text(GetText(data)), font(GetFont(data)) {}
+            Text() : Element(TEXT), text(GetText(data)), font(GetFont(data)), clusters(GetClusters(data)) {}
 
             Text(Vec2 position, Vec2 size, std::string text, int fontId, Font::TextAlign textAlign = Font::TextAlign::LEFT, Font::TextDirection textDirection = Font::TextDirection::LTR) 
-                : Element(TEXT), text(GetText(data)),/* align(textAlign), direction(textDirection),*/ font(GetFont(data)) {
+                : Element(TEXT), text(GetText(data)),/* align(textAlign), direction(textDirection),*/ font(GetFont(data)), clusters(GetClusters(data)) {
                 this->position = position;
                 this->size = size;
                 this->text = text;
                 this->font = UI::fonts[fontId];
                 this->textureId = 0;
                 this->color = Color();
-                std::cout << "hello\n";
-                std::cout << this->text << "\n";
-
             }
 
             Font::Font *&font;
@@ -251,6 +249,7 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
             //int outlineThickness{-1};
 
             std::string &text;
+            std::vector<uint32_t> &clusters;
 
             friend class UI;
         };
@@ -375,7 +374,6 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
         template<std::derived_from<UI::Element>... Args>
         static void AddToSurface(int surface, Args&... args) {
             if (!renderInstance->IsValidSurface(surface)) return;
-        std::cout << "added smth\n";
 
             (elements[surface].push_back(args), ...);
         }
@@ -422,6 +420,7 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
         //Text
         static std::string& GetText(UIData* data);
         static Font::Font*& GetFont(UIData* data);
+        static std::vector<uint32_t>& GetClusters(UIData* data);
 
         static UIVertexData GenerateTextVertecies(UI::ProcessData procData, UIData *data, UI::Color color);
 

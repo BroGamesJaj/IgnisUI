@@ -425,8 +425,8 @@ class Render::Vulkan {
         TextureData data;
         CreateTextureImageFromMemory(rgbaData.data(), width, height, data.textureImage, data.textureImageMemory);
         data.textureImageView = CreateTextureImageView(data.textureImage);
-        UpdateTextureDescriptor(nextTexture, data.textureImageView);
         textureData[nextTexture] = data;
+        UpdateTextureDescriptor(nextTexture, data.textureImageView);
         return nextTexture++;  // returns texture slot ID
     }
 
@@ -440,7 +440,7 @@ class Render::Vulkan {
 
     bool enableValidationLayers = false;
 
-    const std::vector<const char *> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    const std::vector<const char *> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME};
 
     const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -716,7 +716,6 @@ class Render::Vulkan {
                 SurfaceAccess acces = surfaceAccess[surfaceId];
                 SurfaceVulkanData *surfaceData = &windows[acces.window].surfaces[acces.surface];
                 VertexData data = GetVertexData(surfaceId, surfaceData);
-                std::cout << "hi\n";
                 if (!data.vertecies.empty()) {
                     CreateVertexBuffer(surfaceData->vertexBuffer, surfaceData->vertexBufferMemory, surfaceData->haveVertexData, 0, data.vertecies);
                     CreateIndexBuffer(surfaceData->indexBuffer, surfaceData->indexBufferMemory, data.indicies);
@@ -1706,8 +1705,8 @@ class Render::Vulkan {
         colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
         colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
         colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-        colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-        colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+        colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+        colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
         colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
 
         VkPipelineColorBlendStateCreateInfo colorBlending{};
@@ -1719,7 +1718,7 @@ class Render::Vulkan {
         VkPipelineDepthStencilStateCreateInfo depthStencil{};
         depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
         depthStencil.depthTestEnable = VK_TRUE;
-        depthStencil.depthWriteEnable = VK_TRUE;
+        depthStencil.depthWriteEnable = VK_FALSE;
         depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
 
         depthStencil.depthBoundsTestEnable = VK_FALSE;

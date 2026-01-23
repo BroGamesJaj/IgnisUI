@@ -22,52 +22,35 @@
 namespace Ignis {
 namespace Font {
 using unicode_t = uint32_t;
+
 // debug
 void saveAtlasAsBMP(FILE *f, std::vector<uint8_t> &rgbaData, uint16_t width, uint16_t height) {
-    const int row_bytes = ((width + 3) & ~3);  // BMP row padding to multiple of 4
+    const int row_bytes = width * 4;
     const int palette_size = 256 * 4;
-    const int file_size = 54 + palette_size + row_bytes * height;
-
-    // BMP header
+    const int file_size = 54 + row_bytes * height;
     uint8_t header[54] = {0};
     header[0] = 'B';
     header[1] = 'M';
-    *(uint32_t *)(header + 2) = file_size;           // file size
-    *(uint32_t *)(header + 10) = 54 + palette_size;  // pixel data offset
-    *(uint32_t *)(header + 14) = 40;                 // info header size
+    *(uint32_t *)(header + 2) = file_size;
+    *(uint32_t *)(header + 10) = 54;
+    *(uint32_t *)(header + 14) = 40;
     *(int32_t *)(header + 18) = width;
     *(int32_t *)(header + 22) = height;
-    *(uint16_t *)(header + 26) = 1;  // planes
-    *(uint16_t *)(header + 28) = 8;  // bits per pixel
+    *(uint16_t *)(header + 26) = 1;
+    *(uint16_t *)(header + 28) = 32;
+    *(uint32_t *)(header + 34) = row_bytes * height;
+
     fwrite(header, 1, 54, f);
 
-    // grayscale palette
-    for (int i = 0; i < 256; i++) {
-        uint8_t c[4] = {static_cast<uint8_t>(i), static_cast<uint8_t>(i), static_cast<uint8_t>(i), 0};
-        fwrite(c, 1, 4, f);
-    }
-
-    // Allocate a padded row buffer
-    uint8_t *row = (uint8_t *)malloc(row_bytes);
-    if (!row) return;
-
     for (int y = 0; y < height; y++) {
-        // Read from BOTTOM of textureData (BMP is bottom-up)
         int src_y = height - 1 - y;
-        uint8_t *src_rgba = rgbaData.data() + (src_y * width * 4);
+        uint8_t *src = rgbaData.data() + src_y * width * 4;
 
         for (int x = 0; x < width; x++) {
-            // Average RGB → grayscale index (ignores alpha)
-            uint8_t r = src_rgba[x * 4 + 0];
-            uint8_t g = src_rgba[x * 4 + 1];
-            uint8_t b = src_rgba[x * 4 + 2];
-            row[x] = src_rgba[x * 4 + 3];  // BT.601
+            uint8_t bgra[4] = {src[x * 4 + 2], src[x * 4 + 1], src[x * 4 + 0], src[x * 4 + 3]};
+            fwrite(bgra, 1, 4, f);
         }
-
-        memset(row + width, 0, row_bytes - width);
-        fwrite(row, 1, row_bytes, f);
     }
-    free(row);
 }
 void WriteGrayBMP(FILE *f, FT_Bitmap &bmp) {
     if (bmp.pixel_mode != FT_PIXEL_MODE_GRAY) {
@@ -219,11 +202,9 @@ void Font::initializeFont(const std::string filename) {
 }
 
 std::vector<ShapedGlyph> Font::shapeText(const std::u32string &text, int fontSize, TextAlign align, TextDirection direction, const Style style) {
-    std::cout << "start createGlyphsForText\n";
 
     fontSize = defaultSize;
 
-    std::cout << "start createGlyphsForText\n";
     hb_font_t *font = hb_ft_font_create_referenced(ftFace);
     buf = hb_buffer_create();
     hb_buffer_add_utf32(buf, reinterpret_cast<const uint32_t *>(text.data()), text.length(), 0, text.size());
@@ -241,10 +222,6 @@ std::vector<ShapedGlyph> Font::shapeText(const std::u32string &text, int fontSiz
     hb_glyph_info_t *glyphInfo = hb_buffer_get_glyph_infos(buf, &glyphCount);
     hb_glyph_position_t *glyphPos = hb_buffer_get_glyph_positions(buf, &glyphCount);
 
-    std::cout << "glyph count: " << glyphCount << "\n";
-    std::cout << "fs: " << fontSize << "\n";
-    std::cout << "s: " << pagePosition[fontSize].size() << "\n";
-
     std::vector<ShapedGlyph> shapedGlyphs;
     shapedGlyphs.reserve(glyphCount);
     std::vector<hb_codepoint_t> notPaged;
@@ -253,37 +230,36 @@ std::vector<ShapedGlyph> Font::shapeText(const std::u32string &text, int fontSiz
     int same = 0;
     for (uint32_t i = 0; i < glyphCount; i++) {
         hb_codepoint_t cp = glyphInfo[i].codepoint;
-        std::cout << "codepoint: " << cp << "\n";
+        uint32_t cluster = glyphInfo[i].cluster;
         if (pagePosition[fontSize].contains(cp)) same++;
-        if (!pagePosition[fontSize].contains(cp)) {
+        Glyph *glyph = nullptr;
+        uint32_t pN = 0;
+        uint32_t texId = 0;
+        // TODO: figure out a way to do this for every character that doesn't need drawing
+        // also this should be in a separate loop
+        if (text[cluster] == ' ') {
+
+        } else if (!pagePosition[fontSize].contains(cp)) {
             notPaged.push_back(cp);
             continue;
+        } else {
+            pN = pagePosition[fontSize][cp];
+            glyph = &pages[pN].glyphs.at(cp);
+            texId = pages[pN].textureId;
         }
-        uint32_t pN = pagePosition[fontSize][cp];
-        Glyph *glyph = &pages[pN].glyphs.at(cp);
-
-        std::cout << "shape\n";
-        std::cout << (char)(glyph->getUnicode()) << " glyph\n";
-        // std::cout << "xy: (" << glyph->x << "," << glyph->y << ")\n";
-        // std::cout << "u0, v0: (" << glyph->u0 << "," << glyph->v0 << ")\n";
-        // std::cout << "u1, v1: (" << glyph->u1 << "," << glyph->v1 << ")\n";
 
         hb_position_t xOffset = glyphPos[i].x_offset;
         hb_position_t yOffset = glyphPos[i].y_offset;
         hb_position_t xAdvance = glyphPos[i].x_advance;
         hb_position_t yAdvance = glyphPos[i].y_advance;
-        // std::cout << "xOffset: " << xOffset << "\n";
-        // std::cout << "yOffset: " << yOffset << "\n";
-        // std::cout << "xAdvance: " << xAdvance << "\n";
-        // std::cout << "yAdvance: " << yAdvance << "\n";
-        shapedGlyphs.push_back({glyph, pages[pN].textureId, xOffset, yOffset, xAdvance, yAdvance, glyphInfo[i].cluster});
+
+        shapedGlyphs.push_back({glyph, texId, xOffset, yOffset, xAdvance, yAdvance, cluster});
         cursorX += xAdvance;
         cursorY += yAdvance;
     }
     hb_buffer_destroy(buf);
     hb_font_destroy(font);
 
-    std::cout << "end createGlyphsForText\n";
     return shapedGlyphs;
 };
 
@@ -318,9 +294,6 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
     FT_ULong charcode = FT_Get_First_Char(ftFace, &glyphIndex);
     while (glyphIndex != 0) {
         if ((charcode >= unicodeStart && charcode <= unicodeEnd)) {
-            if (charcode == 'a') {
-                std::cout << "charcode: " << (char)charcode << "\n";
-            }
             scriptCodepoints.push_back({charcode, glyphIndex});
         }
         charcode = FT_Get_Next_Char(ftFace, charcode, &glyphIndex);
@@ -333,11 +306,11 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
     if (scriptCodepoints.empty()) return;
 
     const uint16_t maxPageSize = 2048;
-    constexpr uint32_t maxPageArea = maxPageSize * maxPageSize;
+    const uint32_t maxPageArea = maxPageSize * maxPageSize;
     uint32_t charPerPage = maxCharPerPage;
     if (maxCharPerPage < 1) {
         uint64_t maxChars = (static_cast<uint64_t>(maxPageSize) * static_cast<uint64_t>(maxPageSize)) / (fontSize * fontSize);
-        charPerPage = std::min(static_cast<uint32_t>(scriptCodepoints.size()) + 1, static_cast<uint>(std::round(maxChars * 0.9)));
+        charPerPage = std::min(static_cast<uint32_t>(scriptCodepoints.size()) + 1, static_cast<uint>(std::round(maxChars)));
     }
 
     uint32_t padding = std::min(5, std::max(1, fontSize % 20));
@@ -356,30 +329,27 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
             uint32_t totalArea = 0;
             for (int ci = glyphsProcessed; ci < scriptCodepoints.size(); ci++) {
                 int cp = scriptCodepoints[ci].second;
-                if (cp < 0x0020) continue;
+                int unicode = scriptCodepoints[ci].first;
+                if (unicode < 0x0020) continue;
                 FT_Load_Glyph(ftFace, cp, FT_LOAD_RENDER);
                 uint32_t w = ftFace->glyph->bitmap.width + padding;
                 uint32_t h = ftFace->glyph->bitmap.rows + padding;
                 totalArea += w * h;
-                if (totalArea > maxPageArea * 0.95 || glyphsToPackCount == charPerPage) {
+                if (totalArea > maxPageArea * 0.90 || glyphsToPackCount == charPerPage) {
                     pageSize = std::min(maxPageSize, std::max(pageWidth, nextPow2(static_cast<uint16_t>(std::sqrt(totalArea)))));
-                    std::cout << "new page: " << glyphsToPackCount << " " << pageSize << "\n";
                     break;
                 }
                 glyphsToPackCount++;
             }
             if (pageSize == 0) pageSize = std::min(maxPageSize, std::max(pageWidth, nextPow2(static_cast<uint16_t>(std::sqrt(totalArea)))));
         }
-        // 1. Pack THIS PAGE's glyphs only
         size_t glyphsToPack = std::min(static_cast<size_t>(glyphsToPackCount), scriptCodepoints.size() - glyphsProcessed);
-        std::cout << "glyphsToPack: " << glyphsToPack << "\n";
         std::vector<std::pair<unicode_t, hb_codepoint_t>> pageCodepoints(scriptCodepoints.begin() + glyphsProcessed, scriptCodepoints.begin() + glyphsProcessed + glyphsToPack);
         pageWidth = pageHeight = pageSize;
 
         Page page(pageWidth, pageHeight, fontSize, style);
         std::vector<uint8_t> textureData(pageWidth * pageHeight * 4, 0);
 
-        // 2. Create rects from codepoints (measure without loading)
         std::vector<stbrp_rect> rects;
         std::vector<std::pair<unicode_t, hb_codepoint_t>> validPageCodepoints;
 
@@ -406,7 +376,7 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
             glyphsProcessed += glyphsToPack;
             continue;
         }
-        // 3. Pack layout
+        // Pack layout
         stbrp_context context;
         std::vector<stbrp_node> nodes(pageWidth);
         stbrp_init_target(&context, pageWidth, pageHeight, nodes.data(), pageWidth);
@@ -483,16 +453,11 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
         pages.push_back(std::move(page));
         glyphsProcessed += glyphsToPack;
         pageCount++;
-        std::cout << "failedPacks: " << failedPacks << "\n";
-        std::cout << "pageNum: " << pageCount << "\n";
     }
-    std::cout << "num_glyphs: " << ftFace->num_glyphs << "\n";
-    std::cout << "bad glyphs: " << badCounter << "\n";
-    std::cout << "glyphs added: " << glyphsAdded << "\n";
 }
 
 Font::~Font() {
-    std::cout << "cleanup\n";
+    std::cout << "Font Cleanup\n";
     FT_Done_Face(ftFace);
     FT_Done_FreeType(lib);
 }
