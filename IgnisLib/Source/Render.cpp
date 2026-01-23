@@ -14,6 +14,11 @@
 
 namespace Ignis {
 
+	struct WindowUserPointer {
+		void* vulkanData;
+		void* inputData;
+	};
+
 	using Vertex = Render::Vertex;
 	using CreateRenderPassInfo = Render::CreateRenderPassInfo;
 	using CreateGraphicPipeLineInfo = Render::CreateGraphicPipeLineInfo;
@@ -283,7 +288,19 @@ namespace Ignis {
 			glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
 			windowOut = glfwCreateWindow(width, height, title, monitor, share);
-			windows[windowOut] = WindowVulkanData{};
+			windows[windowOut] = std::make_unique<WindowVulkanData>();
+
+			void* existing = glfwGetWindowUserPointer(windowOut);
+			if (existing != nullptr) {
+				WindowUserPointer* ptr = (WindowUserPointer*)existing;
+				ptr->vulkanData = windows[windowOut].get();
+			}
+			else {
+				WindowUserPointer* ptr = new WindowUserPointer();
+				ptr->vulkanData = windows[windowOut].get();
+				glfwSetWindowUserPointer(windowOut, ptr);
+			}
+
 			glfwSetWindowUserPointer(windowOut, &(windows[windowOut]));
 			glfwSetFramebufferSizeCallback(windowOut, FramebufferResizeCallback);
 
@@ -321,14 +338,14 @@ namespace Ignis {
 				CreateTextureSampler();
 			}
 
-			windows[curWindow].surfaces[curSurface] = SurfaceVulkanData{};
+			windows[curWindow]->surfaces[curSurface] = SurfaceVulkanData{};
 
-			SurfaceVulkanData* surface = &(windows[curWindow].surfaces[curSurface]);
+			SurfaceVulkanData* surface = &(windows[curWindow]->surfaces[curSurface]);
 
 			surface->haveVertexData = false;
 
 			//creates the swapchain, the images that are rendered onto the screen
-			CreateSwapChain(surface->swapChain, surface->swapChainImages, windows[curWindow], curWindow, curSurface);
+			CreateSwapChain(surface->swapChain, surface->swapChainImages, windows[curWindow].get(), curWindow, curSurface);
 
 			//creates the views for the imagese in the swapchain
 			CreateImageViews(surface->swapChainImageViews, surface->swapChainImages);
@@ -339,13 +356,13 @@ namespace Ignis {
 			CreateDescriptorSetLayout(surface);
 
 			//create the rendering procedure that the data passes to be rendered
-			CreateGraphicPipeline(windows[curWindow], surface->pipeline, surface->layout, surface->renderPass, graphicPipeLineInfo, surface->descriptorSetLayout); // need a CreatePipelineInfo later
+			CreateGraphicPipeline(windows[curWindow].get(), surface->pipeline, surface->layout, surface->renderPass, graphicPipeLineInfo, surface->descriptorSetLayout); // need a CreatePipelineInfo later
 
 			//creates depth resources for the surface so it can depth check
-			CreateDepthResources(surface, windows[curWindow].swapChainExtent);
+			CreateDepthResources(surface, windows[curWindow]->swapChainExtent);
 
 			//creates the buffers for the images
-			CreateFramebuffers(surface->swapChainFramebuffers, surface->swapChainImageViews, surface->renderPass, windows[curWindow], surface->depthImageView);
+			CreateFramebuffers(surface->swapChainFramebuffers, surface->swapChainImageViews, surface->renderPass, windows[curWindow].get(), surface->depthImageView);
 
 			CreateUniformBuffers(surface);
 
@@ -377,15 +394,15 @@ namespace Ignis {
 		}
 
 		static void FramebufferResizeCallback(GLFWwindow* windowIn, int width, int height) {
-			auto window = reinterpret_cast<WindowVulkanData*>(glfwGetWindowUserPointer(windowIn));
-			window->framebufferResized = true;
+			auto window = reinterpret_cast<WindowUserPointer*>(glfwGetWindowUserPointer(windowIn));
+			((WindowVulkanData*)window->vulkanData)->framebufferResized = true;
 		}
 
 		void Event() {
 			glfwPollEvents();
 			for (auto& window : windows)
 			{
-				if (glfwWindowShouldClose(window.first) || window.second.surfaces.size() == 0) {
+				if (glfwWindowShouldClose(window.first) || window.second->surfaces.size() == 0) {
 					CloseWindow(window.first);
 					break;
 				}
@@ -431,7 +448,7 @@ namespace Ignis {
 
 		bool firstTexture = true;
 
-		std::unordered_map<GLFWwindow*, WindowVulkanData> windows;
+		std::unordered_map<GLFWwindow*, std::unique_ptr<WindowVulkanData>> windows;
 		VkInstance instance;
 
 		VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
@@ -521,25 +538,31 @@ namespace Ignis {
 				else ++it;
 			}
 
-			WindowVulkanData& window = windows[windowIn];
-			for (auto& [surface, surfaceData] : window.surfaces) {
+			WindowVulkanData* window = windows[windowIn].get();
+			for (auto& [surface, surfaceData] : window->surfaces) {
 				CleanUpSurface(&surfaceData);
 
 				vkDestroySurfaceKHR(instance, surface, nullptr);
+			}
+
+			void* exists = glfwGetWindowUserPointer(windowIn);
+			if (exists != nullptr) {
+				delete exists;
+				glfwSetWindowUserPointer(windowIn, nullptr);
 			}
 
 			glfwDestroyWindow(windowIn);
 
 			windows.erase(windowIn);
 
-			if (windows.size() > 0) surface = windows.begin()->second.surfaces.begin()->first;
+			if (windows.size() > 0) surface = windows.begin()->second->surfaces.begin()->first;
 		}
 
 		//Cleans up upon closing all the windows
 		void CleanUp()
 		{
 			for (auto& [window, windowData] : windows) {
-				for (auto& [surface, surfaceData] : windowData.surfaces) {
+				for (auto& [surface, surfaceData] : windowData->surfaces) {
 					CleanUpSurface(&surfaceData);
 					vkDestroySurfaceKHR(instance, surface, nullptr);
 				}
@@ -566,6 +589,11 @@ namespace Ignis {
 			}
 
 			for (auto& [window, windowData] : windows) {
+				void* exists = glfwGetWindowUserPointer(window);
+				if (exists != nullptr) {
+					delete exists;
+					glfwSetWindowUserPointer(window, nullptr);
+				}
 				glfwDestroyWindow(window);
 			}
 
@@ -577,7 +605,7 @@ namespace Ignis {
 
 		//update
 		void DrawFrame(GLFWwindow* window, VkSurfaceKHR* surface) {
-			SurfaceVulkanData* data = &windows[window].surfaces[*surface];
+			SurfaceVulkanData* data = &windows[window]->surfaces[*surface];
 			if (!data->haveVertexData) return;
 			//waits for last frame to complete (for the fence), then resets it
 			vkWaitForFences(device, 1, &data->inFlightFences[data->currentFrame], VK_TRUE, UINT64_MAX);
@@ -599,11 +627,11 @@ namespace Ignis {
 			vkResetFences(device, 1, &data->inFlightFences[data->currentFrame]);
 
 			//updating the uniform buffer for the frame
-			UpdateUniformBuffer(data, &windows[window]);
+			UpdateUniformBuffer(data, windows[window].get());
 
 			//resets and records the command buffer
 			vkResetCommandBuffer(data->commandBuffers[data->currentFrame], 0);
-			RecordCommandBuffer(data, windows[window].swapChainExtent, imageIndex);
+			RecordCommandBuffer(data, windows[window]->swapChainExtent, imageIndex);
 
 			//submiting it to the graphics family queue
 			VkSubmitInfo submitInfo{};
@@ -642,8 +670,8 @@ namespace Ignis {
 			result = vkQueuePresentKHR(presentQueue, &presentInfo);
 
 			//check if swapchain recreation is necessary
-			if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || windows[window].framebufferResized) {
-				windows[window].framebufferResized = false;
+			if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || windows[window]->framebufferResized) {
+				windows[window]->framebufferResized = false;
 				RecreateSwapChain(window, *surface);
 			}
 			else if (result != VK_SUCCESS) {
@@ -674,7 +702,7 @@ namespace Ignis {
 		}
 
 		void RecreateSwapChain(GLFWwindow* window, VkSurfaceKHR surface) {
-			SurfaceVulkanData* data = &windows[window].surfaces[surface];
+			SurfaceVulkanData* data = &windows[window]->surfaces[surface];
 			int width = 0, height = 0;
 			glfwGetFramebufferSize(window, &width, &height);
 			while (width == 0 || height == 0) {
@@ -686,10 +714,10 @@ namespace Ignis {
 
 			CleanupSwapChain(data);
 
-			CreateSwapChain(data->swapChain, data->swapChainImages, windows[window], window, surface);
+			CreateSwapChain(data->swapChain, data->swapChainImages, windows[window].get(), window, surface);
 			CreateImageViews(data->swapChainImageViews, data->swapChainImages);
-			CreateDepthResources(data, windows[window].swapChainExtent);
-			CreateFramebuffers(data->swapChainFramebuffers, data->swapChainImageViews, data->renderPass, windows[window], data->depthImageView);
+			CreateDepthResources(data, windows[window]->swapChainExtent);
+			CreateFramebuffers(data->swapChainFramebuffers, data->swapChainImageViews, data->renderPass, windows[window].get(), data->depthImageView);
 		}
 
 		//assumes one element per surface
@@ -698,7 +726,7 @@ namespace Ignis {
 			{
 				if (element.changed) {
 					SurfaceAccess acces = surfaceAccess[surfaceId];
-					SurfaceVulkanData* surfaceData = &windows[acces.window].surfaces[acces.surface];
+					SurfaceVulkanData* surfaceData = &windows[acces.window]->surfaces[acces.surface];
 					VertexData data = GetVertexData(surfaceId, surfaceData);
 					CreateVertexBuffer(surfaceData, data.vertecies);
 					CreateIndexBuffer(surfaceData, data.indicies);
@@ -1061,7 +1089,7 @@ namespace Ignis {
 
 			for (auto& [window, windowData] : windows)
 			{
-				for (auto& [surface, surfaceData] : windowData.surfaces) 
+				for (auto& [surface, surfaceData] : windowData->surfaces) 
 				{
 					for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
 					{
@@ -1488,7 +1516,7 @@ namespace Ignis {
 		}
 
 		//framebuffer creation
-		void CreateFramebuffers(std::vector<VkFramebuffer>& buffers, std::vector<VkImageView>& views, VkRenderPass renderPass, WindowVulkanData window, VkImageView depthImageView) {
+		void CreateFramebuffers(std::vector<VkFramebuffer>& buffers, std::vector<VkImageView>& views, VkRenderPass renderPass, WindowVulkanData* window, VkImageView depthImageView) {
 			buffers.resize(views.size());
 
 			for (size_t i = 0; i < views.size(); i++) {
@@ -1502,8 +1530,8 @@ namespace Ignis {
 				framebufferInfo.renderPass = renderPass;
 				framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
 				framebufferInfo.pAttachments = attachments.data();
-				framebufferInfo.width = window.swapChainExtent.width;
-				framebufferInfo.height = window.swapChainExtent.height;
+				framebufferInfo.width = window->swapChainExtent.width;
+				framebufferInfo.height = window->swapChainExtent.height;
 				framebufferInfo.layers = 1;
 
 				if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &buffers[i]) != VK_SUCCESS) {
@@ -1519,15 +1547,15 @@ namespace Ignis {
 			swapChainPresentMode = ChooseSwapPresentMode(swapChainSupport.presentModes);
 		}
 		//creating the swapchain
-		void CreateSwapChain(VkSwapchainKHR& swapchain, std::vector<VkImage>& images, WindowVulkanData& windowData, GLFWwindow* window, VkSurfaceKHR curSurface) {
-			vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, curSurface, &windowData.capabilities);
-			windowData.swapChainExtent = ChooseSwapExtent(windowData.capabilities, window);
+		void CreateSwapChain(VkSwapchainKHR& swapchain, std::vector<VkImage>& images, WindowVulkanData* windowData, GLFWwindow* window, VkSurfaceKHR curSurface) {
+			vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, curSurface, &windowData->capabilities);
+			windowData->swapChainExtent = ChooseSwapExtent(windowData->capabilities, window);
 			//number of images in swapchain
-			uint32_t imageCount = windowData.capabilities.minImageCount +1;
+			uint32_t imageCount = windowData->capabilities.minImageCount +1;
 
 			//not exceeding maximum image count
-			if (windowData.capabilities.maxImageCount > 0 && imageCount > windowData.capabilities.maxImageCount) {
-				imageCount = windowData.capabilities.maxImageCount;
+			if (windowData->capabilities.maxImageCount > 0 && imageCount > windowData->capabilities.maxImageCount) {
+				imageCount = windowData->capabilities.maxImageCount;
 			}
 
 			//seting surface and other info for swapchain
@@ -1538,7 +1566,7 @@ namespace Ignis {
 			createInfo.minImageCount = imageCount;
 			createInfo.imageFormat = swapChainImageFormat.format;
 			createInfo.imageColorSpace = swapChainImageFormat.colorSpace;
-			createInfo.imageExtent = windowData.swapChainExtent;
+			createInfo.imageExtent = windowData->swapChainExtent;
 			createInfo.imageArrayLayers = 1;
 			createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
@@ -1557,10 +1585,10 @@ namespace Ignis {
 				createInfo.pQueueFamilyIndices = nullptr; // Optional
 			}
 
-			createInfo.preTransform = windowData.capabilities.currentTransform;
+			createInfo.preTransform = windowData->capabilities.currentTransform;
 
 			//if possible makes the buffer able to be transparent
-			if (windowData.capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR)
+			if (windowData->capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR)
 				createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR;
 			else createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 
@@ -1592,7 +1620,7 @@ namespace Ignis {
 
 
 		//creates the pipeline
-		void CreateGraphicPipeline(WindowVulkanData window ,VkPipeline& pipeline, VkPipelineLayout& layout, VkRenderPass renderPass, CreateGraphicPipeLineInfo graphicPipeLineInfo, VkDescriptorSetLayout& decriptorSetLayout) {
+		void CreateGraphicPipeline(WindowVulkanData* window ,VkPipeline& pipeline, VkPipelineLayout& layout, VkRenderPass renderPass, CreateGraphicPipeLineInfo graphicPipeLineInfo, VkDescriptorSetLayout& decriptorSetLayout) {
 			//reads in the binary shader data
 			CompileShader(graphicPipeLineInfo.vertexShader, "vert");
 			auto vertShaderCode = readFile("vert.spv");
@@ -1641,15 +1669,15 @@ namespace Ignis {
 			VkViewport viewport{};
 			viewport.x = 0.0f;
 			viewport.y = 0.0f;
-			viewport.width = (float)window.swapChainExtent.width;
-			viewport.height = (float)window.swapChainExtent.height;
+			viewport.width = (float)window->swapChainExtent.width;
+			viewport.height = (float)window->swapChainExtent.height;
 			viewport.minDepth = 0.0f;
 			viewport.maxDepth = 1.0f;
 
 			//cuts off parts of the framebuffer from rendering
 			VkRect2D scissor{};
 			scissor.offset = { 0, 0 };
-			scissor.extent = window.swapChainExtent;
+			scissor.extent = window->swapChainExtent;
 
 			//handles what should be dinamic during runtime
 			std::vector<VkDynamicState> dynamicStates = {
