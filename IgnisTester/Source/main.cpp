@@ -17,16 +17,15 @@ int main() {
 	gpInfo.vertexShader = "../Resources/Shaders/shader.vert";
 	gpInfo.fragmentShader = "../Resources/Shaders/shader.frag";
 
-	Render renderer = Render(true);
+	Render::Init(true);
 
-	Window window1 = renderer.CreateAppWindow(1200, 800, "Gup 1");
-	int surface = renderer.CreateSurface(window1, gpInfo);
+	Window window1 = Render::CreateAppWindow(1200, 800, "Gup 1");
+	int surface = Render::CreateSurface(window1, gpInfo);
 	surfaces.push_back(surface);
 
-	int monika = renderer.CreateTexture("../Resources/Textures/monika2.png");
-	int sus = renderer.CreateTexture("../Resources/Textures/goated0.bmp");
+	int monika = Render::CreateTexture("../Resources/Textures/monika2.png");
+	int sus = Render::CreateTexture("../Resources/Textures/goated0.bmp");
 
-	UI::SetRender(&renderer);
 	UI::SetMainSurface(surface);
 
 	Color tip(0, 255, 0);
@@ -40,11 +39,11 @@ int main() {
 
 	while (surfaces.size() != 0)
 	{
-		renderer.Event();
+		Render::Event();
 
 		for (auto it = surfaces.begin(); it != surfaces.end(); ) {
-			if (renderer.IsValidSurface(*it)) {
-				renderer.Draw(*it);
+			if (Render::IsValidSurface(*it)) {
+				Render::Draw(*it);
 				it++;
 			}
 			else it = surfaces.erase(it);

@@ -1,5 +1,7 @@
 #version 450
 
+#extension GL_EXT_nonuniform_qualifier : enable
+
 #define MAX_TEXTURES 1028
 
 layout(location = 0) in vec3 fragColor;
@@ -12,7 +14,7 @@ layout(location = 0) out vec4 outColor;
 
 void main() {
     if (fragTexId < MAX_TEXTURES && fragTexId >= 0) {
-        vec4 texColor = texture(textures[fragTexId], fragTexCoord);
+        vec4 texColor = texture(textures[nonuniformEXT(fragTexId)], fragTexCoord);
         outColor = texColor * vec4(fragColor, texColor.a);
     } else {
         outColor = vec4(fragColor, 1.0);

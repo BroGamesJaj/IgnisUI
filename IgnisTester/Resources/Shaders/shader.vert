@@ -7,7 +7,7 @@ layout(location = 3) in uint inTexId;
 
 layout(location = 0) out vec3 fragColor;
 layout(location = 1) out vec2 fragTexCoord;
-layout(location = 2) out uint fragTexId;
+layout(location = 2) out flat uint fragTexId;
 
 layout(binding = 0) uniform UniformBufferObject {
     mat4 model;

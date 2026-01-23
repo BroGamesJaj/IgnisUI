@@ -328,41 +328,12 @@ namespace Ignis {
 
             friend class UI;
         };
-        
-
-        static inline void SetRender(Render* render) { renderInstance = render; }
 
         static inline void SetMainSurface(int surface) { mainSurface = surface; }
 
-        static int CreateButton(int surface = mainSurface) {
-            if (!renderInstance) {
-                throw std::runtime_error("Render for UI has not been set");
-            }
-
-            if (!renderInstance->IsValidSurface(surface)) {
-                throw std::runtime_error("Invalid surface for UI element");
-            }
-
-            Render::UIRenderData data{
-                .vertecies = {
-                    {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0}},
-                    {{ 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {0}},
-                    {{ 0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {0}},
-                    {{-0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {0}}
-                },
-                .indicies = { 
-                        0, 2, 1, 0, 3, 2
-                },
-                .surface = surface,
-                .changed = true,
-            };
-
-            return renderInstance->AddUIElementData(data);
-        }
-
         template<std::derived_from<UI::Element>... Args>
         static void AddToSurface(int surface, Args&... args) {
-            if (!renderInstance->IsValidSurface(surface)) return;
+            if (!Render::IsValidSurface(surface)) return;
             (elements[surface].push_back(args), ...);
         }
 
@@ -375,7 +346,6 @@ namespace Ignis {
         static void Clean();
 
     private:
-        static Render* renderInstance;
         static int mainSurface;
         static std::unordered_map<int, std::vector<Element>> elements;
         static int nextId;

@@ -171,7 +171,7 @@ namespace Ignis {
 		Render::UIRenderData outputData = ProcessVertecies(data, elements[surface]);
 		outputData.surface = surface;
 		outputData.changed = true;
-		renderInstance->AddUIElementData(outputData);
+		Render::AddUIElementData(outputData);
 	}
 
 	Render::UIRenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<Element>& elements) {
@@ -359,7 +359,6 @@ namespace Ignis {
 	//Variables
 
 	int UI::mainSurface = -1;
-	Render* UI::renderInstance = nullptr;
 	int UI::nextId = 0;
 	std::unordered_map<int, std::vector<UI::Element>> UI::elements;
 	std::unordered_set<UI::UIData*> UI::dataPtrs;
