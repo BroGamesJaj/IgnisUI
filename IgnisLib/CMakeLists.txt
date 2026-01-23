@@ -5,12 +5,12 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-
 # Make clangd happy
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 file(GLOB_RECURSE SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/Source/*.cpp")
-add_library(Ignis STATIC ${SOURCES} "Source/UI.cpp")
+
+add_library(Ignis STATIC ${SOURCES})
 
 set(outputDir ${CMAKE_SOURCE_DIR}/Output)
 set_target_properties(Ignis PROPERTIES
@@ -19,10 +19,13 @@ set_target_properties(Ignis PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${outputDir}
 )
 
+# Freetype
+add_subdirectory(Dependencies/freetype)
+
 # HarfBuzz
-# This is for making smaller font files, currently useless for use so 
-# its turned off
+# This is for making smaller font files, currently useless for use so its turned off
 set(HB_BUILD_SUBSET OFF CACHE BOOL "" FORCE)
+set(HB_HAVE_FREETYPE ON CACHE BOOL "" FORCE)
 add_subdirectory(Dependencies/harfbuzz)
 
 if (WIN32)
@@ -43,7 +46,10 @@ else()
     target_link_libraries(Ignis PRIVATE Vulkan::Vulkan ${GLFW_LIBRARIES})
 endif()
 
-target_link_libraries(Ignis PRIVATE harfbuzz)
+target_link_libraries(Ignis PRIVATE 
+    harfbuzz 
+    freetype
+)
 
 target_include_directories(Ignis PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}/Dependencies

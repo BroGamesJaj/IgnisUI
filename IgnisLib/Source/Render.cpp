@@ -1,3 +1,5 @@
+#include <vulkan/vulkan_core.h>
+
 #include "IgnisLib.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -8,9 +10,9 @@
 #include <filesystem>
 
 #define GLFW_INCLUDE_VULKAN
-#include "GLFW/glfw3.h"
-
 #include <chrono>
+
+#include "GLFW/glfw3.h"
 
 namespace Ignis {
 
@@ -329,30 +331,38 @@ namespace Ignis {
 				//gets imageformat and supported stuff, so we dont need to get that on every surface
 				GetSwapChainData();
 
-				//command pool is managing the memory used for the command buffers
-				CreateCommandPool();
+    Window CreateVulkanWindow(int width, int height, const char *title, GLFWmonitor *monitor, GLFWwindow *share) {
+        GLFWwindow *windowOut;
+        // Not opengl so dont do any opengl stuff
+        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-				firstSurface = false;
+        windowOut = glfwCreateWindow(width, height, title, monitor, share);
+        windows[windowOut] = WindowVulkanData{};
+        glfwSetWindowUserPointer(windowOut, &(windows[windowOut]));
+        glfwSetFramebufferSizeCallback(windowOut, FramebufferResizeCallback);
 
-				CreateTextureSampler();
-			}
+        return {windowOut};
+    }
 
 			windows[curWindow]->surfaces[curSurface] = SurfaceVulkanData{};
 
 			SurfaceVulkanData* surface = &(windows[curWindow]->surfaces[curSurface]);
 
-			surface->haveVertexData = false;
+        if (glfwCreateWindowSurface(instance, curWindow, nullptr, &curSurface) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create window surface!");
+        }
 
-			//creates the swapchain, the images that are rendered onto the screen
-			CreateSwapChain(surface->swapChain, surface->swapChainImages, windows[curWindow].get(), curWindow, curSurface);
+        if (firstSurface) {
+            surface = curSurface;
 
-			//creates the views for the imagese in the swapchain
-			CreateImageViews(surface->swapChainImageViews, surface->swapChainImages);
+            // basicly selects the "GPU"
+            PickPhysicalDevice();
 
-			//the passes to be executed on the data
-			CreateRenderPass(surface->renderPass, renderPassInfo);
+            // creates the "computing" part of the instance, stuff get done with this
+            CreateLogicalDevice();
 
-			CreateDescriptorSetLayout(surface);
+            // gets imageformat and supported stuff, so we dont need to get that on every surface
+            GetSwapChainData();
 
 			//create the rendering procedure that the data passes to be rendered
 			CreateGraphicPipeline(windows[curWindow].get(), surface->pipeline, surface->layout, surface->renderPass, graphicPipeLineInfo, surface->descriptorSetLayout); // need a CreatePipelineInfo later
@@ -363,179 +373,165 @@ namespace Ignis {
 			//creates the buffers for the images
 			CreateFramebuffers(surface->swapChainFramebuffers, surface->swapChainImageViews, surface->renderPass, windows[curWindow].get(), surface->depthImageView);
 
-			CreateUniformBuffers(surface);
+        windows[curWindow].surfaces[curSurface] = SurfaceVulkanData{};
 
-			CreateDescriptorPool(surface);
+        SurfaceVulkanData *surface = &(windows[curWindow].surfaces[curSurface]);
 
-			CreateDescriptorSets(surface);
+        surface->haveVertexData = false;
 
-			//creates command buffer that can be used to submit commands to specific queues
-			CreateCommandBuffers(surface->commandBuffers);
+        // creates the swapchain, the images that are rendered onto the screen
+        CreateSwapChain(surface->swapChain, surface->swapChainImages, windows[curWindow], curWindow, curSurface);
 
-			//creates the fences & semaphores to handle cpu-gpu syncronization
-			CreateSyncObjects(surface->imageAvailableSemaphores, surface->renderFinishedSemaphores, surface->inFlightFences);
+        // creates the views for the imagese in the swapchain
+        CreateImageViews(surface->swapChainImageViews, surface->swapChainImages);
 
-			surfaceAccess[nextSurface] = { curWindow, curSurface };
+        // the passes to be executed on the data
+        CreateRenderPass(surface->renderPass, renderPassInfo);
 
-			return nextSurface++;
-		}
+        CreateDescriptorSetLayout(surface);
 
-		int CreateTexture(std::string path) {
-			TextureData data;
-			CreateTextureImage(path, data.textureImage, data.textureImageMemory);
-			data.textureImageView = CreateTextureImageView(data.textureImage);
+        // create the rendering procedure that the data passes to be rendered
+        CreateGraphicPipeline(windows[curWindow], surface->pipeline, surface->layout, surface->renderPass, graphicPipeLineInfo, surface->descriptorSetLayout);  // need a CreatePipelineInfo later
 
-			textureData[nextTexture] = data;
+        // creates depth resources for the surface so it can depth check
+        CreateDepthResources(surface, windows[curWindow].swapChainExtent);
 
-			UpdateTextureDescriptor(nextTexture,data.textureImageView);
+        // creates the buffers for the images
+        CreateFramebuffers(surface->swapChainFramebuffers, surface->swapChainImageViews, surface->renderPass, windows[curWindow], surface->depthImageView);
 
-			return nextTexture++;
-		}
+        CreateUniformBuffers(surface);
 
-		static void FramebufferResizeCallback(GLFWwindow* windowIn, int width, int height) {
-			auto window = reinterpret_cast<WindowUserPointer*>(glfwGetWindowUserPointer(windowIn));
-			((WindowVulkanData*)window->vulkanData)->framebufferResized = true;
-		}
+        CreateDescriptorPool(surface);
 
-		void Event() {
-			glfwPollEvents();
-			for (auto& window : windows)
-			{
-				if (glfwWindowShouldClose(window.first) || window.second->surfaces.size() == 0) {
-					CloseWindow(window.first);
-					break;
-				}
-			}
+        CreateDescriptorSets(surface);
 
-			//if a ui element changed update the vertex & index buffer for that window
-			UpdateElementBuffers();
-		}
+        // creates command buffer that can be used to submit commands to specific queues
+        CreateCommandBuffers(surface->commandBuffers);
 
-		bool IsValidSurface(int surfaceIndex) {
-			return surfaceAccess.count(surfaceIndex) > 0;
-		}
+        // creates the fences & semaphores to handle cpu-gpu syncronization
+        CreateSyncObjects(surface->imageAvailableSemaphores, surface->renderFinishedSemaphores, surface->inFlightFences);
 
-		void Draw(int surfaceIndex)
-		{
-			if (surfaceAccess.count(surfaceIndex) > 0) {
-				DrawFrame(surfaceAccess[surfaceIndex].window, &surfaceAccess[surfaceIndex].surface);
-				vkDeviceWaitIdle(device);
-			}
-			else throw std::runtime_error("invalid surface!");
-		}
+        surfaceAccess[nextSurface] = {curWindow, curSurface};
 
-		int AddUIElementData(UIRenderData& data) {
-			renderData[nextElement] = data;
-			return nextElement++;
-		}
+        return nextSurface++;
+    }
 
-	private:
-		struct SwapChainSupportDetails {
-			std::vector<VkSurfaceFormatKHR> formats;
-			std::vector<VkPresentModeKHR> presentModes;
-		};
+    int CreateTexture(std::string path) {
+        TextureData data;
+        CreateTextureImage(path, data.textureImage, data.textureImageMemory);
+        data.textureImageView = CreateTextureImageView(data.textureImage);
 
-		const std::vector<const char*> validationLayers = { "VK_LAYER_KHRONOS_validation" };
+        textureData[nextTexture] = data;
 
-		bool enableValidationLayers = false;
+        UpdateTextureDescriptor(nextTexture, data.textureImageView);
 
-		const std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME };
+        return nextTexture++;
+    }
 
-		const int MAX_FRAMES_IN_FLIGHT = 2;
+    static void FramebufferResizeCallback(GLFWwindow *windowIn, int width, int height) {
+        auto window = reinterpret_cast<WindowVulkanData *>(glfwGetWindowUserPointer(windowIn));
+        window->framebufferResized = true;
+    }
 
-		bool firstSurface = true;
+    void Event() {
+        glfwPollEvents();
+        for (auto &window : windows) {
+            if (glfwWindowShouldClose(window.first) || window.second.surfaces.size() == 0) {
+                CloseWindow(window.first);
+                break;
+            }
+        }
 
-		bool firstTexture = true;
+        // if a ui element changed update the vertex & index buffer for that window
+        UpdateElementBuffers();
+    }
 
 		std::unordered_map<GLFWwindow*, std::unique_ptr<WindowVulkanData>> windows;
 		VkInstance instance;
+    bool IsValidSurface(int surfaceIndex) { return surfaceAccess.count(surfaceIndex) > 0; }
 
-		VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
-		VkDebugUtilsMessengerEXT debugMessenger;
+    void Draw(int surfaceIndex) {
+        if (surfaceAccess.count(surfaceIndex) > 0) {
+            DrawFrame(surfaceAccess[surfaceIndex].window, &surfaceAccess[surfaceIndex].surface);
+            vkDeviceWaitIdle(device);
+        } else
+            throw std::runtime_error("invalid surface!");
+    }
 
-		VkDevice device;
-		VkQueue graphicsQueue;
-		VkQueue presentQueue;
+    int AddUIElementData(UIRenderData &data) {
+        renderData[nextElement] = data;
+        return nextElement++;
+    }
 
-		VkSurfaceKHR surface;
+    int CreateFontPage(const std::vector<uint8_t> &rgbaData, uint32_t width, uint32_t height) {
+        TextureData data;
+        CreateTextureImageFromMemory(rgbaData.data(), width, height, data.textureImage, data.textureImageMemory);
+        data.textureImageView = CreateTextureImageView(data.textureImage);
+        textureData[nextTexture] = data;
+        UpdateTextureDescriptor(nextTexture, data.textureImageView);
+        return nextTexture++;  // returns texture slot ID
+    }
 
-		SwapChainSupportDetails swapChainSupport;
-		VkSurfaceFormatKHR swapChainImageFormat;
-		VkPresentModeKHR swapChainPresentMode;
+   private:
+    struct SwapChainSupportDetails {
+        std::vector<VkSurfaceFormatKHR> formats;
+        std::vector<VkPresentModeKHR> presentModes;
+    };
 
-		VkCommandPool commandPool;
+    const std::vector<const char *> validationLayers = {"VK_LAYER_KHRONOS_validation"};
 
-		std::unordered_map<int, TextureData> textureData;
-		VkSampler textureSampler;
-		int nextTexture = 0;
-		uint32_t MAX_TEXTURES;
+    bool enableValidationLayers = false;
 
-		VkImageView dummyImageView;
-		VkImage dummyImage;
-		VkDeviceMemory dummyImageMemory;
+    const std::vector<const char *> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME};
 
-		std::unordered_map<int, UIRenderData> renderData;
-		int nextElement = 0;
+    const int MAX_FRAMES_IN_FLIGHT = 2;
 
-		struct SurfaceAccess {
-			GLFWwindow* window;
-			VkSurfaceKHR surface;
-		};
+    bool firstSurface = true;
 
-		std::unordered_map<int, SurfaceAccess> surfaceAccess;
-		int nextSurface = 0;
+    bool firstTexture = true;
 
-		void CleanupSwapChain(SurfaceVulkanData* surface) {
-			vkDestroyImageView(device, surface->depthImageView, nullptr);
-			vkDestroyImage(device, surface->depthImage, nullptr);
-			vkFreeMemory(device, surface->depthImageMemory, nullptr);
+    std::unordered_map<GLFWwindow *, WindowVulkanData> windows;
+    VkInstance instance;
 
-			for (auto framebuffer : surface->swapChainFramebuffers) {
-				vkDestroyFramebuffer(device, framebuffer, nullptr);
-			}
+    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+    VkDebugUtilsMessengerEXT debugMessenger;
 
-			for (auto imageView : surface->swapChainImageViews) {
-				vkDestroyImageView(device, imageView, nullptr);
-			}
+    VkDevice device;
+    VkQueue graphicsQueue;
+    VkQueue presentQueue;
 
-			vkDestroySwapchainKHR(device, surface->swapChain, nullptr);
-		}
+    VkSurfaceKHR surface;
 
-		void CleanUpSurface(SurfaceVulkanData* data) {
-			CleanupSwapChain(data);
+    SwapChainSupportDetails swapChainSupport;
+    VkSurfaceFormatKHR swapChainImageFormat;
+    VkPresentModeKHR swapChainPresentMode;
 
-			vkDestroyDescriptorSetLayout(device, data->descriptorSetLayout, nullptr);
-			vkDestroyDescriptorPool(device, data->descriptorPool, nullptr);
+    VkCommandPool commandPool;
 
-			vkDestroyBuffer(device, data->vertexBuffer, nullptr);
-			vkFreeMemory(device, data->vertexBufferMemory, nullptr);
+    std::unordered_map<int, TextureData> textureData;
+    VkSampler textureSampler;
+    int nextTexture = 1;
+    uint32_t MAX_TEXTURES;
 
-			vkDestroyBuffer(device, data->indexBuffer, nullptr);
-			vkFreeMemory(device, data->indexBufferMemory, nullptr);
+    VkImageView dummyImageView;
+    VkImage dummyImage;
+    VkDeviceMemory dummyImageMemory;
 
-			for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-				vkDestroyBuffer(device, data->uniformBuffers[i], nullptr);
-				vkFreeMemory(device, data->uniformBuffersMemory[i], nullptr);
-			}
+    std::unordered_map<int, UIRenderData> renderData;
+    int nextElement = 0;
 
-			vkDestroyPipeline(device, data->pipeline, nullptr);
-			vkDestroyPipelineLayout(device, data->layout, nullptr);
-			vkDestroyRenderPass(device, data->renderPass, nullptr);
+    struct SurfaceAccess {
+        GLFWwindow *window;
+        VkSurfaceKHR surface;
+    };
 
-			for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-			{
-				vkDestroySemaphore(device, data->imageAvailableSemaphores[i], nullptr);
-				vkDestroySemaphore(device, data->renderFinishedSemaphores[i], nullptr);
-				vkDestroyFence(device, data->inFlightFences[i], nullptr);
-			}
-		}
+    std::unordered_map<int, SurfaceAccess> surfaceAccess;
+    int nextSurface = 0;
 
-		void CloseWindow(GLFWwindow* windowIn)
-		{
-			for (auto it = surfaceAccess.begin(); it != surfaceAccess.end(); ) {
-				if (it->second.window == windowIn) it = surfaceAccess.erase(it);
-				else ++it;
-			}
+    void CleanupSwapChain(SurfaceVulkanData *surface) {
+        vkDestroyImageView(device, surface->depthImageView, nullptr);
+        vkDestroyImage(device, surface->depthImage, nullptr);
+        vkFreeMemory(device, surface->depthImageMemory, nullptr);
 
 			WindowVulkanData* window = windows[windowIn].get();
 			for (auto& [surface, surfaceData] : window->surfaces) {
@@ -2210,3 +2206,20 @@ namespace Ignis {
 
 	Render::Vulkan* Render::instance = nullptr;
 }
+
+Window Render::CreateAppWindow(int width, int height, const char *title, GLFWmonitor *screen, GLFWwindow *share) { return instance->CreateVulkanWindow(width, height, title, screen, share); }
+
+int Render::CreateSurface(Window window, CreateGraphicPipeLineInfo graphicPipeLineInfo, CreateRenderPassInfo renderPassInfo) { return instance->CreateSurface(window, graphicPipeLineInfo, renderPassInfo); }
+
+void Render::Draw(int surface) { instance->Draw(surface); }
+
+void Render::Event() { instance->Event(); }
+
+bool Render::IsValidSurface(int surfaceIndex) { return instance->IsValidSurface(surfaceIndex); }
+
+int Render::AddUIElementData(UIRenderData &data) { return instance->AddUIElementData(data); }
+
+int Render::CreateTexture(std::string path) { return instance->CreateTexture(path); }
+
+int Render::CreateFontPage(const std::vector<uint8_t> &rgbaData, uint32_t width, uint32_t height) { return instance->CreateFontPage(rgbaData, width, height); };
+}  // namespace Ignis
