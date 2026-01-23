@@ -7,3 +7,6 @@
 [submodule "IgnisLib/Dependencies/freetype"]
 	path = IgnisLib/Dependencies/freetype
 	url = https://github.com/freetype/freetype.git
+[submodule "IgnisLib/Dependencies/GLFW"]
+	path = IgnisLib/Dependencies/GLFW
+	url = https://github.com/glfw/glfw.git

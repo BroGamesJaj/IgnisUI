@@ -18,27 +18,11 @@ set_target_properties(IgnisTester PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${outputDir}
 )
 
-if (WIN32)
-    set(GLFW_LIB ${CMAKE_SOURCE_DIR}/Dependencies/glfw3.lib)
-    set(VULKAN_LIB $ENV{VULKAN_SDK}/Lib/vulkan-1.lib)
-    target_include_directories(IgnisTester PRIVATE
-        $ENV{VULKAN_SDK}/Include
-    )
-    target_link_directories(IgnisTester PRIVATE ${CMAKE_SOURCE_DIR}/Dependencies)
-else()
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(GLFW REQUIRED glfw3)
-    find_package(Vulkan REQUIRED)
-    set(VULKAN_LIB Vulkan::Vulkan)
-endif()
-
 target_include_directories(IgnisTester PRIVATE
     ${CMAKE_SOURCE_DIR}/Dependencies
 )
 
 target_link_libraries(IgnisTester PRIVATE
-    ${VULKAN_LIB}
-    ${GLFW_LIB}
     Ignis
 )
 

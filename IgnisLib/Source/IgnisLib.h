@@ -104,7 +104,7 @@ class Render {
     static int CreateFontPage(const std::vector<uint8_t> &rgbaData, uint32_t width, uint32_t height);
 
     static void Draw(int surface);
-    static void Event();
+    static void Update();
     static bool IsValidSurface(int surfaceIndex);
 
    private:
@@ -440,7 +440,25 @@ using Button = UI::Button;
 
 #if defined(IGNIS_INPUT) || defined(IGNIS_UI)
 class Input {
-    static void InitWindow();
+private:
+    using Action = std::pair<GLFWwindow*, int>;
+    using Callback = void*;
+
+    struct Callbacks;
+
+    struct KeyHash {
+        size_t operator()(const Action& k) const noexcept {
+            return std::hash<GLFWwindow*>()(k.first) ^ (std::hash<int>()(k.second) << 1);
+        }
+    };
+
+    static std::unordered_map<Action, Callback, KeyHash> customCallbacks;
+    static std::unordered_map <GLFWwindow*, std::unordered_set<Callbacks>> windowCallbacks;
+public:
+
+    static void Init();
+    static void Event();
+    static void HookFramebufferSizeCallback(Render::Window window, void* function);
 };
 #endif
 }  // namespace Ignis

@@ -7,9 +7,10 @@
 
 #include <filesystem>
 
-#define GLFW_INCLUDE_VULKAN
+
 #include <chrono>
 
+#define GLFW_INCLUDE_VULKAN
 #include "GLFW/glfw3.h"
 
 namespace Ignis {
@@ -266,6 +267,11 @@ static CreateRenderPassInfoVKConvert RenderPassInfoToVK(CreateRenderPassInfo inf
 class Render::Vulkan {
    public:
     Vulkan(bool debuging = false) {
+
+#ifndef IGNIS_INPUT
+        glfwInit();
+#endif
+
         if (debuging) enableValidationLayers = true;
 
         // basicly the whole system, the connection between the app and the vulkan api
@@ -288,17 +294,16 @@ class Render::Vulkan {
         windowOut = glfwCreateWindow(width, height, title, monitor, share);
         windows[windowOut] = std::make_unique<WindowVulkanData>();
 
-        void *existing = glfwGetWindowUserPointer(windowOut);
-        if (existing != nullptr) {
-            WindowUserPointer *ptr = (WindowUserPointer *)existing;
-            ptr->vulkanData = windows[windowOut].get();
-        } else {
-            WindowUserPointer *ptr = new WindowUserPointer();
-            ptr->vulkanData = windows[windowOut].get();
-            glfwSetWindowUserPointer(windowOut, ptr);
-        }
+        WindowUserPointer* ptr = new WindowUserPointer();
+        ptr->vulkanData = windows[windowOut].get();
+        glfwSetWindowUserPointer(windowOut, ptr);
 
+#ifdef IGNIS_INPUT
+        Input::HookFramebufferSizeCallback({ windowOut }, FramebufferResizeCallback);
+#else 
         glfwSetFramebufferSizeCallback(windowOut, FramebufferResizeCallback);
+#endif
+
 
         return {windowOut};
     }
@@ -319,8 +324,22 @@ class Render::Vulkan {
 
         VkSurfaceKHR curSurface;
 
-        if (glfwCreateWindowSurface(instance, curWindow, nullptr, &curSurface) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create window surface!");
+        glfwSetErrorCallback([](int error, const char* desc) {
+            std::cerr << "GLFW Error " << error << ": " << desc << std::endl;
+            });
+
+        VkResult result = glfwCreateWindowSurface(instance, curWindow, nullptr, &curSurface);
+        if (result != VK_SUCCESS) {
+            std::string msg = "Failed to create Vulkan surface: ";
+            switch (result) {
+            case VK_ERROR_OUT_OF_HOST_MEMORY:        msg += "Out of host memory"; break;
+            case VK_ERROR_OUT_OF_DEVICE_MEMORY:      msg += "Out of device memory"; break;
+            case VK_ERROR_EXTENSION_NOT_PRESENT:     msg += "Required extension not present"; break;
+            case VK_ERROR_SURFACE_LOST_KHR:          msg += "Surface lost"; break;
+            case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR:  msg += "Native window already in use"; break;
+            default:                                 msg += "Unknown error code " + std::to_string(result); break;
+            }
+            throw std::runtime_error(msg);
         }
 
         if (firstSurface) {
@@ -403,8 +422,12 @@ class Render::Vulkan {
         ((WindowVulkanData *)window->vulkanData)->framebufferResized = true;
     }
 
-    void Event() {
+    void Update() {
+
+#ifndef IGNIS_INPUT
         glfwPollEvents();
+#endif
+
         for (auto &window : windows) {
             if (glfwWindowShouldClose(window.first) || window.second->surfaces.size() == 0) {
                 CloseWindow(window.first);
@@ -2122,7 +2145,7 @@ int Render::CreateSurface(Window window, CreateGraphicPipeLineInfo graphicPipeLi
 
 void Render::Draw(int surface) { instance->Draw(surface); }
 
-void Render::Event() { instance->Event(); }
+void Render::Update() { instance->Update(); }
 
 bool Render::IsValidSurface(int surfaceIndex) { return instance->IsValidSurface(surfaceIndex); }
 
