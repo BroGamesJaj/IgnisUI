@@ -29,8 +29,8 @@ std::u32string sToU32s(const std::string_view &utf8);
 
 struct Glyph {
     Glyph(uint32_t unicode, uint32_t codepoint, uint16_t _x, uint16_t _y) : unicode(unicode), glyphIndex(codepoint), x(_x), y(_y) {}
-    const hb_codepoint_t getIdx() const noexcept { return glyphIndex; }
-    const hb_codepoint_t getUnicode() const noexcept { return unicode; }
+    hb_codepoint_t getIdx() const noexcept { return glyphIndex; }
+    hb_codepoint_t getUnicode() const noexcept { return unicode; }
 
     uint32_t unicode;
     hb_codepoint_t glyphIndex;
@@ -48,9 +48,9 @@ struct Glyph {
 };
 
 struct ShapedGlyph {
-    ShapedGlyph(Glyph *g, const uint32_t pageId, const int xOff, const int yOff, const int xAdv, const int yAdv, const uint32_t clustering) : glyph(g), pId(pageId), xOffset(xOff), yOffset(yOff), xAdvance(xAdv), yAdvance(xAdv), cluster(clustering) {};
+    ShapedGlyph(Glyph *g, const uint32_t pageId, const int xOff, const int yOff, const int xAdv, const int yAdv, const uint32_t clustering) : glyph(g), pId(pageId), xOffset(xOff), yOffset(yOff), xAdvance(xAdv), yAdvance(yAdv), cluster(clustering) {};
 
-    const int getLeft() { return glyph->bearingX;}
+    int getLeft() { return glyph->bearingX; }
     Glyph *glyph;
     uint32_t pId;
     int xOffset, yOffset;
@@ -67,11 +67,12 @@ class Page {
 
     // private:
     uint32_t textureId;
-    uint16_t fontSize;
-    Style style;
     uint16_t w;
     uint16_t h;
     uint32_t gS, gE;
+
+    uint16_t fontSize;
+    Style style;
     std::unordered_map<hb_codepoint_t, Glyph> glyphs{};
 };
 
@@ -84,7 +85,7 @@ class Font {
 
     void createBitmapFromText(const std::string text);
 
-    std::vector<ShapedGlyph> shapeText(const std::u32string &text, int FontSize = -1, TextAlign align = TextAlign::GUESS, TextDirection direction = TextDirection::GUESS, const Style style = Style::REGULAR);
+    std::vector<ShapedGlyph> shapeText(const std::u32string &text, int FontSize = -1, TextAlign align = TextAlign::GUESS, TextDirection direction = TextDirection::GUESS, Style style = Style::REGULAR);
 
     // dont set maxCharPerPage and autoPageSize if you want behaviour to be optimized
     // not autoPageSize is not implemented
