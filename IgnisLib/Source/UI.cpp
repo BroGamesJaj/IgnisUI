@@ -68,7 +68,7 @@ UI::UIData *UI::CreateData(UIType type) {
             data = new UIData(new TextData, TEXT);
             break;
         case Ignis::UI::BUTTON:
-            data = new UIData(new ButtonData{.text = Text()}, BUTTON);
+            data = new UIData(new ButtonData{ .text = Text() }, BUTTON);
             break;
         case Ignis::UI::IMAGE:
             data = new UIData(new ImageData, IMAGE);
@@ -154,7 +154,7 @@ void UI::Bind(Element &dst, Element &src) {
 void UI::SubmitSurface(int surface) {
     if (!elements.contains(surface)) return;
 
-    UI::ProcessData data{.ofst{0, 0}, .size{2, 2}};
+    UI::ProcessData data{ .ofst{ 0, 0 }, .size{ 2, 2 } };
 
     Render::UIRenderData outputData = ProcessVertecies(data, elements[surface]);
     outputData.surface = surface;
@@ -168,10 +168,10 @@ Render::UIRenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<Elem
     int additionIndex = 0;
 
     for (auto &element : elements) {
-        Vec2f elementSize = {data.size.x / 100 * element.size.x, data.size.y / 100 * element.size.y};
-        Vec2f elementOffset = {data.size.x / 100 * element.position.x, data.size.y / 100 * element.position.y};
+        Vec2f elementSize = { data.size.x / 100 * element.size.x, data.size.y / 100 * element.size.y };
+        Vec2f elementOffset = { data.size.x / 100 * element.position.x, data.size.y / 100 * element.position.y };
 
-        UI::ProcessData calcData{.ofst{data.ofst.x + elementOffset.x, data.ofst.y + elementOffset.y}, .size{elementSize}};
+        UI::ProcessData calcData{ .ofst{ data.ofst.x + elementOffset.x, data.ofst.y + elementOffset.y }, .size{ elementSize } };
         if (element.data->type == TEXT) {
             UIVertexData textVertexData = GenerateTextVertecies(calcData, element.data, GetColor(element.data));
 
@@ -201,7 +201,7 @@ Render::UIRenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<Elem
             childData = UI::ProcessVertecies(calcData, *view.elements);
         } else if (element.data->type == BUTTON) {
             auto &button = static_cast<Button &>(element);
-            std::vector<Element> text = {button.text};
+            std::vector<Element> text = { button.text };
             childData = UI::ProcessVertecies(calcData, text);
         }
 
@@ -222,15 +222,13 @@ Render::UIRenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<Elem
 UI::UIVertexData UI::GenerateVertecies(UI::ProcessData procDt, int textureId, Color color) {
     glm::vec3 vertexColor = glm::vec3(color.r, color.g, color.b);
     glm::uint texture = glm::uint(textureId);
+    Vertex topLeft = { glm::vec3(-1 + procDt.ofst.x, -1 + procDt.ofst.y, 0.0f), vertexColor, glm::vec2(0.0f, 0.0f), texture };
+    Vertex topRight = { glm::vec3(-1 + procDt.ofst.x + procDt.size.x, -1 + procDt.ofst.y, 0.0f), vertexColor, glm::vec2(1.0f, 0.0f), texture };
+    Vertex bottomRight = { glm::vec3(-1 + procDt.ofst.x + procDt.size.x, -1 + procDt.ofst.y + procDt.size.y, 0.0f), vertexColor, glm::vec2(1.0f, 1.0f), texture };
+    Vertex bottomLeft = { glm::vec3(-1 + procDt.ofst.x, -1 + procDt.ofst.y + procDt.size.y, 0.0f), vertexColor, glm::vec2(0.0f, 1.0f), texture };
 
-    UIVertexData returnData{.vertecies =
-                                {
-                                    {glm::vec3(-1 + procDt.ofst.x, -1 + procDt.ofst.y, 0.0f), vertexColor, glm::vec2(0.0f, 0.0f), texture},
-                                    {glm::vec3(-1 + procDt.ofst.x + procDt.size.x, -1 + procDt.ofst.y, 0.0f), vertexColor, glm::vec2(1.0f, 0.0f), texture},
-                                    {glm::vec3(-1 + procDt.ofst.x + procDt.size.x, -1 + procDt.ofst.y + procDt.size.y, 0.0f), vertexColor, glm::vec2(1.0f, 1.0f), texture},
-                                    {glm::vec3(-1 + procDt.ofst.x, -1 + procDt.ofst.y + procDt.size.y, 0.0f), vertexColor, glm::vec2(0.0f, 1.0f), texture},
-                                },
-                            .indicies = {0, 2, 1, 0, 3, 2}};
+    UIVertexData returnData{ .vertecies = { topLeft, topRight, bottomRight, bottomLeft },
+                             .indicies = { 0, 2, 1, 0, 3, 2 } };
     return returnData;
 }
 
@@ -282,18 +280,18 @@ UI::UIVertexData UI::GenerateTextVertecies(UI::ProcessData procDt, UIData *data,
             // std::cout << "pen: (" << pen.x << "," << pen.y << ")\n";
             uint32_t pageId = sg.pId;
 
-            // std::cout << "top-left: (" << -1 + glyphPos.x << "," << -1 + glyphPos.y << ")\n";
-            // std::cout << "top-right: (" << -1 + glyphSize.x + glyphPos.x << "," << -1 + glyphPos.y << ")\n";
-            // std::cout << "bottom-right: (" << -1 + glyphSize.x + glyphPos.x << "," << -1 + glyphPos.y + glyphSize.y << ")\n";
-            // std::cout << "bottom-left: (" << -1 + glyphPos.x << "," << -1 + glyphPos.y + glyphSize.y << ")\n";
+            Vertex topLeft = { glm::vec3(-1 + glyphPos.x, -1 + glyphPos.y, 0.0f), vertexColor, glm::vec2(g->u0, g->v0), pageId };
+            Vertex topRight = { glm::vec3(-1 + glyphPos.x + glyphSize.x, -1 + glyphPos.y, 0.0f), vertexColor, glm::vec2(g->u1, g->v0), pageId };
+            Vertex bottomRight = { glm::vec3(-1 + glyphPos.x + glyphSize.x, -1 + glyphPos.y + glyphSize.y, 0.0f), vertexColor, glm::vec2(g->u1, g->v1), pageId };
+            Vertex bottomLeft = { glm::vec3(-1 + glyphPos.x, -1 + glyphPos.y + glyphSize.y, 0.0f), vertexColor, glm::vec2(g->u0, g->v1), pageId };
+            // std::cout << "top-left: (" << topLeft.pos.x << "," << topLeft.pos.y << ")\n";
+            // std::cout << "top-right: (" << topRight.pos.x << "," << topRight.pos.y << ")\n";
+            // std::cout << "bottom-right:" << bottomRight.pos.x << "," << bottomRight.pos.y << ")\n";
+            // std::cout << "bottom-left:" << bottomLeft.pos.x << "," << bottomLeft.pos.y << ")\n";
 
-            returnData.vertecies.insert(returnData.vertecies.end(), {
-                                                                        {glm::vec3(-1 + glyphPos.x, -1 + glyphPos.y, 0.0f), vertexColor, glm::vec2(g->u0, g->v0), pageId},
-                                                                        {glm::vec3(-1 + glyphPos.x + glyphSize.x, -1 + glyphPos.y, 0.0f), vertexColor, glm::vec2(g->u1, g->v0), pageId},
-                                                                        {glm::vec3(-1 + glyphPos.x + glyphSize.x, -1 + glyphPos.y + glyphSize.y, 0.0f), vertexColor, glm::vec2(g->u1, g->v1), pageId},
-                                                                        {glm::vec3(-1 + glyphPos.x, -1 + glyphPos.y + glyphSize.y, 0.0f), vertexColor, glm::vec2(g->u0, g->v1), pageId},
-                                                                    });
-            returnData.indicies.insert(returnData.indicies.end(), {0 + indiceOffset, 2 + indiceOffset, 1 + indiceOffset, 0 + indiceOffset, 3 + indiceOffset, 2 + indiceOffset});
+            returnData.vertecies.insert(returnData.vertecies.end(), { topLeft, topRight, bottomRight, bottomLeft });
+
+            returnData.indicies.insert(returnData.indicies.end(), { 0 + indiceOffset, 2 + indiceOffset, 1 + indiceOffset, 0 + indiceOffset, 3 + indiceOffset, 2 + indiceOffset });
 
             indiceOffset += 4;
         }
