@@ -13,28 +13,29 @@ int main() {
 
 	glfwInit();
 
-
 	CreateGraphicPipeLineInfo gpInfo{};
 	gpInfo.vertexShader = "../Resources/Shaders/shader.vert";
 	gpInfo.fragmentShader = "../Resources/Shaders/shader.frag";
 
 	Render renderer = Render(true);
 
-	Window window1 = renderer.CreateAppWindow(500, 400, "Gup 1");
+	Window window1 = renderer.CreateAppWindow(1200, 800, "Gup 1");
 	int surface = renderer.CreateSurface(window1, gpInfo);
 	surfaces.push_back(surface);
 
-	renderer.CreateTexture("../Resources/Textures/monikaTexture.jpg");
+	int monika = renderer.CreateTexture("../Resources/Textures/monika2.png");
+	int sus = renderer.CreateTexture("../Resources/Textures/goated0.bmp");
 
 	UI::SetRender(&renderer);
 	UI::SetMainSurface(surface);
 
-	Color tip(255,0,255);
-	Color base(255,0,0);
+	Color tip(0, 255, 0);
+	Color base = tip.Inverted();
 
-	Image image = Image( Vec2(20, 30), Vec2(20, 40), base);
-	Image image2 = Image( Vec2(25, 40), Vec2(50, 20), tip);
-	UI::AddToSurface(surface, image, image2);
+	Image image = Image( Vec2i(40, 10), Vec2i(20, 40), monika, base);
+	Image image3 = Image(Vec2i(45, 15), Vec2i(20, 40), sus);
+	Image image2 = Image( Vec2i(25, 40), Vec2i(50, 20), tip);
+	UI::AddToSurface(surface, image2, image, image3);
 	UI::SubmitSurface();
 
 	while (surfaces.size() != 0)

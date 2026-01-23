@@ -70,7 +70,6 @@ namespace Ignis {
 		VkImage depthImage;
 		VkDeviceMemory depthImageMemory;
 		VkImageView depthImageView;
-
 		size_t currentFrame = 0;
 	};
 
@@ -1181,7 +1180,7 @@ namespace Ignis {
 			renderPassInfo.renderArea.extent = extent;
 
 			std::array<VkClearValue, 2> clearValues{};
-			clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
+			clearValues[0].color = { {0.388235f, 0.643137f, 0.839216f, 1.0f} };
 			clearValues[1].depthStencil = { 1.0f, 0 };
 
 			renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
@@ -1704,8 +1703,8 @@ namespace Ignis {
 			colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
 			colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
 			colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-			colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-			colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+			colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+			colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
 			colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
 
 			VkPipelineColorBlendStateCreateInfo colorBlending{};
@@ -1717,7 +1716,7 @@ namespace Ignis {
 			VkPipelineDepthStencilStateCreateInfo depthStencil{};
 			depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 			depthStencil.depthTestEnable = VK_TRUE;
-			depthStencil.depthWriteEnable = VK_TRUE;
+			depthStencil.depthWriteEnable = VK_FALSE;
 			depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
 
 			depthStencil.depthBoundsTestEnable = VK_FALSE;
@@ -2139,16 +2138,6 @@ namespace Ignis {
 		}
 	};
 
-	Render::Render(bool debugging)
-	{
-		instance = new Render::Vulkan(debugging);
-	}
-
-	Ignis::Render::~Render() {
-		printf("Deleted :P\n");
-		delete instance;
-	}
-
 	Window Render::CreateAppWindow(int width, int height, const char* title, GLFWmonitor* screen, GLFWwindow* share) {
 		return instance->CreateVulkanWindow(width, height, title, screen, share);
 	}
@@ -2175,5 +2164,13 @@ namespace Ignis {
 
 	int Render::CreateTexture(std::string path) {
 		return instance->CreateTexture(path);
+	}
+
+	void Render::Init(bool debugging) {
+		instance = new Render::Vulkan(debugging);
+	}
+
+	void Render::Clean() {
+		delete instance;
 	}
 }

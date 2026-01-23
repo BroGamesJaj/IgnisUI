@@ -6,6 +6,21 @@ using Color = Ignis::UI::Color;
 namespace Ignis {
 
 	//Vector
+	
+	//Area
+	template <typename T>
+		requires std::is_arithmetic_v<T>
+	inline void UI::Area2<T>::Calc() {
+		TR = (BR.x, TL.y);
+		BL = (TL.x, BR.y);
+	}
+
+	template <typename T>
+		requires std::is_arithmetic_v<T>
+	inline bool UI::Area2<T>::Contain(Vec2<T>& position) const {
+		return (position.x > TL.x && position.x < BR.x
+			&& position.y > TL.y && position.y < BR.y);
+	}
 
 	//Color
 
@@ -20,6 +35,16 @@ namespace Ignis {
 		r = hexToFloat(hex.substr(1,2));
         g = hexToFloat(hex.substr(3,2));
         b = hexToFloat(hex.substr(5,2));
+	}
+
+	Color Color::operator+(const Color& other) const {
+		return Color(std::clamp(this->r + other.r, 0.0f, 1.0f), std::clamp(this->g + other.g, 0.0f, 1.0f), std::clamp(this->b + other.b, 0.0f, 1.0f));
+	}
+	Color Color::operator-(const Color& other) const {
+		return Color(std::clamp(this->r - other.r, 0.0f, 1.0f), std::clamp(this->g - other.g, 0.0f, 1.0f), std::clamp(this->b - other.b, 0.0f, 1.0f));
+	}
+	Color Color::Inverted() {
+		return Color(1.0f - this->r, 1.0f - this->g, 1.0f - this->b);
 	}
 
 
@@ -155,8 +180,8 @@ namespace Ignis {
 		int additionIndex = 0;
 
 		for (auto& element : elements) {
-			Vec2i elementSize = { data.size.x / 100 * element.size.x , data.size.y / 100 * element.size.y };
-			Vec2i elementOffset = { data.size.x / 100 * element.position.x, data.size.y / 100 * element.position.y };
+			Vec2f elementSize = { data.size.x / 100 * element.size.x , data.size.y / 100 * element.size.y };
+			Vec2f elementOffset = { data.size.x / 100 * element.position.x, data.size.y / 100 * element.position.y };
 
 
 			UI::ProcessData calcData{ .ofst{data.ofst.x + elementOffset.x, data.ofst.y + elementOffset.y}, .size{elementSize} };
@@ -204,16 +229,17 @@ namespace Ignis {
 
 		return returnData;
 	}
+
 	UI::UIVertexData UI::GenerateVertecies(UI::ProcessData procDt, int textureId, Color color) {
 
-		glm::vec3 vertexColor = glm::vec3((float)color.r / 255, (float)color.g / 255, (float)color.b / 255);
+		glm::vec3 vertexColor = glm::vec3(color.r, color.g, color.b);
 		glm::uint texture = glm::uint(textureId);
 
 		UIVertexData returnData{
 			.vertecies = {
-				{ glm::vec3(-1 + procDt.ofst.x, -1 + procDt.ofst.y, 0.0f), vertexColor, glm::vec2(1.0f, 0.0f), texture},
-				{ glm::vec3(-1 + procDt.ofst.x + procDt.size.x, -1 + procDt.ofst.y, 0.0f), vertexColor, glm::vec2(1.0f, 1.0f), texture},
-				{ glm::vec3(-1 + procDt.ofst.x + procDt.size.x, -1 + procDt.ofst.y + procDt.size.y, 0.0f), vertexColor, glm::vec2(0.0f, 1.0f), texture},
+				{ glm::vec3(-1 + procDt.ofst.x, -1 + procDt.ofst.y, 0.0f), vertexColor, glm::vec2(0.0f, 0.0f), texture},
+				{ glm::vec3(-1 + procDt.ofst.x + procDt.size.x, -1 + procDt.ofst.y, 0.0f), vertexColor, glm::vec2(1.0f, 0.0f), texture},
+				{ glm::vec3(-1 + procDt.ofst.x + procDt.size.x, -1 + procDt.ofst.y + procDt.size.y, 0.0f), vertexColor, glm::vec2(1.0f, 1.0f), texture},
 				{ glm::vec3(-1 + procDt.ofst.x, -1 + procDt.ofst.y + procDt.size.y, 0.0f), vertexColor, glm::vec2(0.0f, 1.0f), texture},
 			},
 			.indicies = {
@@ -225,7 +251,7 @@ namespace Ignis {
 
 	//Element
 
-	Vec2& UI::GetPosition(UIData* data) {
+	Vec2i& UI::GetPosition(UIData* data) {
 		switch (data->type) {
 		case TEXT:
 			return static_cast<TextData*>(data->ptr)->base.position;
@@ -240,7 +266,7 @@ namespace Ignis {
 		}
 	}
 
-	Vec2& UI::GetSize(UIData* data) {
+	Vec2i& UI::GetSize(UIData* data) {
 		switch (data->type) {
 		case TEXT:
 			return static_cast<TextData*>(data->ptr)->base.size;

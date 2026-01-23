@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <concepts>
+#include <type_traits>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -25,6 +26,7 @@ struct GLFWmonitor;
 #define IGNIS_UI
 #define IGNIS_UI_NAMES
 #define IGNIS_RENDER_NAMES
+#define IGNIS_INPUT
 
 namespace Ignis {
 
@@ -77,25 +79,25 @@ namespace Ignis {
             bool changed = true;
         };
 
-        Render(bool debugging);
-        ~Render();
+        static void Init(bool debugging);
+        static void Clean();
     
-        Window CreateAppWindow(int width, int height, const char* title, GLFWmonitor* screen = nullptr, GLFWwindow* share = nullptr);
-        int CreateSurface(Window window, CreateGraphicPipeLineInfo graphicPipeLineInfo, CreateRenderPassInfo renderPassInfo = {});
-        int CreateTexture(std::string path);
+        static Window CreateAppWindow(int width, int height, const char* title, GLFWmonitor* screen = nullptr, GLFWwindow* share = nullptr);
+        static int CreateSurface(Window window, CreateGraphicPipeLineInfo graphicPipeLineInfo, CreateRenderPassInfo renderPassInfo = {});
+        static int CreateTexture(std::string path);
 
-        void Draw(int surface);
-        void Event();
-        bool IsValidSurface(int surfaceIndex);
+        static void Draw(int surface);
+        static void Event();
+        static bool IsValidSurface(int surfaceIndex);
     
     private:
         class Vulkan;
 
-        Vulkan* instance;
+        static Vulkan* instance;
 
         friend class UI;
 
-        int AddUIElementData(UIRenderData& data);
+        static int AddUIElementData(UIRenderData& data);
     };
 
 #ifdef IGNIS_RENDER_NAMES
@@ -108,7 +110,8 @@ namespace Ignis {
 #ifdef IGNIS_UI
     class UI {
     public:
-        template<T> 
+        template <typename T>
+            requires std::is_arithmetic_v<T>
         struct Vec2 {
             Vec2() : x(0), y(0) {}
             Vec2(T x, T y) : x(x), y(y) {}
@@ -123,16 +126,28 @@ namespace Ignis {
             Vec2 operator*(const Vec2& other) const { return Vec2{x * other.x, y * other.y}; }
             Vec2 operator/(const Vec2& other) const { return Vec2{x / other.x, y / other.y}; }
             Vec2& operator*=(const Vec2& other) { x *= other.x; y *= other.y; return *this; }
-            Vec2& operator/=(const Vec2& other) { x /= other.x; y /= other.y; return *this; }
-            
+            Vec2& operator/=(const Vec2& other) { x /= other.x; y /= other.y; return *this; }     
         };
 
         using Vec2f = Vec2<float>;
         using Vec2i = Vec2<int>;
 
+        template <typename T>
+            requires std::is_arithmetic_v<T>
+        struct Area2 {
+            Vec2<T> TL;
+            Vec2<T> BR;
+
+            Vec2<T> TR;
+            Vec2<T> BL;
+
+            inline void Calc();
+            inline bool Contain(Vec2<T>& position) const;
+        };
+
         struct Color {
-            Color(unsigned char r, unsigned char g, unsigned char b)
-                : r((float)r/255), g((float)r/255), b((float)r/255) {}
+            Color(int r, int g, int b)
+                : r((float)r/255), g((float)g/255), b((float)b/255) {}
 
             Color(float r, float g, float b)
                 : r(r), g(g), b(b) {}
@@ -166,8 +181,8 @@ namespace Ignis {
         };
 
         struct ElementData {
-            Vec2 position;
-            Vec2 size;
+            Vec2i position;
+            Vec2i size;
             int textureId;
             Color color;
         };
@@ -198,8 +213,8 @@ namespace Ignis {
                     dataPtrs.insert(data);
             }
 
-            Vec2& position;
-            Vec2& size;
+            Vec2i& position;
+            Vec2i& size;
 
             bool Valid() { return data; }
 
@@ -216,7 +231,7 @@ namespace Ignis {
         public:
             Text() : Element(TEXT), text(GetText(data)) {}
 
-            Text(Vec2 position, Vec2 size, std::string text) 
+            Text(Vec2i position, Vec2i size, std::string text) 
                 : Element(TEXT), text(GetText(data)) {
                 this->position = position;
                 this->size = size;
@@ -240,7 +255,7 @@ namespace Ignis {
     public:
         class Image : public Element {
         private:
-            Image(Vec2 position, Vec2 size, int textureId, Color color, bool dummy)
+            Image(Vec2i position, Vec2i size, int textureId, Color color, bool dummy)
                 : Element(IMAGE) {
                 this->position = position;
                 this->size = size;
@@ -250,20 +265,20 @@ namespace Ignis {
             }
 
         public:
-            Image(Vec2 position, Vec2 size, int textureId, Color color)
+            Image(Vec2i position, Vec2i size, int textureId, Color color)
                 : Image(position, size, textureId, color, true) {}
 
-            Image(Vec2 position, Vec2 size, Color color)
+            Image(Vec2i position, Vec2i size, Color color)
                 : Image(position, size, -1, color, true) {}
 
-            Image(Vec2 position, Vec2 size, int textureId)
+            Image(Vec2i position, Vec2i size, int textureId)
                 : Image(position, size, textureId, Color(), true) {}
 
             friend class UI;
         };
 
         class View : public Element {
-            View(Vec2 position, Vec2 size, std::optional<int> textureId, std::optional<Color> color)
+            View(Vec2i position, Vec2i size, std::optional<int> textureId, std::optional<Color> color)
                 : Element(VIEW), elements(GetChildrens(data)) {
                 if (textureId.has_value())
                     this->textureId = textureId.value();
@@ -289,7 +304,7 @@ namespace Ignis {
         };
 
         class Button : public Element {
-            Button(Vec2 position, Vec2 size, void* function, std::optional<Text>& text, std::optional<int> textureId, std::optional<Color> color)
+            Button(Vec2i position, Vec2i size, void* function, std::optional<Text>& text, std::optional<int> textureId, std::optional<Color> color)
                 : Element(BUTTON), function(GetFunction(data)), text(GetTextElement(data)) {
                 if (text.has_value())
                     Bind(this->text, text.value());
@@ -367,8 +382,8 @@ namespace Ignis {
         static std::unordered_set<UIData*> dataPtrs;
 
         struct ProcessData {
-            Vec2 ofst;
-            Vec2 size;
+            Vec2f ofst;
+            Vec2f size;
         };
 
         struct UIVertexData {
@@ -384,8 +399,8 @@ namespace Ignis {
         static void DeleteData(UIData* data);
 
         //Element
-        static Vec2& GetPosition(UIData* data);
-        static Vec2& GetSize(UIData* data);
+        static Vec2i& GetPosition(UIData* data);
+        static Vec2i& GetSize(UIData* data);
 
         //Text
         static std::string& GetText(UIData* data);
@@ -404,9 +419,8 @@ namespace Ignis {
 
 #ifdef IGNIS_UI_NAMES
     using Color = UI::Color;
-    using Vec2 = UI::Vec2;
     using Vec2i = UI::Vec2i;
-    using Vec2f = UI::Vec2f
+    using Vec2f = UI::Vec2f;
 
     using Image = UI::Image;
     using Text = UI::Text;
@@ -414,5 +428,11 @@ namespace Ignis {
     using Button = UI::Button;
 #endif
 
+#endif
+
+#if defined(IGNIS_INPUT) || defined(IGNIS_UI)
+    class Input {
+        static void InitWindow();
+    };
 #endif
 }

@@ -13,7 +13,7 @@ layout(location = 0) out vec4 outColor;
 void main() {
     if (fragTexId < MAX_TEXTURES && fragTexId >= 0) {
         vec4 texColor = texture(textures[fragTexId], fragTexCoord);
-        outColor = texColor * vec4(fragColor, 1.0);
+        outColor = texColor * vec4(fragColor, texColor.a);
     } else {
         outColor = vec4(fragColor, 1.0);
     }
