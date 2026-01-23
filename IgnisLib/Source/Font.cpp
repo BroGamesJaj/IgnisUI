@@ -26,9 +26,9 @@ using unicode_t = uint32_t;
 // debug
 void saveAtlasAsBMP(FILE *f, std::vector<uint8_t> &rgbaData, uint16_t width, uint16_t height) {
     const int row_bytes = width * 4;
-    const int palette_size = 256 * 4;
+    // const int palette_size = 256 * 4; no palette currently
     const int file_size = 54 + row_bytes * height;
-    uint8_t header[54] = {0};
+    uint8_t header[54] = { 0 };
     header[0] = 'B';
     header[1] = 'M';
     *(uint32_t *)(header + 2) = file_size;
@@ -47,7 +47,7 @@ void saveAtlasAsBMP(FILE *f, std::vector<uint8_t> &rgbaData, uint16_t width, uin
         uint8_t *src = rgbaData.data() + src_y * width * 4;
 
         for (int x = 0; x < width; x++) {
-            uint8_t bgra[4] = {src[x * 4 + 2], src[x * 4 + 1], src[x * 4 + 0], src[x * 4 + 3]};
+            uint8_t bgra[4] = { src[x * 4 + 2], src[x * 4 + 1], src[x * 4 + 0], src[x * 4 + 3] };
             fwrite(bgra, 1, 4, f);
         }
     }
@@ -65,7 +65,7 @@ void WriteGrayBMP(FILE *f, FT_Bitmap &bmp) {
     const int file_size = 54 + palette_size + row_bytes * height;
 
     // BMP header
-    uint8_t header[54] = {0};
+    uint8_t header[54] = { 0 };
     header[0] = 'B';
     header[1] = 'M';
     *(uint32_t *)(header + 2) = file_size;           // file size
@@ -79,7 +79,7 @@ void WriteGrayBMP(FILE *f, FT_Bitmap &bmp) {
 
     // grayscale palette
     for (int i = 0; i < 256; i++) {
-        uint8_t c[4] = {static_cast<uint8_t>(i), static_cast<uint8_t>(i), static_cast<uint8_t>(i), 0};
+        uint8_t c[4] = { static_cast<uint8_t>(i), static_cast<uint8_t>(i), static_cast<uint8_t>(i), 0 };
         fwrite(c, 1, 4, f);
     }
 
@@ -201,7 +201,11 @@ void Font::initializeFont(const std::string filename) {
     preloadPageByRange(0x0021, 0x007E);
 }
 
-std::vector<ShapedGlyph> Font::shapeText(const std::u32string &text, int fontSize, TextAlign align, TextDirection direction, const Style style) {
+std::vector<ShapedGlyph> Font::shapeText(const std::u32string &text, int fontSize, TextAlign align, TextDirection direction, Style style) {
+    // TODO: not appease the unused warnings
+    align = align;
+    direction = direction;
+    style = style;
 
     fontSize = defaultSize;
 
@@ -238,7 +242,6 @@ std::vector<ShapedGlyph> Font::shapeText(const std::u32string &text, int fontSiz
         // TODO: figure out a way to do this for every character that doesn't need drawing
         // also this should be in a separate loop
         if (text[cluster] == ' ') {
-
         } else if (!pagePosition[fontSize].contains(cp)) {
             notPaged.push_back(cp);
             continue;
@@ -253,7 +256,7 @@ std::vector<ShapedGlyph> Font::shapeText(const std::u32string &text, int fontSiz
         hb_position_t xAdvance = glyphPos[i].x_advance;
         hb_position_t yAdvance = glyphPos[i].y_advance;
 
-        shapedGlyphs.push_back({glyph, texId, xOffset, yOffset, xAdvance, yAdvance, cluster});
+        shapedGlyphs.push_back({ glyph, texId, xOffset, yOffset, xAdvance, yAdvance, cluster });
         cursorX += xAdvance;
         cursorY += yAdvance;
     }
@@ -280,6 +283,37 @@ uint16_t nextPow2(uint16_t num) {
     return num;
 }
 
+struct Outline {
+    Outline(FT_Outline &ftOutline) {
+        flags = ftOutline.flags;
+        numContours = ftOutline.n_contours;
+        numPoints = ftOutline.n_points;
+        points.reserve(numPoints);
+        tags.reserve(numPoints);
+        for (int pIdx = 0; pIdx < numPoints; pIdx++) {
+            points[pIdx].x = ftOutline.points[pIdx].x;
+            points[pIdx].y = ftOutline.points[pIdx].y;
+
+            tags[pIdx] = ftOutline.tags[pIdx];
+        }
+
+        contours.reserve(numContours);
+        for (int cIdx = 0; cIdx < numContours; cIdx++) contours[cIdx] = ftOutline.contours[cIdx];
+    }
+
+    uint16_t numContours;
+    uint16_t numPoints;
+
+    std::vector<Vec2i> points;        // length of numPoints
+    std::vector<unsigned char> tags;  // length of numPoints
+    std::vector<uint16_t> contours;   // length of numContours
+
+    int flags;
+};
+
+void generateMSDF(uint8_t *bmp, Outline outline, int channel = 1) {
+}
+
 void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeEnd, int16_t fontSize, const Style style, const TextDirection, const int maxCharPerPage, const bool autoPageSize, const uint16_t pSize) {
     if (!ftFace) return;
 
@@ -294,7 +328,7 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
     FT_ULong charcode = FT_Get_First_Char(ftFace, &glyphIndex);
     while (glyphIndex != 0) {
         if ((charcode >= unicodeStart && charcode <= unicodeEnd)) {
-            scriptCodepoints.push_back({charcode, glyphIndex});
+            scriptCodepoints.push_back({ charcode, glyphIndex });
         }
         charcode = FT_Get_Next_Char(ftFace, charcode, &glyphIndex);
     }
@@ -324,10 +358,10 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
     int badCounter = 0;
     while (glyphsProcessed < scriptCodepoints.size()) {
         uint32_t pageSize = 0;
-        int glyphsToPackCount = 0;
+        size_t glyphsToPackCount = 0;
         if (autoPageSize) {
             uint32_t totalArea = 0;
-            for (int ci = glyphsProcessed; ci < scriptCodepoints.size(); ci++) {
+            for (size_t ci = glyphsProcessed; ci < scriptCodepoints.size(); ci++) {
                 int cp = scriptCodepoints[ci].second;
                 int unicode = scriptCodepoints[ci].first;
                 if (unicode < 0x0020) continue;
@@ -369,7 +403,7 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
             rect.h = bmp.rows + padding;
             rect.id = validPageCodepoints.size();
             rects.push_back(rect);
-            validPageCodepoints.push_back({unicode, cp});
+            validPageCodepoints.push_back({ unicode, cp });
         }
 
         if (rects.empty()) {
@@ -382,7 +416,6 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
         stbrp_init_target(&context, pageWidth, pageHeight, nodes.data(), pageWidth);
         stbrp_pack_rects(&context, rects.data(), rects.size());
 
-        int a = 0;
         int failedPacks = 0;
         // BLIT shit together
         for (size_t i = 0; i < rects.size(); ++i) {
@@ -393,7 +426,17 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
             }
 
             auto [unicode, cp] = validPageCodepoints[rects[i].id];
+            // EXPERIMENTAL
+            FT_Load_Glyph(ftFace, cp, FT_LOAD_DEFAULT);
+            if (ftFace->glyph->format == FT_GLYPH_FORMAT_OUTLINE) {
+                std::cout << "outline\n";
+                auto &outline = ftFace->glyph->outline;
+                generateMSDF(nullptr, outline);
+            };
+
+            // EXPERIMENTAL END
             FT_Load_Glyph(ftFace, cp, FT_LOAD_RENDER);
+
             const FT_Bitmap &bmp = ftFace->glyph->bitmap;
             FT_GlyphSlot slot = ftFace->glyph;
 
@@ -440,7 +483,7 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
 
             // this shit sets the uvs
             page.addGlyph(glyph);
-            pagePosition[fontSize].insert({cp, pages.size()});
+            pagePosition[fontSize].insert({ cp, pages.size() });
         }
         page.textureId = Render::CreateFontPage(textureData, pageWidth, pageHeight);
 
@@ -468,7 +511,7 @@ void Page::addGlyph(Glyph &glyph) {
     glyph.u1 = static_cast<float>(glyph.x + glyph.w) / w;
     glyph.v1 = static_cast<float>(glyph.y + glyph.h) / h;
 
-    glyphs.insert({glyph.glyphIndex, glyph});
+    glyphs.insert({ glyph.glyphIndex, glyph });
 }
 
 }  // namespace Font

@@ -360,8 +360,8 @@ class UI {
                 this->color = Color();
         }
 
-        Text &text;
         void *&function;
+        Text &text;
 
         friend class UI;
     };

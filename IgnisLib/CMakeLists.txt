@@ -21,9 +21,11 @@ set_target_properties(Ignis PROPERTIES
 
 # Being strict
 target_compile_options(Ignis PRIVATE
+    # try these out see if you like them:
+    # /W4 /w14242 /w14254 /w14263 /w14265 /w14287 /w14296 /w14311 /w14545 /w14546 /w14547 /w14549 /wd4100 /wd5030
     $<$<CXX_COMPILER_ID:MSVC>:/permissive->
-    $<$<CXX_COMPILER_ID:GNU>:-Wall -Wextra -Wpedantic>
-    $<$<CXX_COMPILER_ID:Clang>:-Wall -Wextra -Wpedantic>
+    $<$<CXX_COMPILER_ID:GNU>:-Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-reorder>
+    $<$<CXX_COMPILER_ID:Clang>:-Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-reorder>
 )
 
 # Freetype
