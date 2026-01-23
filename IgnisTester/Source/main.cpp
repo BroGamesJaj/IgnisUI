@@ -1,6 +1,3 @@
-#define GLFW_INCLUDE_VULKAN
-#include "glfw3.h"
-
 #define IGNIS_UI
 #define IGNIS_UI_NAMES
 #define IGNIS_RENDER_NAMES
@@ -12,7 +9,7 @@ using namespace Ignis;
 int main() {
     std::vector<int> surfaces;
 
-    glfwInit();
+	Input::Init();
 
 	CreateGraphicPipeLineInfo gpInfo{};
 	gpInfo.vertexShader = "../Resources/Shaders/shader.vert";
@@ -44,7 +41,8 @@ int main() {
 
 	while (surfaces.size() != 0)
 	{
-		Render::Event();
+		Input::Event();
+		Render::Update();
 
 		for (auto it = surfaces.begin(); it != surfaces.end(); ) {
 			if (Render::IsValidSurface(*it)) {

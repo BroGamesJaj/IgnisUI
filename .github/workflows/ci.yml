@@ -35,7 +35,13 @@ jobs:
             cmake \
             pkg-config \
             libglfw3-dev \
-            libvulkan-dev
+            libvulkan-dev \
+            libxkbcommon-dev \
+            libxinerama-dev \
+            libxcursor-dev \
+            libx11-dev \
+            libxrandr-dev \
+            libxi-dev
             
       - name: configure
         working-directory: IgnisTester
