@@ -5,13 +5,14 @@
 #define IGNIS_UI_NAMES
 #define IGNIS_RENDER_NAMES
 #include "../../IgnisLib/Source/IgnisLib.h"
+#include "../../IgnisLib/Source/Font.h"
 
 using namespace Ignis;
 
 int main() {
-	std::vector<int> surfaces;
+    std::vector<int> surfaces;
 
-	glfwInit();
+    glfwInit();
 
 	CreateGraphicPipeLineInfo gpInfo{};
 	gpInfo.vertexShader = "../Resources/Shaders/shader.vert";
@@ -50,5 +51,5 @@ int main() {
 		}
 	}
 
-	UI::Clean();
+    UI::Clean();
 }

@@ -13,6 +13,7 @@
 #include <unordered_set>
 #include <concepts>
 #include <type_traits>
+#include <memory>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -28,8 +29,16 @@ struct GLFWmonitor;
 #define IGNIS_RENDER_NAMES
 #define IGNIS_INPUT
 
-namespace Ignis {
 
+namespace Ignis {
+namespace Font {
+enum class TextDirection { LTR, RTL, BTT, TTB, GUESS };
+enum class TextAlign { LEFT, CENTER, RIGHT, GUESS };
+enum class Script { LATIN, CYRILLIC, ARABIC, DEVANAGARI, THAI, GREEK, HANGUL, HIRAGANA, KATAKANA, HAN, TAMIL, GUESS };
+enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
+
+    class Font;
+}
 #if defined(IGNIS_RENDER) || defined(IGNIS_UI)
     class Render
     {
@@ -40,6 +49,13 @@ namespace Ignis {
             glm::vec3 color;
             glm::vec2 texCoord;
             glm::uint texId;
+        };
+
+        struct GlyphInstance {
+            glm::vec2 pos;
+            glm::vec2 size;
+            glm::vec4 uvRect; 
+            glm::uint pageId;
         };
 
         struct Window {
@@ -75,6 +91,7 @@ namespace Ignis {
         struct UIRenderData {
             std::vector<Vertex> vertecies;
             std::vector<uint32_t> indicies;
+
             int surface;
             bool changed = true;
         };
@@ -86,6 +103,10 @@ namespace Ignis {
         static int CreateSurface(Window window, CreateGraphicPipeLineInfo graphicPipeLineInfo, CreateRenderPassInfo renderPassInfo = {});
         static int CreateTexture(std::string path);
 
+        int CreateFontPage(const std::vector<uint8_t> &rgbaData, uint32_t width, uint32_t height);
+
+        int AddFont(const std::string path);
+
         static void Draw(int surface);
         static void Event();
         static bool IsValidSurface(int surfaceIndex);
@@ -96,6 +117,7 @@ namespace Ignis {
         static Vulkan* instance;
 
         friend class UI;
+    
 
         static int AddUIElementData(UIRenderData& data);
     };
@@ -107,7 +129,9 @@ namespace Ignis {
 
 #endif
 
+
 #ifdef IGNIS_UI
+
     class UI {
     public:
         template <typename T>
@@ -152,7 +176,7 @@ namespace Ignis {
             Color(float r, float g, float b)
                 : r(r), g(g), b(b) {}
 
-            Color() : r(1), g(1), b(1) {}
+            Color() : r(255), g(255), b(255) {}
 
             Color(std::string hex);
 
@@ -187,9 +211,12 @@ namespace Ignis {
             Color color;
         };
 
+
         struct TextData {
             ElementData base;
             std::string text;
+            Font::Font *font;
+            std::vector<uint32_t> clusters;
         };
 
         struct ImageData {
@@ -229,18 +256,30 @@ namespace Ignis {
     public:
         class Text : public Element {
         public:
-            Text() : Element(TEXT), text(GetText(data)) {}
+            Text() : Element(TEXT), text(GetText(data)), font(GetFont(data)), clusters(GetClusters(data)) {}
 
-            Text(Vec2i position, Vec2i size, std::string text) 
-                : Element(TEXT), text(GetText(data)) {
+            Text(Vec2 position, Vec2 size, std::string text, int fontId, Font::TextAlign textAlign = Font::TextAlign::LEFT, Font::TextDirection textDirection = Font::TextDirection::LTR) 
+                : Element(TEXT), text(GetText(data)),/* align(textAlign), direction(textDirection),*/ font(GetFont(data)), clusters(GetClusters(data)) {
                 this->position = position;
                 this->size = size;
                 this->text = text;
-                this->textureId = -1;
+                this->font = UI::fonts[fontId];
+                this->textureId = 0;
                 this->color = Color();
             }
 
-            std::string& text;
+            Font::Font *&font;
+
+            //uint32_t FontSize{16};
+            //Vec2 bounds{size};
+            //Font::TextDirection direction{Font::TextDirection::LTR};
+            //Font::TextAlign align{Font::TextAlign::LEFT};
+            // Style style{REGULAR};
+            // Color outline;
+            //int outlineThickness{-1};
+
+            std::string &text;
+            std::vector<uint32_t> &clusters;
 
             friend class UI;
         };
@@ -269,7 +308,7 @@ namespace Ignis {
                 : Image(position, size, textureId, color, true) {}
 
             Image(Vec2i position, Vec2i size, Color color)
-                : Image(position, size, -1, color, true) {}
+                : Image(position, size, 0, color, true) {}
 
             Image(Vec2i position, Vec2i size, int textureId)
                 : Image(position, size, textureId, Color(), true) {}
@@ -283,7 +322,7 @@ namespace Ignis {
                 if (textureId.has_value())
                     this->textureId = textureId.value();
                 else
-                    this->textureId = -1;
+                    this->textureId = 0;
 
                 if (color.has_value())
                     this->color = color.value();
@@ -315,7 +354,7 @@ namespace Ignis {
                 if (textureId.has_value())
                     this->textureId = textureId.value();
                 else
-                    this->textureId = -1;
+                    this->textureId = 0;
 
                 if (color.has_value())
                     this->color = color.value();
@@ -330,10 +369,13 @@ namespace Ignis {
         };
 
         static inline void SetMainSurface(int surface) { mainSurface = surface; }
+      
+        static int LoadFont(const std::string& fontPath, uint32_t size = 16);
 
         template<std::derived_from<UI::Element>... Args>
         static void AddToSurface(int surface, Args&... args) {
-            if (!Render::IsValidSurface(surface)) return;
+            if (!renderInstance->IsValidSurface(surface)) return;
+
             (elements[surface].push_back(args), ...);
         }
 
@@ -350,6 +392,8 @@ namespace Ignis {
         static std::unordered_map<int, std::vector<Element>> elements;
         static int nextId;
         static std::unordered_set<UIData*> dataPtrs;
+        static std::unordered_map<int, Font::Font*> fonts;
+        static int nextFontId;
 
         struct ProcessData {
             Vec2f ofst;
@@ -374,6 +418,10 @@ namespace Ignis {
 
         //Text
         static std::string& GetText(UIData* data);
+        static Font::Font*& GetFont(UIData* data);
+        static std::vector<uint32_t>& GetClusters(UIData* data);
+
+        static UIVertexData GenerateTextVertecies(UI::ProcessData procData, UIData *data, UI::Color color);
 
         //Image
         static int& GetTexture(UIData* data);
