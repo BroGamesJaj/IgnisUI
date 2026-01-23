@@ -1322,6 +1322,30 @@ namespace Ignis {
 			vkFreeMemory(device, stagingBufferMemory, nullptr);
 		}
 
+		void CreateTextureImageFromMemory(const uint8_t* rgba, uint32_t width, uint32_t height, VkImage& image, VkDeviceMemory& memory) {
+			VkDeviceSize imageSize = width * height * 4;
+
+			if (!rgba) throw std::runtime_error("failed to load texture image from memory!");
+
+			VkBuffer stagingBuffer;
+			VkDeviceMemory stagingBufferMemory;
+			CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+			void* data;
+			vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
+			memcpy(data, rgba, static_cast<size_t>(imageSize));
+			vkUnmapMemory(device, stagingBufferMemory);
+
+			CreateImage(width, height, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, image, memory);
+
+			TransitionImageLayout(image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+			CopyBufferToImage(stagingBuffer, image, width, height);
+			TransitionImageLayout(image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+			vkDestroyBuffer(device, stagingBuffer, nullptr);
+			vkFreeMemory(device, stagingBufferMemory, nullptr);
+		}
+
 		void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout) {
 			VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
 
@@ -2170,6 +2194,15 @@ namespace Ignis {
 				func(instance, debugMessenger, pAllocator);
 			}
 		}
+	
+		int CreateFontPage(const std::vector<uint8_t>& rgbaData, uint32_t width, uint32_t height) {
+			TextureData data;
+			CreateTextureImageFromMemory(rgbaData.data(), width, height, data.textureImage, data.textureImageMemory);
+			data.textureImageView = CreateTextureImageView(data.textureImage);
+			textureData[nextTexture] = data;
+			UpdateTextureDescriptor(nextTexture, data.textureImageView);
+			return nextTexture++;  // returns texture slot ID
+		}
 	};
 
 	Window Render::CreateAppWindow(int width, int height, const char* title, GLFWmonitor* screen, GLFWwindow* share) {
@@ -2208,5 +2241,6 @@ namespace Ignis {
 		delete instance;
 	}
 
+	int Render::CreateFontPage(const std::vector<uint8_t>& rgbaData, uint32_t width, uint32_t height) { return instance->CreateFontPage(rgbaData, width, height); };
 	Render::Vulkan* Render::instance = nullptr;
 }
