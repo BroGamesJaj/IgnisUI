@@ -301,7 +301,6 @@ namespace Ignis {
 				glfwSetWindowUserPointer(windowOut, ptr);
 			}
 
-			glfwSetWindowUserPointer(windowOut, &(windows[windowOut]));
 			glfwSetFramebufferSizeCallback(windowOut, FramebufferResizeCallback);
 
 			return { windowOut };
@@ -545,10 +544,10 @@ namespace Ignis {
 				vkDestroySurfaceKHR(instance, surface, nullptr);
 			}
 
-			void* exists = glfwGetWindowUserPointer(windowIn);
+			auto exists = static_cast<WindowUserPointer*>(glfwGetWindowUserPointer(windowIn));
 			if (exists != nullptr) {
-				delete exists;
 				glfwSetWindowUserPointer(windowIn, nullptr);
+				delete exists;
 			}
 
 			glfwDestroyWindow(windowIn);
