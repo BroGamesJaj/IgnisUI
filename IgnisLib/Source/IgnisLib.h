@@ -103,9 +103,7 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
         static int CreateSurface(Window window, CreateGraphicPipeLineInfo graphicPipeLineInfo, CreateRenderPassInfo renderPassInfo = {});
         static int CreateTexture(std::string path);
 
-        int CreateFontPage(const std::vector<uint8_t> &rgbaData, uint32_t width, uint32_t height);
-
-        int AddFont(const std::string path);
+        static int CreateFontPage(const std::vector<uint8_t> &rgbaData, uint32_t width, uint32_t height);
 
         static void Draw(int surface);
         static void Event();
@@ -176,7 +174,7 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
             Color(float r, float g, float b)
                 : r(r), g(g), b(b) {}
 
-            Color() : r(255), g(255), b(255) {}
+            Color() : r(1), g(1), b(1) {}
 
             Color(std::string hex);
 
@@ -205,8 +203,8 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
         };
 
         struct ElementData {
-            Vec2i position;
-            Vec2i size;
+            Vec2f position;
+            Vec2f size;
             int textureId;
             Color color;
         };
@@ -240,8 +238,8 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
                     dataPtrs.insert(data);
             }
 
-            Vec2i& position;
-            Vec2i& size;
+            Vec2f& position;
+            Vec2f& size;
 
             bool Valid() { return data; }
 
@@ -258,7 +256,7 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
         public:
             Text() : Element(TEXT), text(GetText(data)), font(GetFont(data)), clusters(GetClusters(data)) {}
 
-            Text(Vec2 position, Vec2 size, std::string text, int fontId, Font::TextAlign textAlign = Font::TextAlign::LEFT, Font::TextDirection textDirection = Font::TextDirection::LTR) 
+            Text(Vec2f position, Vec2f size, std::string text, int fontId, Font::TextAlign textAlign = Font::TextAlign::LEFT, Font::TextDirection textDirection = Font::TextDirection::LTR) 
                 : Element(TEXT), text(GetText(data)),/* align(textAlign), direction(textDirection),*/ font(GetFont(data)), clusters(GetClusters(data)) {
                 this->position = position;
                 this->size = size;
@@ -294,7 +292,7 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
     public:
         class Image : public Element {
         private:
-            Image(Vec2i position, Vec2i size, int textureId, Color color, bool dummy)
+            Image(Vec2f position, Vec2f size, int textureId, Color color, bool dummy)
                 : Element(IMAGE) {
                 this->position = position;
                 this->size = size;
@@ -304,20 +302,20 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
             }
 
         public:
-            Image(Vec2i position, Vec2i size, int textureId, Color color)
+            Image(Vec2f position, Vec2f size, int textureId, Color color)
                 : Image(position, size, textureId, color, true) {}
 
-            Image(Vec2i position, Vec2i size, Color color)
+            Image(Vec2f position, Vec2f size, Color color)
                 : Image(position, size, 0, color, true) {}
 
-            Image(Vec2i position, Vec2i size, int textureId)
+            Image(Vec2f position, Vec2f size, int textureId)
                 : Image(position, size, textureId, Color(), true) {}
 
             friend class UI;
         };
 
         class View : public Element {
-            View(Vec2i position, Vec2i size, std::optional<int> textureId, std::optional<Color> color)
+            View(Vec2f position, Vec2f size, std::optional<int> textureId, std::optional<Color> color)
                 : Element(VIEW), elements(GetChildrens(data)) {
                 if (textureId.has_value())
                     this->textureId = textureId.value();
@@ -343,7 +341,7 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
         };
 
         class Button : public Element {
-            Button(Vec2i position, Vec2i size, void* function, std::optional<Text>& text, std::optional<int> textureId, std::optional<Color> color)
+            Button(Vec2f position, Vec2f size, void* function, std::optional<Text>& text, std::optional<int> textureId, std::optional<Color> color)
                 : Element(BUTTON), function(GetFunction(data)), text(GetTextElement(data)) {
                 if (text.has_value())
                     Bind(this->text, text.value());
@@ -374,7 +372,7 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
 
         template<std::derived_from<UI::Element>... Args>
         static void AddToSurface(int surface, Args&... args) {
-            if (!renderInstance->IsValidSurface(surface)) return;
+            if (!Render::IsValidSurface(surface)) return;
 
             (elements[surface].push_back(args), ...);
         }
@@ -413,8 +411,8 @@ enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
         static void DeleteData(UIData* data);
 
         //Element
-        static Vec2i& GetPosition(UIData* data);
-        static Vec2i& GetSize(UIData* data);
+        static Vec2f& GetPosition(UIData* data);
+        static Vec2f& GetSize(UIData* data);
 
         //Text
         static std::string& GetText(UIData* data);

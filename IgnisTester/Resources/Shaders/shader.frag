@@ -1,7 +1,6 @@
 #version 450
 
 #extension GL_EXT_nonuniform_qualifier : require
-#extension GL_EXT_nonuniform_qualifier : enable
 
 #define MAX_TEXTURES 1028
 

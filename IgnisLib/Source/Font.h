@@ -92,7 +92,6 @@ class Font {
     void packUnicodeRange(const uint32_t UnicodeStart, const uint32_t UnicodeEnd, int16_t fontSize = -1, const Style style = Style::REGULAR, const TextDirection direction = TextDirection::GUESS, const int maxCharPerPage = -1, const bool autoPageSize = true, const uint16_t pSize = 128);
 
     //   private:
-    Render *renderer;
     uint32_t defaultSize = 16;
 
     hb_buffer_t *buf;

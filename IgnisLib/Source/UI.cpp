@@ -272,10 +272,15 @@ namespace Ignis {
 
     // TODO: change the whole position and sizing shit
     UI::UIVertexData UI::GenerateTextVertecies(UI::ProcessData procDt, UIData *data, UI::Color color){
-        // TODO: unhardcode it IMPORTANT
+
+
+		//if (data->type != TEXT) return;
+		//TextData* textData = static_cast<TextData*>(data->ptr);
+
+		// TODO: unhardcode it IMPORTANT
         float hardcode = 2.0f;
         UIVertexData returnData;
-		glm::vec3 vertexColor = glm::vec3((float)color.r / 255, (float)color.g / 255, (float)color.b / 255);
+		glm::vec3 vertexColor = glm::vec3((float)color.r, (float)color.g, (float)color.b);
         glm::vec2 norm(100);
 
         if (!GetFont(data) || GetText(data).empty()) {
@@ -283,8 +288,11 @@ namespace Ignis {
             std::cout << "text: " << GetText(data) << "\n";
             return {};
         }
+
         Font::Font *font = GetFont(data);
         std::string &text = GetText(data);
+
+
 
         glm::vec2 pen(procDt.ofst.x, procDt.ofst.y);
         float scale = 1.0f / (64.0f * norm.x * hardcode);
@@ -344,7 +352,6 @@ namespace Ignis {
 
     int UI::LoadFont(const std::string& fontPath, uint32_t size) {
         Font::Font *font = new Font::Font();
-        font->renderer = renderInstance;
         font->defaultSize = size;
         font->initializeFont(fontPath);
         std::cout << "font initialized\n";
@@ -357,7 +364,7 @@ namespace Ignis {
 
 	//Element
 
-	Vec2i& UI::GetPosition(UIData* data) {
+	Vec2f& UI::GetPosition(UIData* data) {
 		switch (data->type) {
 		case TEXT:
 			return static_cast<TextData*>(data->ptr)->base.position;
@@ -372,7 +379,7 @@ namespace Ignis {
 		}
 	}
 
-	Vec2i& UI::GetSize(UIData* data) {
+	Vec2f& UI::GetSize(UIData* data) {
 		switch (data->type) {
 		case TEXT:
 			return static_cast<TextData*>(data->ptr)->base.size;

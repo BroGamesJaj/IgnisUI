@@ -310,7 +310,7 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
     uint32_t charPerPage = maxCharPerPage;
     if (maxCharPerPage < 1) {
         uint64_t maxChars = (static_cast<uint64_t>(maxPageSize) * static_cast<uint64_t>(maxPageSize)) / (fontSize * fontSize);
-        charPerPage = std::min(static_cast<uint32_t>(scriptCodepoints.size()) + 1, static_cast<uint>(std::round(maxChars)));
+        charPerPage = std::min(static_cast<uint32_t>(scriptCodepoints.size()) + 1, static_cast<uint32_t>(std::round(maxChars)));
     }
 
     uint32_t padding = std::min(5, std::max(1, fontSize % 20));
@@ -442,7 +442,7 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
             page.addGlyph(glyph);
             pagePosition[fontSize].insert({cp, pages.size()});
         }
-        page.textureId = renderer->CreateFontPage(textureData, pageWidth, pageHeight);
+        page.textureId = Render::CreateFontPage(textureData, pageWidth, pageHeight);
 
         char filename[20];
         sprintf(filename, "goated%u.bmp", pageCount);
