@@ -154,6 +154,8 @@ void UI::Bind(Element &dst, Element &src) {
 void UI::SubmitSurface(int surface) {
     if (!elements.contains(surface)) return;
 
+    GLFWwindow* window = static_cast<GLFWwindow*>(Render::GetWindowOfSurface(surface));
+
     UI::ProcessData data{ .ofst{ 0, 0 }, .size{ 2, 2 } };
 
     Render::UIRenderData outputData = ProcessVertecies(data, elements[surface]);

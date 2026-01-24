@@ -458,6 +458,10 @@ class Render::Vulkan {
         return nextElement++;
     }
 
+    void* GetWindowOfSurface(int surface) {
+        return surfaceAccess[surface].window;
+    }
+
    private:
     struct SwapChainSupportDetails {
         std::vector<VkSurfaceFormatKHR> formats;
@@ -2163,6 +2167,10 @@ void Render::Init(bool debugging) { instance = new Render::Vulkan(debugging); }
 void Render::Clean() { delete instance; }
 
 int Render::CreateFontPage(const std::vector<uint8_t> &rgbaData, uint32_t width, uint32_t height) { return instance->CreateFontPage(rgbaData, width, height); };
+
+void* Render::GetWindowOfSurface(int surface) {
+    return instance->GetWindowOfSurface(surface);
+}
 
 Render::Vulkan *Render::instance = nullptr;
 }  // namespace Ignis

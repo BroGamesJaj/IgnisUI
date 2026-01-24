@@ -139,7 +139,7 @@ void Input::InputCharModsCallback(GLFWwindow* window, unsigned int codepoint, in
 	CallFunction(window, Callbacks::InputCharMods);
 }
 void Input::InputMouseButtonCallback(GLFWwindow* window, int button, int action, int mods){
-	windowCallbackData[window].Mouse = { button, action, mods };
+	windowCallbackData[window].Mouse = { button, action, mods, false };
 	CallFunction(window, Callbacks::InputMouseButton);
 }
 void Input::InputCursorPositionCallback(GLFWwindow* window, double xpos, double ypos){

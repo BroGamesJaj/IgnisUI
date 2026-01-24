@@ -156,6 +156,8 @@ class Render {
     friend class UI;
 
     static int AddUIElementData(UIRenderData &data);
+
+    static void* GetWindowOfSurface(int surface);
 };
 
 #ifdef IGNIS_RENDER_NAMES
