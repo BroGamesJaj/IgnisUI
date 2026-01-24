@@ -421,7 +421,7 @@ class Render::Vulkan {
         return nextTexture++;
     }
 
-    static void FramebufferResizeCallback(Window& windowIn) {
+    static void FramebufferResizeCallback(Window windowIn) {
         auto window = reinterpret_cast<WindowUserPointer*>(glfwGetWindowUserPointer(windowIn.ptr));
         ((WindowVulkanData *)window->vulkanData)->framebufferResized = true;
     }

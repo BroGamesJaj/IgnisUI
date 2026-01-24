@@ -449,20 +449,23 @@ using Button = UI::Button;
 #if defined(IGNIS_INPUT) || defined(IGNIS_UI)
 class Input {
 public:
-    typedef void (*HookFunction)(Window& window);
+    typedef void (*HookFunction)(Window);
 
     struct Keydata {
         int key;
         int scancode;
         int action;
+        int mods;
     };
     struct ModifierData {
-        int codepoint;
+        unsigned int codepoint;
         int mods;
     };
     struct MouseData {
+        int button;
         int action;
         int mods;
+        bool entered;
     };
     struct DropData {
         int count;
@@ -473,7 +476,7 @@ private:
     using Action = std::pair<GLFWwindow*, int>;
     using Callback = HookFunction;
 
-    struct Callbacks;
+    enum Callbacks;
 
     struct KeyHash {
         size_t operator()(const Action& k) const noexcept {
@@ -481,16 +484,56 @@ private:
         }
     };
 
+    struct WindowInputData {
+        Vec2i windowPosition;
+        Vec2i windowSize;
+        Vec2i framebufferSize;
+
+        Keydata Key;
+        unsigned int Char;
+        ModifierData modChar;
+        MouseData Mouse;
+        Vec2<double> cursorPosition;
+        Vec2<double> scrollOffset;
+        DropData Drop;
+    };
+
     static std::unordered_map<Action, Callback, KeyHash> customCallbacks;
-    static std::unordered_map <GLFWwindow*, std::unordered_set<Callbacks>> windowCallbacks;
+    static std::unordered_map <GLFWwindow*, WindowInputData> windowCallbackData;
+
+    static void WindowPosCallback(GLFWwindow* window, int xpos, int ypos);
+    static void WindowSizeCallback(GLFWwindow* window, int width, int height);
+    static void WindowCloseCallback(GLFWwindow* window);
+    static void WindowRefreshCallback(GLFWwindow* window);
+    static void WindowFocusCallback(GLFWwindow* window, int focused);
+    static void WindowIconifyCallback(GLFWwindow* window, int iconified);
+    static void WindowMaximizeCallback(GLFWwindow* window, int maximized);
+    static void FramebufferSizeCallback(GLFWwindow* window, int width, int height);
+    //static void WindowContentScaleCallback(GLFWwindow* window, float xscale, float yscale);
+
+    static void InputKeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
+    static void InputCharCallback(GLFWwindow* window, unsigned int codepoint);
+    static void InputCharModsCallback(GLFWwindow* window, unsigned int codepoint, int mods);
+    static void InputMouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
+    static void InputCursorPositionCallback(GLFWwindow* window, double xpos, double ypos);
+    static void InputCursorEnterCallback(GLFWwindow* window, int entered);
+    static void InputScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
+    static void InputDropCallback(GLFWwindow* window, int count, const char** paths);
+
+    //static void MonitorCallback(Render::Window window, void* function);
+
+    //static void ErrorCallback(Render::Window window, void* function);
+
+    static void CallFunction(GLFWwindow* window, Callbacks type);
 
 public:
     static void Init();
+    static void InitWindow(Window& window);
     static void Event();
 
     static void HookWindowPosCallback(Render::Window window, HookFunction function);
     static void HookWindowSizeCallback(Render::Window window, HookFunction function);
-    static void HookWindowcloseCallback(Render::Window window, HookFunction function);
+    static void HookWindowCloseCallback(Render::Window window, HookFunction function);
     static void HookWindowRefreshCallback(Render::Window window, HookFunction function);
     static void HookWindowFocusCallback(Render::Window window, HookFunction function);
     static void HookWindowIconifyCallback(Render::Window window, HookFunction function);
@@ -502,6 +545,7 @@ public:
     static void HookInputCharCallback(Render::Window window, HookFunction function);
     static void HookInputCharModsCallback(Render::Window window, HookFunction function);
     static void HookInputMouseButtonCallback(Render::Window window, HookFunction function);
+    static void HookInputCursorPositionCallback(Render::Window window, HookFunction function);
     static void HookInputCursorEnterCallback(Render::Window window, HookFunction function);
     static void HookInputScrollCallback(Render::Window window, HookFunction function);
     static void HookInputDropCallback(Render::Window window, HookFunction function);
@@ -510,22 +554,16 @@ public:
 
     //static void HookErrorCallback(Render::Window window, void* function);
 
-    static Vec2i windowPosition;
-    static Vec2i windowSize;
-    static Vec2i frameBuffersize;
-
-    static Keydata Key;
-    static unsigned int Char;
-    static Vec2<double> cursorPosition;
-    static bool cursorEntered;
-    static Vec2<double> scrollOffset;
-    static DropData dropElements;
-
-
-
-
-
-    
+    static Vec2i WindowPosition(Render::Window window);
+    static Vec2i WindowSize(Render::Window window);
+    static Vec2i FramebufferSize(Render::Window window);
+    static Keydata Key(Render::Window window);
+    static unsigned int Char(Render::Window window);
+    static ModifierData ModChar(Render::Window window);
+    static MouseData Mouse(Render::Window window);
+    static Vec2<double> CursorPosition(Render::Window window);
+    static Vec2<double> Scroll(Render::Window window);
+    static DropData Drop(Render::Window window);
 };
 #endif
 }  // namespace Ignis
