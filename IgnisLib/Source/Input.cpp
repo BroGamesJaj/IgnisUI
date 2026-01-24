@@ -8,16 +8,16 @@ namespace Ignis {
 //All the glfw callbacks
 //Handle: the data got from the callback is managed by the Input system
 //Hook: the user needs to hook a function to get "pinged" when it is set of and to get the data
-enum Input::Callbacks {
+enum class Input::Callbacks : int {
 	//Window
 	WindowPos,				//Handle
-	WindowSizeCb,			//Handle
+	WindowSize,			//Handle
 	Windowclose,			//Hook
 	WindowRefresh,			//Hook
 	WindowFocus,			//Hook
 	WindowIconify,			//Hook
 	WindowMaximize,			//Hook
-	FramebufferSizeCb,		//Handle
+	FramebufferSize,		//Handle
 	WindowContentScale,		//Not implemented
 	//Input
 	InputKey,				//Handle
@@ -36,53 +36,53 @@ enum Input::Callbacks {
 
 
 void Input::HookWindowPosCallback(Render::Window window, HookFunction function){
-	customCallbacks[{window.ptr, WindowPos}] = function;
+	customCallbacks[{window.ptr, Callbacks::WindowPos}] = function;
 }
 void Input::HookWindowSizeCallback(Render::Window window, HookFunction function){
-	customCallbacks[{window.ptr, WindowSizeCb}] = function;
+	customCallbacks[{window.ptr, Callbacks::WindowSize}] = function;
 }
 void Input::HookWindowCloseCallback(Render::Window window, HookFunction function){
-	customCallbacks[{window.ptr, Windowclose}] = function;
+	customCallbacks[{window.ptr, Callbacks::Windowclose}] = function;
 }
 void Input::HookWindowRefreshCallback(Render::Window window, HookFunction function){
-	customCallbacks[{window.ptr, WindowRefresh}] = function;
+	customCallbacks[{window.ptr, Callbacks::WindowRefresh}] = function;
 }
 void Input::HookWindowFocusCallback(Render::Window window, HookFunction function){
-	customCallbacks[{window.ptr, WindowFocus}] = function;
+	customCallbacks[{window.ptr, Callbacks::WindowFocus}] = function;
 }
 void Input::HookWindowIconifyCallback(Render::Window window, HookFunction function){
-	customCallbacks[{window.ptr, WindowIconify}] = function;
+	customCallbacks[{window.ptr, Callbacks::WindowIconify}] = function;
 }
 void Input::HookWindowMaximizeCallback(Render::Window window, HookFunction function) {
-	customCallbacks[{window.ptr, WindowMaximize}] = function;
+	customCallbacks[{window.ptr, Callbacks::WindowMaximize}] = function;
 }
 void Input::HookFramebufferSizeCallback(Render::Window window, HookFunction function) {
-	customCallbacks[{window.ptr, FramebufferSizeCb}] = function;
+	customCallbacks[{window.ptr, Callbacks::FramebufferSize}] = function;
 }
 
 void Input::HookInputKeyCallback(Render::Window window, HookFunction function){
-	customCallbacks[{window.ptr, InputKey}] = function;
+	customCallbacks[{window.ptr, Callbacks::InputKey}] = function;
 }
 void Input::HookInputCharCallback(Render::Window window, HookFunction function){
-	customCallbacks[{window.ptr, InputChar}] = function;
+	customCallbacks[{window.ptr, Callbacks::InputChar}] = function;
 }
 void Input::HookInputCharModsCallback(Render::Window window, HookFunction function){
-	customCallbacks[{window.ptr, InputCharMods}] = function;
+	customCallbacks[{window.ptr, Callbacks::InputCharMods}] = function;
 }
 void Input::HookInputMouseButtonCallback(Render::Window window, HookFunction function){
-	customCallbacks[{window.ptr, InputMouseButton}] = function;
+	customCallbacks[{window.ptr, Callbacks::InputMouseButton}] = function;
 }
 void Input::HookInputCursorPositionCallback(Render::Window window, HookFunction function) {
-	customCallbacks[{window.ptr, InputCursorPosition}] = function;
+	customCallbacks[{window.ptr, Callbacks::InputCursorPosition}] = function;
 }
 void Input::HookInputCursorEnterCallback(Render::Window window, HookFunction function){
-	customCallbacks[{window.ptr, InputCursorEnter}] = function;
+	customCallbacks[{window.ptr, Callbacks::InputCursorEnter}] = function;
 }
 void Input::HookInputScrollCallback(Render::Window window, HookFunction function){
-	customCallbacks[{window.ptr, InputScroll}] = function;
+	customCallbacks[{window.ptr, Callbacks::InputScroll}] = function;
 }
 void Input::HookInputDropCallback(Render::Window window, HookFunction function) {
-	customCallbacks[{window.ptr, InputDrop}] = function;
+	customCallbacks[{window.ptr, Callbacks::InputDrop}] = function;
 }
 
 
@@ -100,63 +100,63 @@ void Input::CallFunction(GLFWwindow* window, Callbacks type) {
 
 void Input::WindowPosCallback(GLFWwindow* window, int xpos, int ypos){
 	windowCallbackData[window].windowPosition = { xpos, ypos };
-	CallFunction(window, WindowPos);
+	CallFunction(window, Callbacks::WindowPos);
 }
 void Input::WindowSizeCallback(GLFWwindow* window, int width, int height){
 	windowCallbackData[window].windowSize = { width, height };
-	CallFunction(window, WindowSizeCb);
+	CallFunction(window, Callbacks::WindowSize);
 }
 void Input::WindowCloseCallback(GLFWwindow* window){
-	CallFunction(window, Windowclose);
+	CallFunction(window, Callbacks::Windowclose);
 }
 void Input::WindowRefreshCallback(GLFWwindow* window){
-	CallFunction(window, WindowRefresh);
+	CallFunction(window, Callbacks::WindowRefresh);
 }
 void Input::WindowFocusCallback(GLFWwindow* window, int focused){
-	CallFunction(window, WindowFocus);
+	CallFunction(window, Callbacks::WindowFocus);
 }
 void Input::WindowIconifyCallback(GLFWwindow* window, int iconified){
-	CallFunction(window, WindowIconify);
+	CallFunction(window, Callbacks::WindowIconify);
 }
 void Input::WindowMaximizeCallback(GLFWwindow* window, int maximized){
-	CallFunction(window, WindowMaximize);
+	CallFunction(window, Callbacks::WindowMaximize);
 }
 void Input::FramebufferSizeCallback(GLFWwindow* window, int width, int height){
 	windowCallbackData[window].framebufferSize = { width, height };
-	CallFunction(window, FramebufferSizeCb);
+	CallFunction(window, Callbacks::FramebufferSize);
 }
 
 void Input::InputKeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods){
 	windowCallbackData[window].Key = { key, scancode, action, mods };
-	CallFunction(window, InputKey);
+	CallFunction(window, Callbacks::InputKey);
 }
 void Input::InputCharCallback(GLFWwindow* window, unsigned int codepoint){
 	windowCallbackData[window].Char = codepoint;
-	CallFunction(window, InputChar);
+	CallFunction(window, Callbacks::InputChar);
 }
 void Input::InputCharModsCallback(GLFWwindow* window, unsigned int codepoint, int mods){
 	windowCallbackData[window].modChar = { codepoint, mods };
-	CallFunction(window, InputCharMods);
+	CallFunction(window, Callbacks::InputCharMods);
 }
 void Input::InputMouseButtonCallback(GLFWwindow* window, int button, int action, int mods){
 	windowCallbackData[window].Mouse = { button, action, mods };
-	CallFunction(window, InputMouseButton);
+	CallFunction(window, Callbacks::InputMouseButton);
 }
 void Input::InputCursorPositionCallback(GLFWwindow* window, double xpos, double ypos){
 	windowCallbackData[window].cursorPosition = { xpos, ypos };
-	CallFunction(window, InputCursorPosition);
+	CallFunction(window, Callbacks::InputCursorPosition);
 }
 void Input::InputCursorEnterCallback(GLFWwindow* window, int entered){
 	windowCallbackData[window].Mouse.entered = entered;
-	CallFunction(window, InputCursorEnter);
+	CallFunction(window, Callbacks::InputCursorEnter);
 }
 void Input::InputScrollCallback(GLFWwindow* window, double xoffset, double yoffset){
 	windowCallbackData[window].scrollOffset = { xoffset, yoffset };
-	CallFunction(window, InputScroll);
+	CallFunction(window, Callbacks::InputScroll);
 }
 void Input::InputDropCallback(GLFWwindow* window, int count, const char** paths){
 	windowCallbackData[window].Drop = { count, paths };
-	CallFunction(window, InputDrop);
+	CallFunction(window, Callbacks::InputDrop);
 }
 
 
@@ -235,6 +235,6 @@ void Input::InitWindow(Window& window) {
 	glfwSetDropCallback(ptr, InputDropCallback);
 }
 
-std::unordered_map<std::pair<GLFWwindow*, int>, Input::HookFunction, Input::KeyHash> Input::customCallbacks;
+std::unordered_map<std::pair<GLFWwindow*, Input::Callbacks>, Input::HookFunction, Input::KeyHash> Input::customCallbacks;
 std::unordered_map <GLFWwindow*, Input::WindowInputData> Input::windowCallbackData;
 };

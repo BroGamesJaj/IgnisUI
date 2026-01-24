@@ -473,14 +473,14 @@ public:
     };
 
 private:
-    using Action = std::pair<GLFWwindow*, int>;
-    using Callback = HookFunction;
+    enum class Callbacks : int;
 
-    enum Callbacks;
+    using Action = std::pair<GLFWwindow*, Callbacks>;
+    using Callback = HookFunction;
 
     struct KeyHash {
         size_t operator()(const Action& k) const noexcept {
-            return std::hash<GLFWwindow*>()(k.first) ^ (std::hash<int>()(k.second) << 1);
+            return std::hash<GLFWwindow*>()(k.first) ^ (std::hash<int>()(static_cast<int>(k.second)) << 1);
         }
     };
 
