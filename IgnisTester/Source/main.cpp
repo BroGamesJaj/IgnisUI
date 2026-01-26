@@ -28,7 +28,7 @@ int main() {
 
 	//need to initialize the window & hook a callback witch has a window as an input
 	Input::InitWindow(window1);
-	Input::HookInputCursorPositionCallback(window1, CursorMoved);
+	//Input::HookInputCursorPositionCallback(window1, CursorMoved);
 
 	int surface = Render::CreateSurface(window1, gpInfo);
 	surfaces.push_back(surface);

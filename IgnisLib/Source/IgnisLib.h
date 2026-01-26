@@ -73,6 +73,8 @@ struct Vec2 {
         return *this;
     }
 };
+using Vec2f = Vec2<float>;
+using Vec2i = Vec2<int>;
 
 #if defined(IGNIS_RENDER) || defined(IGNIS_UI)
 class Render {
@@ -99,6 +101,7 @@ class Render {
         friend class Vulkan;
         friend class Render;
         friend class Input;
+        friend class UI;
     };
 
     struct CreateRenderPassInfo {
@@ -171,12 +174,18 @@ using CreateGraphicPipeLineInfo = Render::CreateGraphicPipeLineInfo;
 
 class UI {
    public:
-    using Vec2f = Vec2<float>;
-    using Vec2i = Vec2<int>;
-
     template <typename T>
         requires std::is_arithmetic_v<T>
     struct Area2 {
+
+        Area2() = default;
+
+        Area2(Vec2<T> x, Vec2<T> y) {
+            TL = x;
+            BR = y;
+            Calc();
+        }
+
         Vec2<T> TL;
         Vec2<T> BR;
 
@@ -184,7 +193,7 @@ class UI {
         Vec2<T> BL;
 
         inline void Calc();
-        inline bool Contain(Vec2<T> &position) const;
+        inline bool Contains(Vec2<T> &position) const;
     };
 
     struct Color {
@@ -222,6 +231,8 @@ class UI {
         Vec2f size;
         int textureId;
         Color color;
+
+        Area2<double> area;
     };
 
     struct TextData {
@@ -247,8 +258,10 @@ class UI {
         UIData *data;
 
        public:
-        Element(UIType type) : data(CreateData(type)), position(GetPosition(data)), size(GetSize(data)), id(nextId++), textureId(GetTexture(data)), color(GetColor(data)) {
+        Element(UIType type) : data(CreateData(type)), position(GetPosition(data)), size(GetSize(data)), id(nextId++), 
+            textureId(GetTexture(data)), color(GetColor(data)), area(GetArea(data)) {
             if (!dataPtrs.contains(data)) dataPtrs.insert(data);
+            area = Area2<double>(Vec2<double>(position.x, position.y), Vec2<double>(position.x+size.x, position.y+size.y));
         }
 
         Vec2f &position;
@@ -260,6 +273,7 @@ class UI {
         const int id;
         int &textureId;
         Color &color;
+        Area2<double> &area;
 
         friend class UI;
     };
@@ -418,6 +432,9 @@ class UI {
     // Element
     static Vec2f &GetPosition(UIData *data);
     static Vec2f &GetSize(UIData *data);
+    static int& GetTexture(UIData* data);
+    static Color& GetColor(UIData* data);
+    static Area2<double>& GetArea(UIData* data);
 
     // Text
     static std::string &GetText(UIData *data);
@@ -426,23 +443,21 @@ class UI {
 
     static UIVertexData GenerateTextVertecies(UI::ProcessData procData, UIData *data, UI::Color color);
 
-    // Image
-    static int &GetTexture(UIData *data);
-    static Color &GetColor(UIData *data);
-
     // View
     static std::vector<UIData*> &GetChildrens(UIData *data);
 
     // Button
     static void *&GetFunction(UIData *data);
     static Text &GetTextElement(UIData *data);
+
+    static void HandleClick(Window window);
+    static UIData* FindFirstClicked(std::vector<UIData*>& elements, Vec2<double> position);
+
+    friend class Input;
 };
 
 #ifdef IGNIS_UI_NAMES
 using Color = UI::Color;
-using Vec2i = UI::Vec2i;
-using Vec2f = UI::Vec2f;
-
 using Image = UI::Image;
 using Text = UI::Text;
 using View = UI::View;

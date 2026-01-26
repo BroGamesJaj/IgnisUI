@@ -4,6 +4,8 @@
 using Vertex = Ignis::Render::Vertex;
 using Color = Ignis::UI::Color;
 
+#include "GLFW/glfw3.h"
+
 namespace Ignis {
 
 // Vector
@@ -12,13 +14,13 @@ namespace Ignis {
 template <typename T>
     requires std::is_arithmetic_v<T>
 inline void UI::Area2<T>::Calc() {
-    TR = (BR.x, TL.y);
-    BL = (TL.x, BR.y);
+    TR = Vec2<double>(BR.x, TL.y);
+    BL = Vec2<double>(TL.x, BR.y);
 }
 
 template <typename T>
     requires std::is_arithmetic_v<T>
-inline bool UI::Area2<T>::Contain(Vec2<T> &position) const {
+inline bool UI::Area2<T>::Contains(Vec2<T> &position) const {
     return (position.x > TL.x && position.x < BR.x && position.y > TL.y && position.y < BR.y);
 }
 
@@ -237,6 +239,38 @@ UI::UIVertexData UI::GenerateVertecies(UI::ProcessData procDt, int textureId, Co
     return returnData;
 }
 
+UI::UIData* UI::FindFirstClicked(std::vector<UIData*>& elements, Vec2<double> position) {
+    //TODO: need to implement recursive selection
+    /*
+    for (auto it = elements.rbegin(); it != elements.rend(); ++it) {
+        auto& element = *it;
+        if (GetArea(element).Contains(position)) {
+        }
+    }
+    */
+}
+
+void UI::HandleClick(Window window) {
+    Vec2i windowSize = Input::WindowSize(window);
+    Vec2<double> cursorPositoin = Input::CursorPosition(window);
+    Vec2<double> position = Vec2<double>(cursorPositoin.x / (double)windowSize.x, cursorPositoin.y / (double)windowSize.y);
+
+    Input::MouseData mouse = Input::Mouse(window);
+    if (mouse.action == GLFW_PRESS && mouse.button == GLFW_MOUSE_BUTTON_LEFT) {
+        std::cout << "Clicked at: " << position.x << "; " << position.y << std::endl;
+
+        UIData* clickedElement;
+
+        for (auto& element : elements) {
+            if (Render::GetWindowOfSurface(element.first) == window.ptr) {
+                clickedElement = FindFirstClicked(element.second, position);
+                break;
+            }
+        }
+    }
+
+}
+
 // TODO: change the whole position and sizing shit
 UI::UIVertexData UI::GenerateTextVertecies(UI::ProcessData procDt, UIData *data, UI::Color color) {
     // if (data->type != TEXT) return;
@@ -348,6 +382,51 @@ Vec2f &UI::GetSize(UIData *data) {
     }
 }
 
+Color& UI::GetColor(UIData* data) {
+    switch (data->type) {
+    case IMAGE:
+        return static_cast<ImageData*>(data->ptr)->base.color;
+    case VIEW:
+        return static_cast<ViewData*>(data->ptr)->base.color;
+    case BUTTON:
+        return static_cast<ButtonData*>(data->ptr)->base.color;
+    case TEXT:
+        return static_cast<TextData*>(data->ptr)->base.color;
+    default:
+        throw std::runtime_error("Coudn't access color of the passed in data");
+    }
+}
+
+int& UI::GetTexture(UIData* data) {
+    switch (data->type) {
+    case IMAGE:
+        return static_cast<ImageData*>(data->ptr)->base.textureId;
+    case VIEW:
+        return static_cast<ViewData*>(data->ptr)->base.textureId;
+    case BUTTON:
+        return static_cast<ButtonData*>(data->ptr)->base.textureId;
+    case TEXT:
+        return static_cast<TextData*>(data->ptr)->base.textureId;
+    default:
+        throw std::runtime_error("Coudn't access texture of the passed in data");
+    }
+}
+
+UI::Area2<double>& UI::GetArea(UIData* data) {
+    switch (data->type) {
+    case IMAGE:
+        return static_cast<ImageData*>(data->ptr)->base.area;
+    case VIEW:
+        return static_cast<ViewData*>(data->ptr)->base.area;
+    case BUTTON:
+        return static_cast<ButtonData*>(data->ptr)->base.area;
+    case TEXT:
+        return static_cast<TextData*>(data->ptr)->base.area;
+    default:
+        throw std::runtime_error("Coudn't access texture of the passed in data");
+    }
+}
+
 // Text
 
 std::string &UI::GetText(UIData *data) {
@@ -377,38 +456,6 @@ std::vector<uint32_t> &UI::GetClusters(UIData *data) {
             break;
         default:
             throw std::runtime_error("Coudn't access text of the passed in data");
-    }
-}
-
-// Image
-
-Color &UI::GetColor(UIData *data) {
-    switch (data->type) {
-        case IMAGE:
-            return static_cast<ImageData *>(data->ptr)->base.color;
-        case VIEW:
-            return static_cast<ViewData *>(data->ptr)->base.color;
-        case BUTTON:
-            return static_cast<ButtonData *>(data->ptr)->base.color;
-        case TEXT:
-            return static_cast<TextData *>(data->ptr)->base.color;
-        default:
-            throw std::runtime_error("Coudn't access color of the passed in data");
-    }
-}
-
-int &UI::GetTexture(UIData *data) {
-    switch (data->type) {
-        case IMAGE:
-            return static_cast<ImageData *>(data->ptr)->base.textureId;
-        case VIEW:
-            return static_cast<ViewData *>(data->ptr)->base.textureId;
-        case BUTTON:
-            return static_cast<ButtonData *>(data->ptr)->base.textureId;
-        case TEXT:
-            return static_cast<TextData *>(data->ptr)->base.textureId;
-        default:
-            throw std::runtime_error("Coudn't access texture of the passed in data");
     }
 }
 

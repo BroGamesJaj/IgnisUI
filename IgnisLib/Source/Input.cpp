@@ -140,6 +140,13 @@ void Input::InputCharModsCallback(GLFWwindow* window, unsigned int codepoint, in
 }
 void Input::InputMouseButtonCallback(GLFWwindow* window, int button, int action, int mods){
 	windowCallbackData[window].Mouse = { button, action, mods, false };
+
+#ifdef IGNIS_UI
+	Render::Window win;
+	win.ptr = window;
+	UI::HandleClick(win);
+#endif
+
 	CallFunction(window, Callbacks::InputMouseButton);
 }
 void Input::InputCursorPositionCallback(GLFWwindow* window, double xpos, double ypos){
@@ -209,7 +216,7 @@ void Input::Event() {
 void Input::InitWindow(Window& window) {
 	GLFWwindow* ptr = window.ptr;
 
-	WindowInputData data;
+	WindowInputData& data = windowCallbackData[window.ptr];
 
 	glfwGetWindowPos(window.ptr, &data.windowPosition.x, &data.windowPosition.y);
 	glfwGetWindowSize(window.ptr, &data.windowSize.x, &data.windowSize.y);
