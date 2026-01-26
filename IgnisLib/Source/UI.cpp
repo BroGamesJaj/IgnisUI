@@ -7,23 +7,6 @@ using Color = Ignis::UI::Color;
 #include "GLFW/glfw3.h"
 
 namespace Ignis {
-
-// Vector
-
-// Area
-template <typename T>
-    requires std::is_arithmetic_v<T>
-inline void UI::Area2<T>::Calc() {
-    TR = Vec2<double>(BR.x, TL.y);
-    BL = Vec2<double>(TL.x, BR.y);
-}
-
-template <typename T>
-    requires std::is_arithmetic_v<T>
-inline bool UI::Area2<T>::Contains(Vec2<T> &position) const {
-    return (position.x > TL.x && position.x < BR.x && position.y > TL.y && position.y < BR.y);
-}
-
 // Color
 
 auto hexToFloat = [](const std::string &s) -> float { return static_cast<float>(std::stoi(s, nullptr, 16)) / 255.0f; };
@@ -179,6 +162,11 @@ Render::UIRenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<UIDa
         Vec2f elementOffset = { data.size.x / 100 * position.x, data.size.y / 100 * position.y };
 
         UI::ProcessData calcData{ .ofst{ data.ofst.x + elementOffset.x, data.ofst.y + elementOffset.y }, .size{ elementSize } };
+
+        Area2<double>& area = GetArea(element);
+        area = Area2<double>(Vec2<double>(calcData.ofst.x / 2, calcData.ofst.y / 2), 
+            Vec2<double>((calcData.ofst.x + calcData.size.x) / 2, (calcData.ofst.y + calcData.size.y) / 2));
+
         if (element->type == TEXT) {
             UIVertexData textVertexData = GenerateTextVertecies(calcData, element, GetColor(element));
 
@@ -239,15 +227,24 @@ UI::UIVertexData UI::GenerateVertecies(UI::ProcessData procDt, int textureId, Co
     return returnData;
 }
 
-UI::UIData* UI::FindFirstClicked(std::vector<UIData*>& elements, Vec2<double> position) {
+UI::UIData* UI::FindFirstClicked(std::vector<UIData*>& elements, Vec2<double>& position) {
     //TODO: need to implement recursive selection
-    /*
+    
+    UIData* clickedElement = nullptr;
+
+    //loops from newer to older and checks if it can be more precise with a smoller object
     for (auto it = elements.rbegin(); it != elements.rend(); ++it) {
         auto& element = *it;
         if (GetArea(element).Contains(position)) {
+            if (element->type == VIEW) {
+                clickedElement = FindFirstClicked(GetChildrens(element), position);
+                if (clickedElement != nullptr) return clickedElement;
+            }
+            return element;
         }
     }
-    */
+    
+    return clickedElement;
 }
 
 void UI::HandleClick(Window window) {
@@ -257,16 +254,27 @@ void UI::HandleClick(Window window) {
 
     Input::MouseData mouse = Input::Mouse(window);
     if (mouse.action == GLFW_PRESS && mouse.button == GLFW_MOUSE_BUTTON_LEFT) {
-        std::cout << "Clicked at: " << position.x << "; " << position.y << std::endl;
+
 
         UIData* clickedElement;
 
+        //checks every surface on the position
         for (auto& element : elements) {
             if (Render::GetWindowOfSurface(element.first) == window.ptr) {
                 clickedElement = FindFirstClicked(element.second, position);
                 break;
             }
         }
+
+        if (clickedElement != nullptr) {
+            std::cout << "Something clicked at: " << position.x << "; " << position.y << std::endl;
+            std::cout << "Type: " << clickedElement->type << std::endl;
+        }
+        else {
+            std::cout << "Did not click shit" << std::endl;
+        }
+
+
     }
 
 }

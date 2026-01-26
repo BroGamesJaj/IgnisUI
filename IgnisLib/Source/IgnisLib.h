@@ -192,8 +192,13 @@ class UI {
         Vec2<T> TR;
         Vec2<T> BL;
 
-        inline void Calc();
-        inline bool Contains(Vec2<T> &position) const;
+        inline void Calc() {
+            TR = Vec2<T>(BR.x, TL.y);
+            BL = Vec2<T>(TL.x, BR.y);
+        }
+        inline bool Contains(Vec2<T>& position) const { 
+            return (position.x > TL.x && position.x < BR.x && position.y > TL.y && position.y < BR.y); 
+        };
     };
 
     struct Color {
@@ -261,7 +266,6 @@ class UI {
         Element(UIType type) : data(CreateData(type)), position(GetPosition(data)), size(GetSize(data)), id(nextId++), 
             textureId(GetTexture(data)), color(GetColor(data)), area(GetArea(data)) {
             if (!dataPtrs.contains(data)) dataPtrs.insert(data);
-            area = Area2<double>(Vec2<double>(position.x, position.y), Vec2<double>(position.x+size.x, position.y+size.y));
         }
 
         Vec2f &position;
@@ -451,7 +455,7 @@ class UI {
     static Text &GetTextElement(UIData *data);
 
     static void HandleClick(Window window);
-    static UIData* FindFirstClicked(std::vector<UIData*>& elements, Vec2<double> position);
+    static UIData* FindFirstClicked(std::vector<UIData*>& elements, Vec2<double>& position);
 
     friend class Input;
 };
