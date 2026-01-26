@@ -151,6 +151,13 @@ void Input::InputMouseButtonCallback(GLFWwindow* window, int button, int action,
 }
 void Input::InputCursorPositionCallback(GLFWwindow* window, double xpos, double ypos){
 	windowCallbackData[window].cursorPosition = { xpos, ypos };
+
+#ifdef IGNIS_UI
+	Render::Window win;
+	win.ptr = window;
+	UI::HandleCursorMove(win);
+#endif
+
 	CallFunction(window, Callbacks::InputCursorPosition);
 }
 void Input::InputCursorEnterCallback(GLFWwindow* window, int entered){

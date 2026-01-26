@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <functional>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -255,6 +256,11 @@ class UI {
         Color color;
 
         Area2<float> area;
+
+        std::function<void()> onClick;
+        std::function<void()> onHoverEnter;
+        bool isHovered;
+        std::function<void()> onHoverExit;
     };
 
     struct TextData {
@@ -281,20 +287,26 @@ class UI {
 
        public:
         Element(UIType type) : data(CreateData(type)), position(GetPosition(data)), size(GetSize(data)), id(nextId++), 
-            textureId(GetTexture(data)), color(GetColor(data)), area(GetArea(data)) {
+            textureId(GetTexture(data)), color(GetColor(data)), area(GetArea(data)), onClick(GetOnClick(data)), onHoverEnter(GetOnHoverEnter(data)),
+            onHoverExit(GetOnHoverExit(data)), isHovered(GetIsHovered(data)) {
             if (!dataPtrs.contains(data)) dataPtrs.insert(data);
         }
 
         Vec2f &position;
         Vec2f &size;
+        int& textureId;
+        Color& color;
+        std::function<void()>& onClick;
+        std::function<void()>& onHoverEnter;
+        bool& isHovered;
+        std::function<void()>& onHoverExit;
+        Area2<float>& area;
 
         bool Valid() { return data; }
 
        protected:
-        int &textureId;
-        Color &color;
-        Area2<float> &area;
         const int id;
+
         friend class UI;
     };
 
@@ -455,6 +467,10 @@ class UI {
     static int& GetTexture(UIData* data);
     static Color& GetColor(UIData* data);
     static Area2<float>& GetArea(UIData* data);
+    static std::function<void()>& GetOnClick(UIData* data);
+    static std::function<void()>& GetOnHoverEnter(UIData* data);
+    static std::function<void()>& GetOnHoverExit(UIData* data);
+    static bool& GetIsHovered(UIData* data);
 
     // Text
     static std::string &GetText(UIData *data);
@@ -472,6 +488,9 @@ class UI {
 
     static void HandleClick(Window window);
     static UIData* FindFirstClicked(std::vector<UIData*>& elements, Vec2<float>& position);
+
+    static void HandleCursorMove(Window window);
+    static void ProcHoveredElements(std::vector<UIData*>& elements, Vec2<float>& position);
 
     friend class Input;
 };

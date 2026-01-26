@@ -227,9 +227,7 @@ UI::UIVertexData UI::GenerateVertecies(UI::ProcessData procDt, int textureId, Co
     return returnData;
 }
 
-UI::UIData* UI::FindFirstClicked(std::vector<UIData*>& elements, Vec2<float>& position) {
-    //TODO: need to implement recursive selection
-    
+UI::UIData* UI::FindFirstClicked(std::vector<UIData*>& elements, Vec2<float>& position) {   
     UIData* clickedElement = nullptr;
 
     //loops from newer to older and checks if it can be more precise with a smoller object
@@ -240,7 +238,11 @@ UI::UIData* UI::FindFirstClicked(std::vector<UIData*>& elements, Vec2<float>& po
                 clickedElement = FindFirstClicked(GetChildrens(element), position);
                 if (clickedElement != nullptr) return clickedElement;
             }
-            return element;
+            auto& func = GetOnClick(element);
+            if (func) {
+                func();
+                return element;
+            }
         }
     }
     
@@ -277,6 +279,44 @@ void UI::HandleClick(Window window) {
 
     }
 
+}
+
+void UI::ProcHoveredElements(std::vector<UIData*>& elements, Vec2<float>& position) {
+    //loops from newer to older and checks if it can be more precise with a smoller object
+    for (auto it = elements.rbegin(); it != elements.rend(); ++it) {
+        auto& element = *it;
+        bool& isHovered = GetIsHovered(element);
+        if (GetArea(element).Contains(position)) {
+            if (!isHovered) {
+                auto& func = GetOnHoverEnter(element);
+                if(func) func();
+                isHovered = true;
+            }
+        }
+        else {
+            if (isHovered) {
+                auto& func = GetOnHoverExit(element);
+                if(func) func();
+                isHovered = false;
+            }
+        }
+        if (element->type == VIEW) {
+            ProcHoveredElements(GetChildrens(element), position);
+        }
+    }
+}
+
+void UI::HandleCursorMove(Window window) {
+    Vec2i windowSize = Input::WindowSize(window);
+    Vec2<double> cursorPositoin = Input::CursorPosition(window);
+    Vec2<float> position = Vec2<float>(cursorPositoin.x / (float)windowSize.x, cursorPositoin.y / (float)windowSize.y);
+
+    for (auto& element : elements) {
+        if (Render::GetWindowOfSurface(element.first) == window.ptr) {
+            ProcHoveredElements(element.second, position);
+            break;
+        }
+    }
 }
 
 // TODO: change the whole position and sizing shit
@@ -434,6 +474,59 @@ UI::Area2<float>& UI::GetArea(UIData* data) {
         throw std::runtime_error("Coudn't access texture of the passed in data");
     }
 }
+
+std::function<void()>& UI::GetOnClick(UIData* data) {
+    switch (data->type) {
+    case IMAGE:
+        return static_cast<ImageData*>(data->ptr)->base.onClick;
+    case VIEW:
+        return static_cast<ViewData*>(data->ptr)->base.onClick;
+    case TEXT:
+        return static_cast<TextData*>(data->ptr)->base.onClick;
+    default:
+        throw std::runtime_error("Coudn't access texture of the passed in data");
+    }
+}
+
+std::function<void()>& UI::GetOnHoverEnter(UIData* data) {
+    switch (data->type) {
+    case IMAGE:
+        return static_cast<ImageData*>(data->ptr)->base.onHoverEnter;
+    case VIEW:
+        return static_cast<ViewData*>(data->ptr)->base.onHoverEnter;
+    case TEXT:
+        return static_cast<TextData*>(data->ptr)->base.onHoverEnter;
+    default:
+        throw std::runtime_error("Coudn't access texture of the passed in data");
+    }
+}
+
+std::function<void()>& UI::GetOnHoverExit(UIData* data) {
+    switch (data->type) {
+    case IMAGE:
+        return static_cast<ImageData*>(data->ptr)->base.onHoverExit;
+    case VIEW:
+        return static_cast<ViewData*>(data->ptr)->base.onHoverExit;
+    case TEXT:
+        return static_cast<TextData*>(data->ptr)->base.onHoverExit;
+    default:
+        throw std::runtime_error("Coudn't access texture of the passed in data");
+    }
+}
+
+bool& UI::GetIsHovered(UIData* data) {
+    switch (data->type) {
+    case IMAGE:
+        return static_cast<ImageData*>(data->ptr)->base.isHovered;
+    case VIEW:
+        return static_cast<ViewData*>(data->ptr)->base.isHovered;
+    case TEXT:
+        return static_cast<TextData*>(data->ptr)->base.isHovered;
+    default:
+        throw std::runtime_error("Coudn't access texture of the passed in data");
+    }
+}
+
 
 // Text
 

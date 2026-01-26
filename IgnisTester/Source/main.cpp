@@ -15,7 +15,7 @@ void CursorMoved(Window window) {
 int main() {
     std::vector<int> surfaces;
 
-	//need to initialize the input before using
+	//need to initialize the input before using/
 	Input::Init();
 
 	CreateGraphicPipeLineInfo gpInfo{};
