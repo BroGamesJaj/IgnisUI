@@ -163,9 +163,9 @@ Render::UIRenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<UIDa
 
         UI::ProcessData calcData{ .ofst{ data.ofst.x + elementOffset.x, data.ofst.y + elementOffset.y }, .size{ elementSize } };
 
-        Area2<double>& area = GetArea(element);
-        area = Area2<double>(Vec2<double>(calcData.ofst.x / 2, calcData.ofst.y / 2), 
-            Vec2<double>((calcData.ofst.x + calcData.size.x) / 2, (calcData.ofst.y + calcData.size.y) / 2));
+        Area2<float>& area = GetArea(element);
+        area = Area2<float>(Vec2<float>(calcData.ofst.x / 2, calcData.ofst.y / 2),
+            Vec2<float>((calcData.ofst.x + calcData.size.x) / 2, (calcData.ofst.y + calcData.size.y) / 2));
 
         if (element->type == TEXT) {
             UIVertexData textVertexData = GenerateTextVertecies(calcData, element, GetColor(element));
@@ -227,7 +227,7 @@ UI::UIVertexData UI::GenerateVertecies(UI::ProcessData procDt, int textureId, Co
     return returnData;
 }
 
-UI::UIData* UI::FindFirstClicked(std::vector<UIData*>& elements, Vec2<double>& position) {
+UI::UIData* UI::FindFirstClicked(std::vector<UIData*>& elements, Vec2<float>& position) {
     //TODO: need to implement recursive selection
     
     UIData* clickedElement = nullptr;
@@ -250,7 +250,7 @@ UI::UIData* UI::FindFirstClicked(std::vector<UIData*>& elements, Vec2<double>& p
 void UI::HandleClick(Window window) {
     Vec2i windowSize = Input::WindowSize(window);
     Vec2<double> cursorPositoin = Input::CursorPosition(window);
-    Vec2<double> position = Vec2<double>(cursorPositoin.x / (double)windowSize.x, cursorPositoin.y / (double)windowSize.y);
+    Vec2<float> position = Vec2<float>(cursorPositoin.x / (float)windowSize.x, cursorPositoin.y / (float)windowSize.y);
 
     Input::MouseData mouse = Input::Mouse(window);
     if (mouse.action == GLFW_PRESS && mouse.button == GLFW_MOUSE_BUTTON_LEFT) {
@@ -420,7 +420,7 @@ int& UI::GetTexture(UIData* data) {
     }
 }
 
-UI::Area2<double>& UI::GetArea(UIData* data) {
+UI::Area2<float>& UI::GetArea(UIData* data) {
     switch (data->type) {
     case IMAGE:
         return static_cast<ImageData*>(data->ptr)->base.area;

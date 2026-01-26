@@ -21,6 +21,7 @@ int main() {
 	CreateGraphicPipeLineInfo gpInfo{};
 	gpInfo.vertexShader = "../Resources/Shaders/shader.vert";
 	gpInfo.fragmentShader = "../Resources/Shaders/shader.frag";
+	gpInfo.blendEnable = true;
 
 	Render::Init(true);
 

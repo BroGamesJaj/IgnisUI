@@ -104,30 +104,47 @@ class Render {
         friend class UI;
     };
 
-    struct CreateRenderPassInfo {
-        CreateRenderPassInfo() {};
+    struct CreateGraphicPipeLineInfo {
+        CreateGraphicPipeLineInfo() {};
 
         enum class Samples { x1, x2, x4, x8 };
-        enum class LoadOp { Clear, Load, DontCare };
-        enum class StoreOp { Store, DontCare };
-        enum class ImageLayout { Undefined, PresentSrcKHR };
+        enum class Topology { Point, Line, Triangle };
+        enum class Culling { Front, Back, None };
+        enum class FrontFace { Clockwise, CounterClockwise };
+        enum class BlendFactor { 
+            SrcAlpha, DstAlpha, OneMinusSrcAlpha, OneMinusDstAlpha,
+            SrcColor, DstColor, OneMinusSrcColor, OneMinusDstColor
+        };
+        enum class BlendMode { Add, Sub, Max, Min };
 
-        Samples samples = Samples::x1;
-        LoadOp loadOp = LoadOp::Clear;
-        StoreOp storeOp = StoreOp::Store;
-        LoadOp stencilLoadOp = LoadOp::DontCare;
-        StoreOp stencilStoreOp = StoreOp::DontCare;
-        ImageLayout initialLayout = ImageLayout::Undefined;
-        ImageLayout finalLayout = ImageLayout::PresentSrcKHR;
-    };
-
-    struct CreateGraphicPipeLineInfo {
         std::string vertexShader;
         std::string fragmentShader;
-        std::string geometryShader;
 
-        // it should have so much else, like
-        // multisampling, vertex setup, stuff like that
+        float clearBit[3] = { 1.0f, 1.0f, 1.0f };
+        float stencilBit[2] = { 1.0, 0.0f };
+
+        Topology topology = Topology::Triangle;
+        Culling culling = Culling::Back;
+        FrontFace frontFace = FrontFace::CounterClockwise;
+
+        float lineWidth = 1.0f;
+
+        Samples samples = Samples::x1;
+
+        bool sampleShading = false;
+        float minSampleShading = 1.0f;
+
+        bool blendEnable = false;
+        BlendFactor scrColorBlend = BlendFactor::SrcAlpha;
+        BlendFactor dstColorBlend = BlendFactor::OneMinusSrcAlpha;
+        BlendMode colorBlendOp = BlendMode::Add;
+        BlendFactor scrAlphaBlend = BlendFactor::SrcAlpha;
+        BlendFactor dstAlphaBlend = BlendFactor::OneMinusSrcAlpha;
+        BlendMode alphaBlendOp = BlendMode::Add;
+
+        bool depthTesting = false;
+        bool depthWriting = false;
+
     };
 
     struct UIRenderData {
@@ -142,7 +159,7 @@ class Render {
     static void Clean();
 
     static Window CreateAppWindow(int width, int height, const char *title, GLFWmonitor *screen = nullptr, GLFWwindow *share = nullptr);
-    static int CreateSurface(Window window, CreateGraphicPipeLineInfo graphicPipeLineInfo, CreateRenderPassInfo renderPassInfo = {});
+    static int CreateSurface(Window window, CreateGraphicPipeLineInfo graphicPipeLineInfo);
     static int CreateTexture(std::string path);
 
     static int CreateFontPage(const std::vector<uint8_t> &rgbaData, uint32_t width, uint32_t height);
@@ -237,7 +254,7 @@ class UI {
         int textureId;
         Color color;
 
-        Area2<double> area;
+        Area2<float> area;
     };
 
     struct TextData {
@@ -274,11 +291,10 @@ class UI {
         bool Valid() { return data; }
 
        protected:
-        const int id;
         int &textureId;
         Color &color;
-        Area2<double> &area;
-
+        Area2<float> &area;
+        const int id;
         friend class UI;
     };
 
@@ -438,7 +454,7 @@ class UI {
     static Vec2f &GetSize(UIData *data);
     static int& GetTexture(UIData* data);
     static Color& GetColor(UIData* data);
-    static Area2<double>& GetArea(UIData* data);
+    static Area2<float>& GetArea(UIData* data);
 
     // Text
     static std::string &GetText(UIData *data);
@@ -455,7 +471,7 @@ class UI {
     static Text &GetTextElement(UIData *data);
 
     static void HandleClick(Window window);
-    static UIData* FindFirstClicked(std::vector<UIData*>& elements, Vec2<double>& position);
+    static UIData* FindFirstClicked(std::vector<UIData*>& elements, Vec2<float>& position);
 
     friend class Input;
 };
