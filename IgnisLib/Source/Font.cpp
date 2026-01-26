@@ -427,6 +427,7 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
 
             auto [unicode, cp] = validPageCodepoints[rects[i].id];
             // EXPERIMENTAL
+            /*
             FT_Load_Glyph(ftFace, cp, FT_LOAD_DEFAULT);
             if (ftFace->glyph->format == FT_GLYPH_FORMAT_OUTLINE) {
                 std::cout << "outline\n";
@@ -436,6 +437,7 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
 
             // EXPERIMENTAL END
             FT_Load_Glyph(ftFace, cp, FT_LOAD_RENDER);
+            */
 
             const FT_Bitmap &bmp = ftFace->glyph->bitmap;
             FT_GlyphSlot slot = ftFace->glyph;

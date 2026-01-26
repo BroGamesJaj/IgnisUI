@@ -7,9 +7,9 @@
 using namespace Ignis;
 
 //Resize callback
-void Resized(Window window) {
-	Vec2i curSize = Input::WindowSize(window);
-	std::cout << "Curent window size: " << curSize.x << "; " << curSize.y << std::endl;
+void CursorMoved(Window window) {
+	Vec2<double> curPos = Input::CursorPosition(window);
+	std::cout << "Curent cursor position: " << curPos.x << "; " << curPos.y << std::endl;
 }
 
 int main() {
@@ -28,27 +28,28 @@ int main() {
 
 	//need to initialize the window & hook a callback witch has a window as an input
 	Input::InitWindow(window1);
-	Input::HookFramebufferSizeCallback(window1, Resized);
+	Input::HookInputCursorPositionCallback(window1, CursorMoved);
 
 	int surface = Render::CreateSurface(window1, gpInfo);
 	surfaces.push_back(surface);
 
-	int monika = Render::CreateTexture("../Resources/Textures/monika2.png");
-	int sus = Render::CreateTexture("../Resources/Textures/goated0.bmp");
+	//int monika = Render::CreateTexture("../Resources/Textures/monika2.png");
+	//int sus = Render::CreateTexture("../Resources/Textures/goated0.bmp");
 
-	//int fontId = UI::LoadFont("../DejaVuSans.ttf");
+	int fontId = UI::LoadFont("../DejaVuSans.ttf");
 
 	UI::SetMainSurface(surface);
 
 	Color tip(0, 255, 0);
 	Color base = tip.Inverted();
 
-	//Text text = Text(Vec2f(40, 10), Vec2f(100,20), "heooo fak yeah", fontId);
+	Text text = Text(Vec2f(40, 10), Vec2f(100,100), "heooo fak yeah", fontId);
 
-	Image image = Image( Vec2f(40, 10), Vec2f(20, 40), monika);
-	Image image3 = Image(Vec2f(45, 15), Vec2f(20, 40), sus);
-	Image image2 = Image( Vec2f(25, 40), Vec2f(50, 20), tip);
-	UI::AddToSurface(surface, image2, image, image3);
+	View view = View(Vec2f(40, 10), Vec2f(20, 20), base);
+	Image image2 = Image(Vec2f(25, 40), Vec2f(50, 20), tip);
+	view.Add(image2);
+	view.Add(text);
+	UI::AddToSurface(surface, view);
 	UI::SubmitSurface();
 
 	while (surfaces.size() != 0)

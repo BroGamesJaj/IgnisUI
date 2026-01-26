@@ -164,28 +164,31 @@ void UI::SubmitSurface(int surface) {
     Render::AddUIElementData(outputData);
 }
 
-Render::UIRenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<Element> &elements) {
+Render::UIRenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<UIData*> &elements) {
     Render::UIRenderData returnData;
 
     int additionIndex = 0;
 
-    for (auto &element : elements) {
-        Vec2f elementSize = { data.size.x / 100 * element.size.x, data.size.y / 100 * element.size.y };
-        Vec2f elementOffset = { data.size.x / 100 * element.position.x, data.size.y / 100 * element.position.y };
+    for (auto element : elements) {
+        Vec2f& position = GetPosition(element);
+        Vec2f& size = GetSize(element);
+
+        Vec2f elementSize = { data.size.x / 100 * size.x, data.size.y / 100 * size.y };
+        Vec2f elementOffset = { data.size.x / 100 * position.x, data.size.y / 100 * position.y };
 
         UI::ProcessData calcData{ .ofst{ data.ofst.x + elementOffset.x, data.ofst.y + elementOffset.y }, .size{ elementSize } };
-        if (element.data->type == TEXT) {
-            UIVertexData textVertexData = GenerateTextVertecies(calcData, element.data, GetColor(element.data));
+        if (element->type == TEXT) {
+            UIVertexData textVertexData = GenerateTextVertecies(calcData, element, GetColor(element));
 
             returnData.vertecies.insert(returnData.vertecies.end(), textVertexData.vertecies.begin(), textVertexData.vertecies.end());
-
+            
             // fun word
             for (auto indicy : textVertexData.indicies) {
                 returnData.indicies.push_back(indicy + additionIndex);
             }
             additionIndex += textVertexData.vertecies.size();
         } else {
-            UI::UIVertexData vertexData = GenerateVertecies(calcData, element.textureId, element.color);
+            UI::UIVertexData vertexData = GenerateVertecies(calcData, GetTexture(element), GetColor(element));
 
             returnData.vertecies.insert(returnData.vertecies.end(), vertexData.vertecies.begin(), vertexData.vertecies.end());
 
@@ -198,12 +201,12 @@ Render::UIRenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<Elem
 
         Render::UIRenderData childData;
 
-        if (element.data->type == VIEW) {
-            auto &view = static_cast<View &>(element);
-            childData = UI::ProcessVertecies(calcData, *view.elements);
-        } else if (element.data->type == BUTTON) {
-            auto &button = static_cast<Button &>(element);
-            std::vector<Element> text = { button.text };
+        if (element->type == VIEW) {
+            auto view = static_cast<ViewData*>(element->ptr);
+            childData = UI::ProcessVertecies(calcData, view->elements);
+        } else if (element->type == BUTTON) {
+            auto button = static_cast<ButtonData*>(element->ptr);
+            std::vector<UIData*> text = { button->text.data };
             childData = UI::ProcessVertecies(calcData, text);
         }
 
@@ -411,10 +414,10 @@ int &UI::GetTexture(UIData *data) {
 
 // View
 
-std::vector<UI::Element> *UI::GetChildrens(UIData *data) {
+std::vector<UI::UIData*> &UI::GetChildrens(UIData *data) {
     switch (data->type) {
         case VIEW:
-            return &static_cast<ViewData *>(data->ptr)->elements;
+            return static_cast<ViewData *>(data->ptr)->elements;
         default:
             throw std::runtime_error("Coudn't access childrends of the passed in data");
     }
@@ -446,6 +449,6 @@ int UI::mainSurface = -1;
 std::unordered_map<int, Font::Font *> UI::fonts;
 int UI::nextId = 0;
 int UI::nextFontId = 1;
-std::unordered_map<int, std::vector<UI::Element>> UI::elements;
+std::unordered_map<int, std::vector<UI::UIData*>> UI::elements;
 std::unordered_set<UI::UIData *> UI::dataPtrs;
 }  // namespace Ignis

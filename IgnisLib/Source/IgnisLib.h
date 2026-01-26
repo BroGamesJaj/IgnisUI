@@ -239,7 +239,7 @@ class UI {
 
     struct ViewData {
         ElementData base;
-        std::vector<Element> elements;
+        std::vector<UIData*> elements;
     };
 
     class Element {
@@ -323,23 +323,26 @@ class UI {
     };
 
     class View : public Element {
-        View(Vec2f position, Vec2f size, std::optional<int> textureId, std::optional<Color> color) : Element(VIEW), elements(GetChildrens(data)) {
-            if (textureId.has_value())
-                this->textureId = textureId.value();
-            else
-                this->textureId = 0;
-
-            if (color.has_value())
-                this->color = color.value();
-            else
-                this->color = Color();
+    public:
+        View(Vec2f position, Vec2f size, int textureId, Color color, bool dummy) : Element(VIEW), elements(GetChildrens(data)) { 
+            this->position = position;
+            this->size = size;
+            this->textureId = textureId;
+            this->color = color;
         }
 
-        std::vector<Element> *elements;
+        View(Vec2f position, Vec2f size, int textureId, Color color) : View(position, size, textureId, color, true) {}
 
-        void Add(Element &element) { elements->push_back(element); }
+        View(Vec2f position, Vec2f size, Color color) : View(position, size, 0, color, true) {}
 
-        void Pop(Element &element) {}
+        View(Vec2f position, Vec2f size, int textureId) : View(position, size, textureId, Color(), true) {}
+
+        void Add(Element& element) { elements.push_back(element.data); }
+
+        void Pop(Element& element) {}
+
+    private:
+        std::vector<UIData*> &elements;
 
         friend class UI;
     };
@@ -376,7 +379,7 @@ class UI {
     static void AddToSurface(int surface, Args &...args) {
         if (!Render::IsValidSurface(surface)) return;
 
-        (elements[surface].push_back(args), ...);
+        (elements[surface].push_back(args.data), ...);
     }
 
     static void SubmitSurface(int surface = mainSurface);
@@ -389,7 +392,7 @@ class UI {
 
    private:
     static int mainSurface;
-    static std::unordered_map<int, std::vector<Element>> elements;
+    static std::unordered_map<int, std::vector<UIData*>> elements;
     static int nextId;
     static std::unordered_set<UIData *> dataPtrs;
     static std::unordered_map<int, Font::Font *> fonts;
@@ -405,7 +408,7 @@ class UI {
         std::vector<uint32_t> indicies;
     };
 
-    static Render::UIRenderData ProcessVertecies(ProcessData data, std::vector<Element> &elements);
+    static Render::UIRenderData ProcessVertecies(ProcessData data, std::vector<UIData*> &elements);
     static UIVertexData GenerateVertecies(UI::ProcessData procData, int textureId, Color color);
 
     // Data Handling
@@ -428,7 +431,7 @@ class UI {
     static Color &GetColor(UIData *data);
 
     // View
-    static std::vector<Element> *GetChildrens(UIData *data);
+    static std::vector<UIData*> &GetChildrens(UIData *data);
 
     // Button
     static void *&GetFunction(UIData *data);
