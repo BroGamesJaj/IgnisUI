@@ -202,11 +202,6 @@ void Font::initializeFont(const std::string filename) {
 }
 
 std::vector<ShapedGlyph> Font::shapeText(const std::u32string &text, int fontSize, TextAlign align, TextDirection direction, Style style) {
-    // TODO: not appease the unused warnings
-    align = align;
-    direction = direction;
-    style = style;
-
     fontSize = defaultSize;
 
     hb_font_t *font = hb_ft_font_create_referenced(ftFace);
@@ -229,13 +224,9 @@ std::vector<ShapedGlyph> Font::shapeText(const std::u32string &text, int fontSiz
     std::vector<ShapedGlyph> shapedGlyphs;
     shapedGlyphs.reserve(glyphCount);
     std::vector<hb_codepoint_t> notPaged;
-    hb_position_t cursorX = 0;
-    hb_position_t cursorY = 0;
-    int same = 0;
     for (uint32_t i = 0; i < glyphCount; i++) {
         hb_codepoint_t cp = glyphInfo[i].codepoint;
         uint32_t cluster = glyphInfo[i].cluster;
-        if (pagePosition[fontSize].contains(cp)) same++;
         Glyph *glyph = nullptr;
         uint32_t pN = 0;
         uint32_t texId = 0;
@@ -257,8 +248,6 @@ std::vector<ShapedGlyph> Font::shapeText(const std::u32string &text, int fontSiz
         hb_position_t yAdvance = glyphPos[i].y_advance;
 
         shapedGlyphs.push_back({ glyph, texId, xOffset, yOffset, xAdvance, yAdvance, cluster });
-        cursorX += xAdvance;
-        cursorY += yAdvance;
     }
     hb_buffer_destroy(buf);
     hb_font_destroy(font);
@@ -283,13 +272,56 @@ uint16_t nextPow2(uint16_t num) {
     return num;
 }
 
+enum BezierOrder {
+    UNSET = 0,
+    LINEAR = 2,
+    QUADRATIC = 3,
+    CUBIC = 4
+};
+
+std::string bezierOrderToString(BezierOrder order) {
+    switch (order) {
+        case UNSET:
+            return "unset";
+        case LINEAR:
+            return "linear";
+        case QUADRATIC:
+            return "quadratic";
+        case CUBIC:
+            return "cubic";
+    }
+    assert(false && "unreachable return");
+}
+
+template <typename T>
+bool isBitSet(T var, int index) {
+    return ((1 << index) & var) != 0;
+}
+
+bool isOnCurve(unsigned char tag) {
+    return isBitSet(tag, 0);
+}
+
+BezierOrder getBezierOrder(unsigned char tag) {
+    if (isBitSet(tag, 1)) {
+        return CUBIC;
+    } else {
+        return QUADRATIC;
+    }
+}
+struct Bezier {
+    std::vector<uint16_t> pointsIdx;
+    BezierOrder order = UNSET;
+};
+
 struct Outline {
     Outline(FT_Outline &ftOutline) {
         flags = ftOutline.flags;
         numContours = ftOutline.n_contours;
         numPoints = ftOutline.n_points;
-        points.reserve(numPoints);
-        tags.reserve(numPoints);
+
+        points.resize(numPoints);
+        tags.resize(numPoints);
         for (int pIdx = 0; pIdx < numPoints; pIdx++) {
             points[pIdx].x = ftOutline.points[pIdx].x;
             points[pIdx].y = ftOutline.points[pIdx].y;
@@ -297,21 +329,202 @@ struct Outline {
             tags[pIdx] = ftOutline.tags[pIdx];
         }
 
-        contours.reserve(numContours);
-        for (int cIdx = 0; cIdx < numContours; cIdx++) contours[cIdx] = ftOutline.contours[cIdx];
+        contours.resize(numContours);
+        for (int cIdx = 0; cIdx < numContours; cIdx++) {
+            contours[cIdx] = ftOutline.contours[cIdx];
+        }
+    }
+
+    void printOutline() {
+        std::cout << "numContours: " << numContours << "\n";
+        std::cout << "numPoints: " << numPoints << "\n";
+        for (int pIdx = 0; pIdx < numPoints; pIdx++) {
+            std::cout << "pointIdx: " << pIdx << " xy:(" << points[pIdx].x << "," << points[pIdx].y << ")" << " onCurve: " << isOnCurve(tags[pIdx]) << " " << (isOnCurve(tags[pIdx]) ? "" : bezierOrderToString(getBezierOrder(tags[pIdx]))) << "\n";
+        }
+        for (int cIdx = 0; cIdx < numContours; cIdx++) {
+            std::cout << "contour start: " << ((cIdx > 0) ? contours[cIdx - 1] + 1 : 0) << ", end: " << contours[cIdx] << "\n";
+        }
+    }
+
+    void printBeziers() {
+        for (auto &[contourIdx, curves] : curvesInContours) {
+            for (auto &bez : curves) {
+                std::cout << "pIdxs: ";
+                for (auto &pIdx : bez.pointsIdx) {
+                    std::cout << pIdx << " ";
+                }
+                std::cout << "\n";
+                std::cout << "bez order: " << bezierOrderToString(bez.order) << "\n";
+            }
+        }
     }
 
     uint16_t numContours;
     uint16_t numPoints;
+    int flags;
 
-    std::vector<Vec2i> points;        // length of numPoints
+    std::vector<Vec2f> points;        // length of numPoints
     std::vector<unsigned char> tags;  // length of numPoints
     std::vector<uint16_t> contours;   // length of numContours
 
-    int flags;
+    std::unordered_map<uint16_t, std::vector<Bezier>> curvesInContours;
+    void addImpliedPoints();
+    void populateBeziers();
 };
 
+void Outline::addImpliedPoints() {
+    // first contour starts at point 0
+    uint16_t contourStart = 0;
+    uint16_t contourEnd = 0;
+    uint16_t impliedPointsCount = 0;
+    for (uint16_t contIdx = 0; contIdx < numContours; contIdx++) {
+        // Every contour after the first starts at cotours[i] + 1
+        if (contIdx > 0) contourStart = contourEnd + 1;
+        contourEnd = contours[contIdx] + impliedPointsCount;
+        for (uint16_t pIdx = contourStart; pIdx < contourEnd; pIdx++) {
+            uint16_t nextPIdx = (pIdx == contourEnd) ? contourStart : pIdx + 1;
+            bool onCurve0 = isOnCurve(tags[pIdx]);
+            bool onCurve1 = isOnCurve(tags[nextPIdx]);
+            if (onCurve0 || onCurve1) continue;
+
+            if (CUBIC == getBezierOrder(tags[pIdx]) || CUBIC == getBezierOrder(tags[nextPIdx])) return;
+
+            Vec2f impliedPoint{};
+            impliedPoint = (points[pIdx] + points[nextPIdx]) / 2.0f;
+            points.emplace(points.begin() + nextPIdx, impliedPoint);
+            tags.insert(tags.begin() + nextPIdx, { 0x1 });  // only set the onCurve bit
+            pIdx++;
+            contourEnd++;
+            impliedPointsCount++;
+        }
+        contours[contIdx] = contourEnd;
+    }
+    numPoints = points.size();
+}
+
+void Outline::populateBeziers() {
+    // first contour starts at point 0
+    uint16_t contourStart = 0;
+    uint16_t contourEnd = 0;
+    for (uint16_t contIdx = 0; contIdx < numContours; contIdx++) {
+        // Every contour after the first starts at cotours[i] + 1
+        if (contIdx > 0) contourStart = contourEnd + 1;
+        contourEnd = contours[contIdx];
+        Bezier bz{};
+        for (uint16_t pIdx = contourStart; pIdx <= contourEnd + 1; ++pIdx) {
+            uint16_t idx = (pIdx == contourEnd + 1) ? contourStart : pIdx;
+            bool onCurve = isOnCurve(tags[idx]);
+
+            bz.pointsIdx.push_back(idx);
+
+            if (bz.order == UNSET) {
+                if (!onCurve)
+                    bz.order = getBezierOrder(tags[idx]);
+                else if (bz.pointsIdx.size() == 2)
+                    bz.order = LINEAR;
+            }
+
+            if (bz.order && bz.pointsIdx.size() == bz.order) {
+                curvesInContours[contIdx].push_back(bz);
+                bz = {};
+                bz.pointsIdx.push_back(idx);
+            }
+        }
+    }
+}
+
+// one or multiple bezier curves
+struct Segment {
+    uint16_t startIdx;
+    uint16_t endIdx;
+};
+
+Vec2f derivativeOfBezier(Outline &outline, const Bezier &bez, const float t) {
+    if (bez.order == LINEAR) {
+        Vec2f &P0 = outline.points[bez.pointsIdx[0]];
+        Vec2f &P1 = outline.points[bez.pointsIdx[1]];
+        return P1 - P0;
+    } else if (bez.order == QUADRATIC) {
+        Vec2f &P0 = outline.points[bez.pointsIdx[0]];
+        Vec2f &P1 = outline.points[bez.pointsIdx[1]];
+        Vec2f &P2 = outline.points[bez.pointsIdx[2]];
+
+        if (t == 0)
+            return (P1 - P0) * 2.0f;  // 2(P1 - P0)
+        else if (t == 1)
+            return (P2 - P1) * 2.0f;  // 2(P2 - P1)
+        else
+            // 2t(P2 - 2P1 + P0) + 2(P1 - P0)
+            return (P2 - P1 * 2.0f + P0) * 2 * t + (P1 - P0) * 2.0f;
+
+    } else if (bez.order == CUBIC) {
+        Vec2f &P0 = outline.points[bez.pointsIdx[0]];
+        Vec2f &P1 = outline.points[bez.pointsIdx[1]];
+        Vec2f &P2 = outline.points[bez.pointsIdx[2]];
+        Vec2f &P3 = outline.points[bez.pointsIdx[3]];
+
+        if (t == 0)
+            return (P2 - P1) * 3.0f;  // 3(P2-P1)
+        else if (t == 1)
+            return (P3 - P2) * 3.0f;  // 3(P3-P2)
+        else
+            // 3t^2(P3 − 3P2 + 3P1 − P0) + 6t(P2 − 2P1 + P0) + 3(P1 − P0)
+            return (P3 - P2 * 3.0f + P1 * 3.0f - P0) * 3 * pow(t, 2) + (P2 - P1 * 2.0f + P0) * 6.0f * t + (P1 - P0) * 3;
+    }
+    assert(false && "unreachable");
+}
+
+// This is used for getting the start and end point index of a continuous segment
+std::vector<Segment> getSegments(Outline &outline, float acceptedAngleDeviation) {
+    std::vector<Segment> segments{};
+    // first contour starts at point 0
+    for (uint16_t contIdx = 0; contIdx < outline.numContours; contIdx++) {
+        std::vector<Bezier> &beziers = outline.curvesInContours[contIdx];
+        Segment seg{};
+        seg.startIdx = beziers[0].pointsIdx[0];
+        for (uint16_t bIdx = 0; bIdx < beziers.size(); bIdx++) {
+            uint16_t nextBIdx = (bIdx + 1) % beziers.size();
+            Bezier &bez0 = beziers[bIdx];
+            Bezier &bez1 = beziers[nextBIdx];
+            // get the direction of the bezier at the same points
+            // bez0's last point is the first point of bez1
+            // so we take bez0 at t = 1 and bez1 at t = 0
+            Vec2f derBez0 = derivativeOfBezier(outline, bez0, 1);
+            Vec2f derBez1 = derivativeOfBezier(outline, bez1, 0);
+
+            // normalize the derivatives
+            Vec2f normDerBez0 = derBez0.normalize();
+            Vec2f normDerBez1 = derBez1.normalize();
+
+            float crossProduct = normDerBez0.crossProduct(normDerBez1);
+            float sinDev = sin(acceptedAngleDeviation);
+            // check if its a corner
+            if (std::abs(crossProduct) > sinDev) {
+                seg.endIdx = beziers[bIdx].pointsIdx.back();
+                std::cout << "seg start: " << seg.startIdx << ", end: " << seg.endIdx << "\n";
+                segments.push_back(seg);
+
+                seg.startIdx = beziers[nextBIdx].pointsIdx.front();
+            }
+        }
+        if (seg.startIdx != beziers.back().pointsIdx.back()) {
+            seg.endIdx = beziers.back().pointsIdx.back();
+            std::cout << "seg start: " << seg.startIdx << ", end: " << seg.endIdx << "\n";
+            segments.push_back(seg);
+        }
+    }
+
+    return segments;
+}
+
 void generateMSDF(uint8_t *bmp, Outline outline, int channel = 1) {
+    std::cout << "generate MSDF\n";
+    outline.addImpliedPoints(); // TODO: this can probably be moved to Outline Initialization
+    outline.printOutline();
+    outline.populateBeziers(); // TODO: this can probably be moved to Outline Initialization
+    outline.printBeziers();
+    constexpr float maxDiff = std::numbers::pi / 18; // 10 degrees
+    getSegments(outline, maxDiff);
 }
 
 void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeEnd, int16_t fontSize, const Style style, const TextDirection, const int maxCharPerPage, const bool autoPageSize, const uint16_t pSize) {
@@ -426,15 +639,19 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
             }
 
             auto [unicode, cp] = validPageCodepoints[rects[i].id];
+
             // EXPERIMENTAL
             FT_Load_Glyph(ftFace, cp, FT_LOAD_DEFAULT);
-            if (ftFace->glyph->format == FT_GLYPH_FORMAT_OUTLINE) {
+            if (i == 0 && ftFace->glyph->format == FT_GLYPH_FORMAT_OUTLINE) {
                 std::cout << "outline\n";
-                auto &outline = ftFace->glyph->outline;
+                std::cout << (char)unicode << "\n";
+                auto &ol = ftFace->glyph->outline;
+                Outline outline(ol);
                 generateMSDF(nullptr, outline);
             };
 
             // EXPERIMENTAL END
+
             FT_Load_Glyph(ftFace, cp, FT_LOAD_RENDER);
 
             const FT_Bitmap &bmp = ftFace->glyph->bitmap;

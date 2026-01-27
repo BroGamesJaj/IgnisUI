@@ -40,7 +40,9 @@ class Font;
 }  // namespace Font
 
 template <typename T>
-    requires std::is_arithmetic_v<T>
+concept arithmetic = std::is_arithmetic_v<T>;
+
+template <arithmetic T>
 struct Vec2 {
     Vec2() : x(0), y(0) {}
     Vec2(T x, T y) : x(x), y(y) {}
@@ -48,30 +50,47 @@ struct Vec2 {
     T x;
     T y;
 
-    Vec2 operator+(const Vec2& other) const { return Vec2{ x + other.x, y + other.y }; }
-    Vec2 operator-(const Vec2& other) const { return Vec2{ x - other.x, y - other.y }; }
-    Vec2& operator+=(const Vec2& other) {
+    Vec2 operator+(const Vec2 &other) const { return Vec2{ x + other.x, y + other.y }; }
+    Vec2 operator-(const Vec2 &other) const { return Vec2{ x - other.x, y - other.y }; }
+    Vec2 &operator+=(const Vec2 &other) {
         x += other.x;
         y += other.y;
         return *this;
     }
-    Vec2& operator-=(const Vec2& other) {
+    Vec2 &operator-=(const Vec2 &other) {
         x -= other.x;
         y -= other.y;
         return *this;
     }
-    Vec2 operator*(const Vec2& other) const { return Vec2{ x * other.x, y * other.y }; }
-    Vec2 operator/(const Vec2& other) const { return Vec2{ x / other.x, y / other.y }; }
-    Vec2& operator*=(const Vec2& other) {
+    Vec2 operator*(const Vec2 &other) const { return Vec2{ x * other.x, y * other.y }; }
+    Vec2 operator*(const T &scalar) const { return { x * scalar, y * scalar }; }
+
+    Vec2 operator/(const Vec2 &other) const { return Vec2{ x / other.x, y / other.y }; }
+    Vec2 operator/(const T &scalar) const { return { x / scalar, y / scalar }; }
+
+    Vec2 &operator*=(const Vec2 &other) {
         x *= other.x;
         y *= other.y;
         return *this;
     }
-    Vec2& operator/=(const Vec2& other) {
+    Vec2 &operator/=(const Vec2 &other) {
         x /= other.x;
         y /= other.y;
         return *this;
     }
+    Vec2 &operator*=(const T &scalar) {
+        x *= scalar;
+        y *= scalar;
+        return *this;
+    }
+    Vec2 &operator/=(const T &scalar) {
+        x /= scalar;
+        y /= scalar;
+        return *this;
+    }
+
+    Vec2 normalize() { return Vec2(x, y) / sqrt(pow(x, 2) + pow(y, 2)); }
+    T crossProduct(const Vec2 &other) { return x * other.y - y * other.x; }
 };
 
 #if defined(IGNIS_RENDER) || defined(IGNIS_UI)

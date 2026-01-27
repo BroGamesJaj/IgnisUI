@@ -36,7 +36,7 @@ int main() {
 	int monika = Render::CreateTexture("../Resources/Textures/monika2.png");
 	int sus = Render::CreateTexture("../Resources/Textures/goated0.bmp");
 
-	//int fontId = UI::LoadFont("../DejaVuSans.ttf");
+	int fontId = UI::LoadFont("../DejaVuSans.ttf");
 
 	UI::SetMainSurface(surface);
 
