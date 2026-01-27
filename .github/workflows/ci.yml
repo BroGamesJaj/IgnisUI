@@ -44,9 +44,14 @@ jobs:
       
       - name: install vulkan sdk
         run: |
-          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
-          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan.list \
-          https://packages.lunarg.com/vulkan/lunarg-vulkan.list
+          sudo mkdir -p /etc/apt/keyrings
+          curl -fsSL https://packages.lunarg.com/lunarg-signing-key-pub.asc \
+          | sudo gpg --dearmor -o /etc/apt/keyrings/lunarg.gpg
+
+          echo "deb [signed-by=/etc/apt/keyrings/lunarg.gpg] \
+          https://packages.lunarg.com/vulkan/ubuntu jammy main" \
+          | sudo tee /etc/apt/sources.list.d/lunarg-vulkan.list
+
           sudo apt update
           sudo apt install -y vulkan-sdk
 
