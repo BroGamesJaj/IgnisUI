@@ -42,19 +42,12 @@ jobs:
             libxrandr-dev \
             libxi-dev
       
-      - name: install vulkan sdk
-        run: |
-          sudo mkdir -p /etc/apt/keyrings
-          curl -fsSL https://packages.lunarg.com/lunarg-signing-key-pub.asc \
-          | sudo gpg --dearmor -o /etc/apt/keyrings/lunarg.gpg
-
-          echo "deb [signed-by=/etc/apt/keyrings/lunarg.gpg] \
-          https://packages.lunarg.com/vulkan/ubuntu jammy main" \
-          | sudo tee /etc/apt/sources.list.d/lunarg-vulkan.list
-
-          sudo apt update
-          sudo apt install -y vulkan-sdk
-
+      - name: Install Vulkan SDK
+        uses: humbletim/install-vulkan-sdk@v1.2
+        with:
+          version: 1.4.309.0
+          cache: true
+     
       - name: configure
         working-directory: IgnisTester
         run: cmake -S . -B build
