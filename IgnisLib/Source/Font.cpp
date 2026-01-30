@@ -202,6 +202,7 @@ void Font::initializeFont(const std::string filename) {
 
     // preloadAscii
     preloadPageByRange(0x0021, 0x007E);
+    packUnicodeRangeSDF(0x0021, 0x007E);
 }
 
 std::vector<ShapedGlyph> Font::shapeText(const std::u32string &text, int fontSize, TextAlign align, TextDirection direction, Style style) {
@@ -464,14 +465,14 @@ void Outline::populateBounds() {
     std::cout << "xMin: " << xMin << " xMax: " << xMax << "\n";
     std::cout << "yMin: " << yMin << " yMax: " << yMax << "\n";
 
-    uint16_t padding = unitsPerEM / 8;
-    xMin -= padding;
-    xMax += padding;
-    yMin -= padding;
-    yMax += padding;
-    std::cout << "\nBounds after padding:\n";
-    std::cout << "xMin: " << xMin << " xMax: " << xMax << "\n";
-    std::cout << "yMin: " << yMin << " yMax: " << yMax << "\n";
+    // uint16_t padding = unitsPerEM / 8;
+    // xMin -= padding;
+    // xMax += padding;
+    // yMin -= padding;
+    // yMax += padding;
+    // std::cout << "\nBounds after padding:\n";
+    // std::cout << "xMin: " << xMin << " xMax: " << xMax << "\n";
+    // std::cout << "yMin: " << yMin << " yMax: " << yMax << "\n";
 }
 
 void Outline::populateBeziers() {
@@ -599,7 +600,6 @@ void Outline::getSegments(float acceptedAngleDeviation) {
             // check if its a corner
             // NOTE: this may need a check if vectors are opposite
             if (std::fabs(crossProduct) > sinDev) {
-                std::cout << "corner\n";
                 segments.push_back(seg);
                 seg.bezierIdxs.clear();
             }
@@ -791,7 +791,14 @@ Bezier &Outline::findClosestBez(const Vec2f point, float *distOut = nullptr, flo
 };
 
 Vec2f Outline::transformCoord(const float x, const float y) {
-    return { x * xMax + (xMin / 2), (yMax - y * (yMax)) + (yMin / 2) };
+    float padding = 100;
+
+    float xSize = xMax - xMin;
+    float ySize = yMax - yMin;
+    float xPadding = (xSize < ySize) ? (1 - (xSize / ySize)) * ySize + padding : padding;
+    float yPadding = (ySize < xSize) ? (1 - (ySize / xSize)) * xSize + padding : padding;
+
+    return { x * (xMax + xPadding) + (xMin - (xPadding / 2)), yMax - y * ((yMax + yPadding) - (yMin - (yPadding / 2))) + (ySize - yPadding) };
 }
 
 uint8_t Outline::distToColor(const float dist, const float maxDist) {
@@ -806,9 +813,9 @@ void Outline::createBitmap(std::vector<uint8_t> &bmp, const uint16_t width = 64,
             float t;
             Bezier &bez = findClosestBez(p);
             float dist = shortestDistanceToBezier(p, bez, &t);
-            dist *= signOfDistance(p, bez, t) / 4;
+            dist *= signOfDistance(p, bez, t) / 8;
 
-            uint8_t color = distToColor(dist, 30);
+            uint8_t color = distToColor(dist, 100);
             uint32_t idx = (y * width + x) * 4;
             bmp[idx + 0] = color;
             bmp[idx + 1] = color;
@@ -822,17 +829,17 @@ void Outline::createBitmap(std::vector<uint8_t> &bmp, const uint16_t width = 64,
     fclose(fbmp);
 }
 
-void generateMSDF(std::vector<uint8_t> bmp, Outline outline, int channel = 1) {
-    std::cout << "generate MSDF\n";
+void generateMSDF(std::vector<uint8_t> &bmp, Outline outline, int channel = 1) {
+    // std::cout << "generate MSDF\n";
     outline.addImpliedPoints();  // TODO: this can probably be moved to Outline Initialization
-    outline.printOutline();
+    // outline.printOutline();
     outline.populateBounds();
     outline.populateBeziers();  // TODO: this can probably be moved to Outline Initialization
-    outline.printBeziers();
+    // outline.printBeziers();
     constexpr float maxDiff = std::numbers::pi / 18;  // 10 degrees
     outline.getSegments(maxDiff);
-    outline.printSegments();
-    // Vec2f point{ 400.0f, 496.0f };
+    // outline.printSegments();
+    // Vec2f point{ 1000.0f, 2500.0f };
     // std::cout << "Point: (" << point.x << "," << point.y << ")\n";
     //
     // float t = -1;
@@ -847,21 +854,19 @@ void generateMSDF(std::vector<uint8_t> bmp, Outline outline, int channel = 1) {
     // std::cout << "bez order: " << bezierOrderToString(bez.order) << "\n";
     // std::cout << "distance: " << dist << " t: " << t << "\n";
     float ratio = 1;  //(outline.yMax - outline.yMin) / (outline.xMax - outline.xMin);
-    std::cout << "ratio: " << ratio << "\n";
-    outline.createBitmap(bmp, 256, 256 * ratio);
+    // std::cout << "ratio: " << ratio << "\n";
+    outline.createBitmap(bmp, 64, 64 * ratio);
 }
 
-void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeEnd, int16_t fontSize, const Style style, const TextDirection, const int maxCharPerPage, const bool autoPageSize, const uint16_t pSize) {
+void Font::packUnicodeRangeSDF(const uint32_t unicodeStart, const uint32_t unicodeEnd, const Style style, const TextDirection, const int maxCharPerPage, const bool autoPageSize, const uint16_t pSize) {
     if (!ftFace) return;
 
-    if (fontSize < 1) fontSize = defaultSize;
-
-    FT_Set_Pixel_Sizes(ftFace, 0, fontSize);
+    FT_Set_Pixel_Sizes(ftFace, 0, 64);
     hb_face_t *hbFace = hb_ft_face_create_referenced(ftFace);
 
     std::vector<std::pair<unicode_t, hb_codepoint_t>> scriptCodepoints;
 
-    FT_ULong shitToFind = 0x1F60D;
+    FT_ULong shitToFind = 'u';
     FT_UInt glyphIndex;
     FT_ULong charcode = FT_Get_First_Char(ftFace, &glyphIndex);
     while (glyphIndex != 0) {
@@ -876,6 +881,10 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
                 std::cout << "outline\n";
                 std::cout << (char)shitToFind << "\n";
                 auto &ol = ftFace->glyph->outline;
+                std::cout << "x ppem: " << ftFace->size->metrics.x_ppem;
+                std::cout << "x scale: " << ftFace->size->metrics.x_scale;
+                std::cout << "y ppem: " << ftFace->size->metrics.y_ppem;
+                std::cout << "y scale: " << ftFace->size->metrics.y_scale;
                 uint16_t units = ftFace->units_per_EM;
                 std::cout << "units: " << units << "\n";
                 Outline outline(ol, units);
@@ -883,6 +892,184 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
                 generateMSDF(bitmap, outline);
             };
             // EXPERIMENTAL END
+        }
+        charcode = FT_Get_Next_Char(ftFace, charcode, &glyphIndex);
+    }
+
+    std::cout << "Packing U+" << std::hex << unicodeStart << std::dec << " - U+" << std::hex << unicodeEnd << std::dec << ": " << scriptCodepoints.size() << " glyphs\n";
+
+    hb_face_destroy(hbFace);
+
+    if (scriptCodepoints.empty()) return;
+
+    const uint16_t maxPageSize = 2048;
+    const uint32_t maxPageArea = maxPageSize * maxPageSize;
+    uint32_t charPerPage = maxCharPerPage;
+    if (maxCharPerPage < 1) {
+        uint64_t maxChars = (static_cast<uint64_t>(maxPageSize) * static_cast<uint64_t>(maxPageSize)) / (64 * 64);
+        charPerPage = std::min(static_cast<uint32_t>(scriptCodepoints.size()) + 1, static_cast<uint32_t>(std::round(maxChars)));
+    }
+
+    uint32_t padding = 4;
+
+    // Auto page size
+    uint16_t pageWidth = pSize, pageHeight = pSize;
+
+    int glyphsAdded = 0;
+    size_t glyphsProcessed = 0;
+    int pageCount = 0;
+    int badCounter = 0;
+    while (glyphsProcessed < scriptCodepoints.size()) {
+        uint32_t pageSize = 0;
+        size_t glyphsToPackCount = 0;
+        if (autoPageSize) {
+            uint32_t totalArea = 0;
+            for (size_t ci = glyphsProcessed; ci < scriptCodepoints.size(); ci++) {
+                int cp = scriptCodepoints[ci].second;
+                int unicode = scriptCodepoints[ci].first;
+                if (unicode < 0x0020) continue;
+                FT_Load_Glyph(ftFace, cp, FT_LOAD_DEFAULT);
+                // uint32_t w = ftFace->glyph->bitmap.width + padding;
+                // uint32_t h = ftFace->glyph->bitmap.rows + padding;
+                totalArea += (64 + padding) * (64 + padding);
+                if (totalArea > maxPageArea * 0.90 || glyphsToPackCount == charPerPage) {
+                    pageSize = std::min(maxPageSize, std::max(pageWidth, nextPow2(static_cast<uint16_t>(std::sqrt(totalArea)))));
+                    break;
+                }
+                glyphsToPackCount++;
+            }
+            if (pageSize == 0) pageSize = std::min(maxPageSize, std::max(pageWidth, nextPow2(static_cast<uint16_t>(std::sqrt(totalArea)))));
+        }
+        size_t glyphsToPack = std::min(static_cast<size_t>(glyphsToPackCount), scriptCodepoints.size() - glyphsProcessed);
+        std::vector<std::pair<unicode_t, hb_codepoint_t>> pageCodepoints(scriptCodepoints.begin() + glyphsProcessed, scriptCodepoints.begin() + glyphsProcessed + glyphsToPack);
+        pageWidth = pageHeight = pageSize;
+
+        Page page(pageWidth, pageHeight, 64, style);
+        std::vector<uint8_t> textureData(pageWidth * pageHeight * 4, 0);
+
+        std::vector<stbrp_rect> rects;
+        std::vector<std::pair<unicode_t, hb_codepoint_t>> validPageCodepoints;
+
+        // TODO: change this to something more efficient
+        for (size_t i = 0; i < glyphsToPack; ++i) {
+            auto [unicode, cp] = scriptCodepoints[glyphsProcessed + i];
+            FT_Load_Glyph(ftFace, cp, FT_LOAD_DEFAULT);
+
+            if (ftFace->glyph->format != FT_GLYPH_FORMAT_OUTLINE) {
+                badCounter++;
+                continue;
+            }
+
+            stbrp_rect rect;
+            rect.w = 64 + padding;
+            rect.h = 64 + padding;
+            rect.id = validPageCodepoints.size();
+            rects.push_back(rect);
+            validPageCodepoints.push_back({ unicode, cp });
+        }
+
+        if (rects.empty()) {
+            glyphsProcessed += glyphsToPack;
+            continue;
+        }
+        // Pack layout
+        stbrp_context context;
+        std::vector<stbrp_node> nodes(pageWidth);
+        stbrp_init_target(&context, pageWidth, pageHeight, nodes.data(), pageWidth);
+        stbrp_pack_rects(&context, rects.data(), rects.size());
+
+        int failedPacks = 0;
+        // BLIT shit together
+        for (size_t i = 0; i < rects.size(); ++i) {
+            if (!rects[i].was_packed) {
+                failedPacks++;
+                scriptCodepoints.push_back(validPageCodepoints[i]);
+                continue;
+            }
+
+            auto [unicode, cp] = validPageCodepoints[rects[i].id];
+            FT_Load_Glyph(ftFace, cp, FT_LOAD_DEFAULT);
+
+            FT_GlyphSlot slot = ftFace->glyph;
+
+            // offset the boxes by padding
+            int32_t glyph_x = rects[i].x + (padding / 2);
+            int32_t glyph_y = rects[i].y + (padding / 2);
+
+            FT_Load_Glyph(ftFace, cp, FT_LOAD_DEFAULT);
+
+            std::vector<uint8_t> bitmap;
+            if (ftFace->glyph->format == FT_GLYPH_FORMAT_OUTLINE) {
+                auto &ol = ftFace->glyph->outline;
+                uint16_t units = ftFace->units_per_EM;
+                std::cout << "unitsPerEM: " << units << "\n";
+                Outline outline(ol, units);
+                generateMSDF(bitmap, outline);
+            };
+
+            if (bitmap.empty()) {
+                std::cout << "why\n";
+            }
+            std::cout << "elp\n";
+
+            for (uint16_t py = 0; py < 64; ++py) {
+                for (uint16_t px = 0; px < 64; ++px) {
+                    int x = glyph_x + px;
+                    int y = glyph_y + py;
+                    if ((unsigned)x >= pageWidth || (unsigned)y >= pageHeight) {
+                        continue;
+                    }
+
+                    uint32_t bmpIdx = (py * 64 + px) * 4;
+                    uint32_t idx = (y * pageWidth + x) * 4;
+                    textureData[idx + 0] = bitmap[bmpIdx];
+                    textureData[idx + 1] = bitmap[bmpIdx + 1];
+                    textureData[idx + 2] = bitmap[bmpIdx + 2];
+                    textureData[idx + 3] = bitmap[bmpIdx + 3];
+                }
+            }
+            glyphsAdded++;
+            Glyph glyph(unicode, cp, glyph_x, glyph_y);
+            glyph.w = 64;
+            glyph.h = 64;
+            glyph.bearingX = slot->metrics.horiBearingX;
+            glyph.bearingY = slot->metrics.horiBearingY;
+            glyph.advanceX = slot->metrics.horiAdvance;
+            glyph.advanceY = slot->metrics.vertAdvance;
+
+            // this shit sets the uvs
+            page.addGlyph(glyph);
+            pagePosition[64].insert({ cp, pages.size() });
+        }
+        // page.textureId = Render::CreateFontPage(textureData, pageWidth, pageHeight);
+
+        char filename[20];
+        sprintf(filename, "sdf%u.bmp", pageCount);
+        FILE *fbmp = fopen(filename, "wb");
+        saveAtlasAsBMP(fbmp, textureData, page.w, page.h);
+        fclose(fbmp);
+
+        pages.push_back(std::move(page));
+        glyphsProcessed += glyphsToPack;
+        pageCount++;
+    }
+}
+
+void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeEnd, int16_t fontSize, const Style style, const TextDirection, const int maxCharPerPage, const bool autoPageSize, const uint16_t pSize) {
+    if (!ftFace) return;
+
+    if (fontSize < 1) fontSize = defaultSize;
+
+    FT_Set_Pixel_Sizes(ftFace, 0, fontSize);
+    hb_face_t *hbFace = hb_ft_face_create_referenced(ftFace);
+
+    std::vector<std::pair<unicode_t, hb_codepoint_t>> scriptCodepoints;
+
+    FT_UInt glyphIndex;
+    FT_ULong charcode = FT_Get_First_Char(ftFace, &glyphIndex);
+    while (glyphIndex != 0) {
+        if ((charcode >= unicodeStart && charcode <= unicodeEnd)) {
+            scriptCodepoints.push_back({ charcode, glyphIndex });
         }
         charcode = FT_Get_Next_Char(ftFace, charcode, &glyphIndex);
     }
