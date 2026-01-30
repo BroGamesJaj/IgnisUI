@@ -1321,6 +1321,7 @@ class Render::Vulkan {
         // ending the render pass
         vkCmdEndRendering(cmdBuffer);
 
+        imageMemoryBarrier = VkImageMemoryBarrier{};
         imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
         imageMemoryBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
         imageMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
