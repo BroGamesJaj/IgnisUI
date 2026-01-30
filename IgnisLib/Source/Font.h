@@ -90,6 +90,8 @@ class Font {
     // dont set maxCharPerPage and autoPageSize if you want behaviour to be optimized
     // not autoPageSize is not implemented
     //
+
+    void packUnicodeRangeSDF(const uint32_t UnicodeStart, const uint32_t UnicodeEnd, const Style style = Style::REGULAR, const TextDirection direction = TextDirection::GUESS, const int maxCharPerPage = -1, const bool autoPageSize = true, const uint16_t pSize = 128);
     void packUnicodeRange(const uint32_t UnicodeStart, const uint32_t UnicodeEnd, int16_t fontSize = -1, const Style style = Style::REGULAR, const TextDirection direction = TextDirection::GUESS, const int maxCharPerPage = -1, const bool autoPageSize = true, const uint16_t pSize = 128);
 
     //   private:
