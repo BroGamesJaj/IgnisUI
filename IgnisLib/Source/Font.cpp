@@ -498,6 +498,10 @@ void Outline::populateBeziers() {
             }
 
             if (bz.order && bz.pointsIdx.size() == bz.order) {
+                if (bz.order == LINEAR && bz.pointsIdx[0] == bz.pointsIdx[1]) {
+                    bz = {};
+                    continue;
+                }
                 curvesInContours[contIdx].push_back(bz);
                 bz = {};
                 bz.pointsIdx.push_back(idx);
@@ -666,8 +670,8 @@ std::vector<float> cubicSolver(const float a, const float b, const float c, cons
         float phi = acos(std::clamp(-q / (2.0f * r), -1.0f, 1.0f));
         float t = 2 * cbrt(r);
         roots.push_back(t * cos(phi / 3.0f) - b / (3.0f * a));
-        roots.push_back(t * cos((phi + 2.0f * M_PI) / 3.0f) - b / (3.0f * a));
-        roots.push_back(t * cos((phi + 4.0f * M_PI) / 3.0f) - b / (3.0f * a));
+        roots.push_back(t * cos((phi + 2.0f * std::numbers::pi) / 3.0f) - b / (3.0f * a));
+        roots.push_back(t * cos((phi + 4.0f * std::numbers::pi) / 3.0f) - b / (3.0f * a));
     }
 
     return roots;
@@ -791,14 +795,14 @@ Bezier &Outline::findClosestBez(const Vec2f point, float *distOut = nullptr, flo
 };
 
 Vec2f Outline::transformCoord(const float x, const float y) {
-    float padding = 100;
+    float padding = 64.0f * 64 / 2;
 
     float xSize = xMax - xMin;
     float ySize = yMax - yMin;
     float xPadding = (xSize < ySize) ? (1 - (xSize / ySize)) * ySize + padding : padding;
     float yPadding = (ySize < xSize) ? (1 - (ySize / xSize)) * xSize + padding : padding;
 
-    return { x * (xMax + xPadding) + (xMin - (xPadding / 2)), yMax - y * ((yMax + yPadding) - (yMin - (yPadding / 2))) + (ySize - yPadding) };
+    return { x * (xMax + xPadding) + (xMin - (xPadding / 2)), (yMax + (yPadding / 2)) - y * ((yMax + yPadding) - (yMin - (yPadding / 2))) };
 }
 
 uint8_t Outline::distToColor(const float dist, const float maxDist) {
