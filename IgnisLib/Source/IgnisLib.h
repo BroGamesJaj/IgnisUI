@@ -41,7 +41,9 @@ class Font;
 }  // namespace Font
 
 template <typename T>
-    requires std::is_arithmetic_v<T>
+concept arithmetic = std::is_arithmetic_v<T>;
+
+template <arithmetic T>
 struct Vec2 {
     Vec2() : x(0), y(0) {}
     Vec2(T x, T y) : x(x), y(y) {}
@@ -49,30 +51,52 @@ struct Vec2 {
     T x;
     T y;
 
-    Vec2 operator+(const Vec2& other) const { return Vec2{ x + other.x, y + other.y }; }
-    Vec2 operator-(const Vec2& other) const { return Vec2{ x - other.x, y - other.y }; }
-    Vec2& operator+=(const Vec2& other) {
+    Vec2 operator+(const Vec2 &other) const { return Vec2{ x + other.x, y + other.y }; }
+    Vec2 operator-(const Vec2 &other) const { return Vec2{ x - other.x, y - other.y }; }
+    Vec2 &operator+=(const Vec2 &other) {
         x += other.x;
         y += other.y;
         return *this;
     }
-    Vec2& operator-=(const Vec2& other) {
+    Vec2 &operator-=(const Vec2 &other) {
         x -= other.x;
         y -= other.y;
         return *this;
     }
-    Vec2 operator*(const Vec2& other) const { return Vec2{ x * other.x, y * other.y }; }
-    Vec2 operator/(const Vec2& other) const { return Vec2{ x / other.x, y / other.y }; }
-    Vec2& operator*=(const Vec2& other) {
+    Vec2 operator*(const Vec2 &other) const { return Vec2{ x * other.x, y * other.y }; }
+    Vec2 operator*(const T &scalar) const { return { x * scalar, y * scalar }; }
+
+    Vec2 operator/(const Vec2 &other) const { return Vec2{ x / other.x, y / other.y }; }
+    Vec2 operator/(const T &scalar) const { return { x / scalar, y / scalar }; }
+
+    Vec2 &operator*=(const Vec2 &other) {
         x *= other.x;
         y *= other.y;
         return *this;
     }
-    Vec2& operator/=(const Vec2& other) {
+    Vec2 &operator/=(const Vec2 &other) {
         x /= other.x;
         y /= other.y;
         return *this;
     }
+    Vec2 &operator*=(const T &scalar) {
+        x *= scalar;
+        y *= scalar;
+        return *this;
+    }
+    Vec2 &operator/=(const T &scalar) {
+        x /= scalar;
+        y /= scalar;
+        return *this;
+    }
+
+    bool operator==(const Vec2 &other) { return x == other.x && y == other.y; }
+    bool operator!=(const Vec2 &other) { return x != other.x || y != other.y; }
+
+    float distance(const Vec2 &other) { return sqrt(pow(other.x - x, 2) + pow(other.y - y,2)); }
+    Vec2 normalize() { return Vec2(x, y) / sqrt(x * x + y * y); }
+    float crossProduct(const Vec2 &other) { return x * other.y - y * other.x; }
+    float dotProduct(const Vec2 &other) { return x * other.x + y * other.y; }
 };
 using Vec2f = Vec2<float>;
 using Vec2i = Vec2<int>;
