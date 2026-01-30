@@ -1172,6 +1172,7 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
 
             auto [unicode, cp] = validPageCodepoints[rects[i].id];
             FT_Load_Glyph(ftFace, cp, FT_LOAD_RENDER);
+            
 
             const FT_Bitmap &bmp = ftFace->glyph->bitmap;
             FT_GlyphSlot slot = ftFace->glyph;

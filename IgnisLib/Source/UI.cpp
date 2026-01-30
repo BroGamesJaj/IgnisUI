@@ -4,24 +4,9 @@
 using Vertex = Ignis::Render::Vertex;
 using Color = Ignis::UI::Color;
 
+#include "GLFW/glfw3.h"
+
 namespace Ignis {
-
-// Vector
-
-// Area
-template <typename T>
-    requires std::is_arithmetic_v<T>
-inline void UI::Area2<T>::Calc() {
-    TR = (BR.x, TL.y);
-    BL = (TL.x, BR.y);
-}
-
-template <typename T>
-    requires std::is_arithmetic_v<T>
-inline bool UI::Area2<T>::Contain(Vec2<T> &position) const {
-    return (position.x > TL.x && position.x < BR.x && position.y > TL.y && position.y < BR.y);
-}
-
 // Color
 
 auto hexToFloat = [](const std::string &s) -> float { return static_cast<float>(std::stoi(s, nullptr, 16)) / 255.0f; };
@@ -154,6 +139,8 @@ void UI::Bind(Element &dst, Element &src) {
 void UI::SubmitSurface(int surface) {
     if (!elements.contains(surface)) return;
 
+    GLFWwindow* window = static_cast<GLFWwindow*>(Render::GetWindowOfSurface(surface));
+
     UI::ProcessData data{ .ofst{ 0, 0 }, .size{ 2, 2 } };
 
     Render::UIRenderData outputData = ProcessVertecies(data, elements[surface]);
@@ -162,28 +149,36 @@ void UI::SubmitSurface(int surface) {
     Render::AddUIElementData(outputData);
 }
 
-Render::UIRenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<Element> &elements) {
+Render::UIRenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<UIData*> &elements) {
     Render::UIRenderData returnData;
 
     int additionIndex = 0;
 
-    for (auto &element : elements) {
-        Vec2f elementSize = { data.size.x / 100 * element.size.x, data.size.y / 100 * element.size.y };
-        Vec2f elementOffset = { data.size.x / 100 * element.position.x, data.size.y / 100 * element.position.y };
+    for (auto element : elements) {
+        Vec2f& position = GetPosition(element);
+        Vec2f& size = GetSize(element);
+
+        Vec2f elementSize = { data.size.x / 100 * size.x, data.size.y / 100 * size.y };
+        Vec2f elementOffset = { data.size.x / 100 * position.x, data.size.y / 100 * position.y };
 
         UI::ProcessData calcData{ .ofst{ data.ofst.x + elementOffset.x, data.ofst.y + elementOffset.y }, .size{ elementSize } };
-        if (element.data->type == TEXT) {
-            UIVertexData textVertexData = GenerateTextVertecies(calcData, element.data, GetColor(element.data));
+
+        Area2<float>& area = GetArea(element);
+        area = Area2<float>(Vec2<float>(calcData.ofst.x / 2, calcData.ofst.y / 2),
+            Vec2<float>((calcData.ofst.x + calcData.size.x) / 2, (calcData.ofst.y + calcData.size.y) / 2));
+
+        if (element->type == TEXT) {
+            UIVertexData textVertexData = GenerateTextVertecies(calcData, element, GetColor(element));
 
             returnData.vertecies.insert(returnData.vertecies.end(), textVertexData.vertecies.begin(), textVertexData.vertecies.end());
-
+            
             // fun word
             for (auto indicy : textVertexData.indicies) {
                 returnData.indicies.push_back(indicy + additionIndex);
             }
             additionIndex += textVertexData.vertecies.size();
         } else {
-            UI::UIVertexData vertexData = GenerateVertecies(calcData, element.textureId, element.color);
+            UI::UIVertexData vertexData = GenerateVertecies(calcData, GetTexture(element), GetColor(element));
 
             returnData.vertecies.insert(returnData.vertecies.end(), vertexData.vertecies.begin(), vertexData.vertecies.end());
 
@@ -196,12 +191,12 @@ Render::UIRenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<Elem
 
         Render::UIRenderData childData;
 
-        if (element.data->type == VIEW) {
-            auto &view = static_cast<View &>(element);
-            childData = UI::ProcessVertecies(calcData, *view.elements);
-        } else if (element.data->type == BUTTON) {
-            auto &button = static_cast<Button &>(element);
-            std::vector<Element> text = { button.text };
+        if (element->type == VIEW) {
+            auto view = static_cast<ViewData*>(element->ptr);
+            childData = UI::ProcessVertecies(calcData, view->elements);
+        } else if (element->type == BUTTON) {
+            auto button = static_cast<ButtonData*>(element->ptr);
+            std::vector<UIData*> text = { button->text.data };
             childData = UI::ProcessVertecies(calcData, text);
         }
 
@@ -230,6 +225,98 @@ UI::UIVertexData UI::GenerateVertecies(UI::ProcessData procDt, int textureId, Co
     UIVertexData returnData{ .vertecies = { topLeft, topRight, bottomRight, bottomLeft },
                              .indicies = { 0, 2, 1, 0, 3, 2 } };
     return returnData;
+}
+
+UI::UIData* UI::FindFirstClicked(std::vector<UIData*>& elements, Vec2<float>& position) {   
+    UIData* clickedElement = nullptr;
+
+    //loops from newer to older and checks if it can be more precise with a smoller object
+    for (auto it = elements.rbegin(); it != elements.rend(); ++it) {
+        auto& element = *it;
+        if (GetArea(element).Contains(position)) {
+            if (element->type == VIEW) {
+                clickedElement = FindFirstClicked(GetChildrens(element), position);
+                if (clickedElement != nullptr) return clickedElement;
+            }
+            auto& func = GetOnClick(element);
+            if (func) {
+                func();
+                return element;
+            }
+        }
+    }
+    
+    return clickedElement;
+}
+
+void UI::HandleClick(Window window) {
+    Vec2i windowSize = Input::WindowSize(window);
+    Vec2<double> cursorPositoin = Input::CursorPosition(window);
+    Vec2<float> position = Vec2<float>(cursorPositoin.x / (float)windowSize.x, cursorPositoin.y / (float)windowSize.y);
+
+    Input::MouseData mouse = Input::Mouse(window);
+    if (mouse.action == GLFW_PRESS && mouse.button == GLFW_MOUSE_BUTTON_LEFT) {
+
+
+        UIData* clickedElement;
+
+        //checks every surface on the position
+        for (auto& element : elements) {
+            if (Render::GetWindowOfSurface(element.first) == window.ptr) {
+                clickedElement = FindFirstClicked(element.second, position);
+                break;
+            }
+        }
+
+        if (clickedElement != nullptr) {
+            std::cout << "Something clicked at: " << position.x << "; " << position.y << std::endl;
+            std::cout << "Type: " << clickedElement->type << std::endl;
+        }
+        else {
+            std::cout << "Did not click shit" << std::endl;
+        }
+
+
+    }
+
+}
+
+void UI::ProcHoveredElements(std::vector<UIData*>& elements, Vec2<float>& position) {
+    //loops from newer to older and checks if it can be more precise with a smoller object
+    for (auto it = elements.rbegin(); it != elements.rend(); ++it) {
+        auto& element = *it;
+        bool& isHovered = GetIsHovered(element);
+        if (GetArea(element).Contains(position)) {
+            if (!isHovered) {
+                auto& func = GetOnHoverEnter(element);
+                if(func) func();
+                isHovered = true;
+            }
+        }
+        else {
+            if (isHovered) {
+                auto& func = GetOnHoverExit(element);
+                if(func) func();
+                isHovered = false;
+            }
+        }
+        if (element->type == VIEW) {
+            ProcHoveredElements(GetChildrens(element), position);
+        }
+    }
+}
+
+void UI::HandleCursorMove(Window window) {
+    Vec2i windowSize = Input::WindowSize(window);
+    Vec2<double> cursorPositoin = Input::CursorPosition(window);
+    Vec2<float> position = Vec2<float>(cursorPositoin.x / (float)windowSize.x, cursorPositoin.y / (float)windowSize.y);
+
+    for (auto& element : elements) {
+        if (Render::GetWindowOfSurface(element.first) == window.ptr) {
+            ProcHoveredElements(element.second, position);
+            break;
+        }
+    }
 }
 
 // TODO: change the whole position and sizing shit
@@ -343,6 +430,104 @@ Vec2f &UI::GetSize(UIData *data) {
     }
 }
 
+Color& UI::GetColor(UIData* data) {
+    switch (data->type) {
+    case IMAGE:
+        return static_cast<ImageData*>(data->ptr)->base.color;
+    case VIEW:
+        return static_cast<ViewData*>(data->ptr)->base.color;
+    case BUTTON:
+        return static_cast<ButtonData*>(data->ptr)->base.color;
+    case TEXT:
+        return static_cast<TextData*>(data->ptr)->base.color;
+    default:
+        throw std::runtime_error("Coudn't access color of the passed in data");
+    }
+}
+
+int& UI::GetTexture(UIData* data) {
+    switch (data->type) {
+    case IMAGE:
+        return static_cast<ImageData*>(data->ptr)->base.textureId;
+    case VIEW:
+        return static_cast<ViewData*>(data->ptr)->base.textureId;
+    case BUTTON:
+        return static_cast<ButtonData*>(data->ptr)->base.textureId;
+    case TEXT:
+        return static_cast<TextData*>(data->ptr)->base.textureId;
+    default:
+        throw std::runtime_error("Coudn't access texture of the passed in data");
+    }
+}
+
+UI::Area2<float>& UI::GetArea(UIData* data) {
+    switch (data->type) {
+    case IMAGE:
+        return static_cast<ImageData*>(data->ptr)->base.area;
+    case VIEW:
+        return static_cast<ViewData*>(data->ptr)->base.area;
+    case BUTTON:
+        return static_cast<ButtonData*>(data->ptr)->base.area;
+    case TEXT:
+        return static_cast<TextData*>(data->ptr)->base.area;
+    default:
+        throw std::runtime_error("Coudn't access texture of the passed in data");
+    }
+}
+
+std::function<void()>& UI::GetOnClick(UIData* data) {
+    switch (data->type) {
+    case IMAGE:
+        return static_cast<ImageData*>(data->ptr)->base.onClick;
+    case VIEW:
+        return static_cast<ViewData*>(data->ptr)->base.onClick;
+    case TEXT:
+        return static_cast<TextData*>(data->ptr)->base.onClick;
+    default:
+        throw std::runtime_error("Coudn't access texture of the passed in data");
+    }
+}
+
+std::function<void()>& UI::GetOnHoverEnter(UIData* data) {
+    switch (data->type) {
+    case IMAGE:
+        return static_cast<ImageData*>(data->ptr)->base.onHoverEnter;
+    case VIEW:
+        return static_cast<ViewData*>(data->ptr)->base.onHoverEnter;
+    case TEXT:
+        return static_cast<TextData*>(data->ptr)->base.onHoverEnter;
+    default:
+        throw std::runtime_error("Coudn't access texture of the passed in data");
+    }
+}
+
+std::function<void()>& UI::GetOnHoverExit(UIData* data) {
+    switch (data->type) {
+    case IMAGE:
+        return static_cast<ImageData*>(data->ptr)->base.onHoverExit;
+    case VIEW:
+        return static_cast<ViewData*>(data->ptr)->base.onHoverExit;
+    case TEXT:
+        return static_cast<TextData*>(data->ptr)->base.onHoverExit;
+    default:
+        throw std::runtime_error("Coudn't access texture of the passed in data");
+    }
+}
+
+bool& UI::GetIsHovered(UIData* data) {
+    switch (data->type) {
+    case IMAGE:
+        return static_cast<ImageData*>(data->ptr)->base.isHovered;
+    case VIEW:
+        return static_cast<ViewData*>(data->ptr)->base.isHovered;
+    case TEXT:
+        return static_cast<TextData*>(data->ptr)->base.isHovered;
+    default:
+        throw std::runtime_error("Coudn't access texture of the passed in data");
+    }
+}
+
+
 // Text
 
 std::string &UI::GetText(UIData *data) {
@@ -375,44 +560,12 @@ std::vector<uint32_t> &UI::GetClusters(UIData *data) {
     }
 }
 
-// Image
-
-Color &UI::GetColor(UIData *data) {
-    switch (data->type) {
-        case IMAGE:
-            return static_cast<ImageData *>(data->ptr)->base.color;
-        case VIEW:
-            return static_cast<ViewData *>(data->ptr)->base.color;
-        case BUTTON:
-            return static_cast<ButtonData *>(data->ptr)->base.color;
-        case TEXT:
-            return static_cast<TextData *>(data->ptr)->base.color;
-        default:
-            throw std::runtime_error("Coudn't access color of the passed in data");
-    }
-}
-
-int &UI::GetTexture(UIData *data) {
-    switch (data->type) {
-        case IMAGE:
-            return static_cast<ImageData *>(data->ptr)->base.textureId;
-        case VIEW:
-            return static_cast<ViewData *>(data->ptr)->base.textureId;
-        case BUTTON:
-            return static_cast<ButtonData *>(data->ptr)->base.textureId;
-        case TEXT:
-            return static_cast<TextData *>(data->ptr)->base.textureId;
-        default:
-            throw std::runtime_error("Coudn't access texture of the passed in data");
-    }
-}
-
 // View
 
-std::vector<UI::Element> *UI::GetChildrens(UIData *data) {
+std::vector<UI::UIData*> &UI::GetChildrens(UIData *data) {
     switch (data->type) {
         case VIEW:
-            return &static_cast<ViewData *>(data->ptr)->elements;
+            return static_cast<ViewData *>(data->ptr)->elements;
         default:
             throw std::runtime_error("Coudn't access childrends of the passed in data");
     }
@@ -444,6 +597,6 @@ int UI::mainSurface = -1;
 std::unordered_map<int, Font::Font *> UI::fonts;
 int UI::nextId = 0;
 int UI::nextFontId = 1;
-std::unordered_map<int, std::vector<UI::Element>> UI::elements;
+std::unordered_map<int, std::vector<UI::UIData*>> UI::elements;
 std::unordered_set<UI::UIData *> UI::dataPtrs;
 }  // namespace Ignis

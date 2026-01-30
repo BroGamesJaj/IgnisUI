@@ -21,7 +21,6 @@ struct WindowUserPointer {
 };
 
 using Vertex = Render::Vertex;
-using CreateRenderPassInfo = Render::CreateRenderPassInfo;
 using CreateGraphicPipeLineInfo = Render::CreateGraphicPipeLineInfo;
 using UIRenderData = Render::UIRenderData;
 using Window = Render::Window;
@@ -39,13 +38,41 @@ struct TextureData {
     VkImageView textureImageView;
 };
 
+struct CreateGraphicPipeLineInfoVKConvert {
+    std::string vertexShader;
+    std::string fragmentShader;
+
+    VkPrimitiveTopology topology;
+    VkCullModeFlags cullMode;
+    VkFrontFace frontFace;
+    float lineWidth;
+
+    VkSampleCountFlagBits rasterizationSamples;
+    VkBool32 sampleShadingEnable;
+    float minSampleShading;
+
+    VkBool32 blendEnable;
+    VkBlendFactor srcColorBlendFactor;
+    VkBlendFactor dstColorBlendFactor;
+    VkBlendOp colorBlendOp;
+    VkBlendFactor srcAlphaBlendFactor;
+    VkBlendFactor dstAlphaBlendFactor;
+    VkBlendOp alphaBlendOp;
+
+    VkBool32 depthTestEnable;
+    VkBool32 depthWriteEnable;
+
+    float clearBit[3];
+    float stencilBit[2];
+};
+
 struct SurfaceVulkanData {
     VkSwapchainKHR swapChain;
     std::vector<VkImage> swapChainImages;
     std::vector<VkImageView> swapChainImageViews;
     std::vector<VkFramebuffer> swapChainFramebuffers;
 
-    VkRenderPass renderPass;
+    CreateGraphicPipeLineInfoVKConvert pipelineData;
     VkPipeline pipeline;
     VkPipelineLayout layout;
 
@@ -173,93 +200,104 @@ static void CompileShader(const std::string filename, const std::string name) {
 #endif
 }
 
-struct CreateRenderPassInfoVKConvert {
-    VkSampleCountFlagBits samples;
-    VkAttachmentLoadOp loadOp;
-    VkAttachmentStoreOp storeOp;
-    VkAttachmentLoadOp stencilLoadOp;
-    VkAttachmentStoreOp stencilStoreOp;
-    VkImageLayout initialLayout;
-    VkImageLayout finalLayout;
-};
+static CreateGraphicPipeLineInfoVKConvert RenderPassInfoToVK(CreateGraphicPipeLineInfo info) {
+    CreateGraphicPipeLineInfoVKConvert output;
 
-static CreateRenderPassInfoVKConvert RenderPassInfoToVK(CreateRenderPassInfo info) {
-    CreateRenderPassInfoVKConvert output;
+    output.vertexShader = info.vertexShader;
+    output.fragmentShader = info.fragmentShader;
+
+    switch (info.topology) {
+        case CreateGraphicPipeLineInfo::Topology::Triangle:
+            output.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+            break;
+        case CreateGraphicPipeLineInfo::Topology::Line:
+            output.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+            break;
+        case CreateGraphicPipeLineInfo::Topology::Point:
+            output.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+            break;
+    }
+
+    switch (info.culling) {
+        case CreateGraphicPipeLineInfo::Culling::Back:
+            output.cullMode = VK_CULL_MODE_BACK_BIT;
+            break;
+        case CreateGraphicPipeLineInfo::Culling::Front:
+            output.cullMode = VK_CULL_MODE_FRONT_BIT;
+            break;
+        case CreateGraphicPipeLineInfo::Culling::None:
+            output.cullMode = VK_CULL_MODE_NONE;
+            break;
+    }
+
+    switch (info.frontFace) {
+        case CreateGraphicPipeLineInfo::FrontFace::CounterClockwise:
+            output.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+            break;
+        case CreateGraphicPipeLineInfo::FrontFace::Clockwise:
+            output.frontFace = VK_FRONT_FACE_CLOCKWISE;
+            break;
+    }
+
+    output.lineWidth = info.lineWidth;
 
     switch (info.samples) {
-        case CreateRenderPassInfo::Samples::x1:
-            output.samples = VK_SAMPLE_COUNT_1_BIT;
+        case CreateGraphicPipeLineInfo::Samples::x1:
+            output.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
             break;
-        case CreateRenderPassInfo::Samples::x2:
-            output.samples = VK_SAMPLE_COUNT_2_BIT;
+        case CreateGraphicPipeLineInfo::Samples::x2:
+            output.rasterizationSamples = VK_SAMPLE_COUNT_2_BIT;
             break;
-        case CreateRenderPassInfo::Samples::x4:
-            output.samples = VK_SAMPLE_COUNT_4_BIT;
+        case CreateGraphicPipeLineInfo::Samples::x4:
+            output.rasterizationSamples = VK_SAMPLE_COUNT_4_BIT;
             break;
-        case CreateRenderPassInfo::Samples::x8:
-            output.samples = VK_SAMPLE_COUNT_8_BIT;
-            break;
-    }
-
-    switch (info.loadOp) {
-        case CreateRenderPassInfo::LoadOp::Load:
-            output.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-            break;
-        case CreateRenderPassInfo::LoadOp::Clear:
-            output.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            break;
-        case CreateRenderPassInfo::LoadOp::DontCare:
-            output.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        case CreateGraphicPipeLineInfo::Samples::x8:
+            output.rasterizationSamples = VK_SAMPLE_COUNT_8_BIT;
             break;
     }
 
-    switch (info.storeOp) {
-        case CreateRenderPassInfo::StoreOp::Store:
-            output.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-            break;
-        case CreateRenderPassInfo::StoreOp::DontCare:
-            output.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-            break;
-    }
+    output.sampleShadingEnable = info.sampleShading ? VK_TRUE : VK_FALSE;
+    output.minSampleShading = info.minSampleShading;
 
-    switch (info.stencilLoadOp) {
-        case CreateRenderPassInfo::LoadOp::Load:
-            output.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-            break;
-        case CreateRenderPassInfo::LoadOp::Clear:
-            output.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            break;
-        case CreateRenderPassInfo::LoadOp::DontCare:
-            output.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-            break;
-    }
+    output.blendEnable = info.blendEnable ? VK_TRUE : VK_FALSE;
 
-    switch (info.stencilStoreOp) {
-        case CreateRenderPassInfo::StoreOp::Store:
-            output.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
-            break;
-        case CreateRenderPassInfo::StoreOp::DontCare:
-            output.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-            break;
-    }
+    auto ConvertBlendFactor = [](CreateGraphicPipeLineInfo::BlendFactor factor) -> VkBlendFactor {
+        switch (factor) {
+        case CreateGraphicPipeLineInfo::BlendFactor::SrcAlpha:        return VK_BLEND_FACTOR_SRC_ALPHA;
+        case CreateGraphicPipeLineInfo::BlendFactor::DstAlpha:        return VK_BLEND_FACTOR_DST_ALPHA;
+        case CreateGraphicPipeLineInfo::BlendFactor::OneMinusSrcAlpha:return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        case CreateGraphicPipeLineInfo::BlendFactor::OneMinusDstAlpha:return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+        case CreateGraphicPipeLineInfo::BlendFactor::SrcColor:        return VK_BLEND_FACTOR_SRC_COLOR;
+        case CreateGraphicPipeLineInfo::BlendFactor::DstColor:        return VK_BLEND_FACTOR_DST_COLOR;
+        case CreateGraphicPipeLineInfo::BlendFactor::OneMinusSrcColor:return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+        case CreateGraphicPipeLineInfo::BlendFactor::OneMinusDstColor:return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+        }
+        return VK_BLEND_FACTOR_ONE; // fallback
+    };
 
-    switch (info.initialLayout) {
-        case CreateRenderPassInfo::ImageLayout::Undefined:
-            output.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            break;
-        case CreateRenderPassInfo::ImageLayout::PresentSrcKHR:
-            output.initialLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-            break;
-    }
+    auto ConvertBlendOp = [](CreateGraphicPipeLineInfo::BlendMode mode) -> VkBlendOp {
+        switch (mode) {
+        case CreateGraphicPipeLineInfo::BlendMode::Add: return VK_BLEND_OP_ADD;
+        case CreateGraphicPipeLineInfo::BlendMode::Sub: return VK_BLEND_OP_SUBTRACT;
+        case CreateGraphicPipeLineInfo::BlendMode::Max: return VK_BLEND_OP_MAX;
+        case CreateGraphicPipeLineInfo::BlendMode::Min: return VK_BLEND_OP_MIN;
+        }
+        return VK_BLEND_OP_ADD; // fallback
+    };
 
-    switch (info.finalLayout) {
-        case CreateRenderPassInfo::ImageLayout::Undefined:
-            output.finalLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            break;
-        case CreateRenderPassInfo::ImageLayout::PresentSrcKHR:
-            output.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-            break;
-    }
+    output.srcColorBlendFactor = ConvertBlendFactor(info.scrColorBlend);
+    output.dstColorBlendFactor = ConvertBlendFactor(info.dstColorBlend);
+    output.colorBlendOp = ConvertBlendOp(info.colorBlendOp);
+
+    output.srcAlphaBlendFactor = ConvertBlendFactor(info.scrAlphaBlend);
+    output.dstAlphaBlendFactor = ConvertBlendFactor(info.dstAlphaBlend);
+    output.alphaBlendOp = ConvertBlendOp(info.alphaBlendOp);
+
+    output.depthTestEnable = info.depthTesting ? VK_TRUE : VK_FALSE;
+    output.depthWriteEnable = info.depthWriting ? VK_TRUE : VK_FALSE;
+
+    for (int i = 0; i < 3; i++) output.clearBit[i] = info.clearBit[i];
+    for (int i = 0; i < 2; i++) output.stencilBit[i] = info.stencilBit[i];
 
     return output;
 }
@@ -322,29 +360,13 @@ class Render::Vulkan {
     }
 
     // surface creating
-    int CreateSurface(Window windowIn, CreateGraphicPipeLineInfo graphicPipeLineInfo, CreateRenderPassInfo renderPassInfo) {
+    int CreateSurface(Window windowIn, CreateGraphicPipeLineInfo graphicPipeLineInfo) {
         GLFWwindow *curWindow = windowIn.ptr;
         if (windows.find(curWindow) == windows.end()) throw std::runtime_error("failed to get the specified window");
 
         VkSurfaceKHR curSurface;
 
-        glfwSetErrorCallback([](int error, const char* desc) {
-            std::cerr << "GLFW Error " << error << ": " << desc << std::endl;
-            });
-
-        VkResult result = glfwCreateWindowSurface(instance, curWindow, nullptr, &curSurface);
-        if (result != VK_SUCCESS) {
-            std::string msg = "Failed to create Vulkan surface: ";
-            switch (result) {
-            case VK_ERROR_OUT_OF_HOST_MEMORY:        msg += "Out of host memory"; break;
-            case VK_ERROR_OUT_OF_DEVICE_MEMORY:      msg += "Out of device memory"; break;
-            case VK_ERROR_EXTENSION_NOT_PRESENT:     msg += "Required extension not present"; break;
-            case VK_ERROR_SURFACE_LOST_KHR:          msg += "Surface lost"; break;
-            case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR:  msg += "Native window already in use"; break;
-            default:                                 msg += "Unknown error code " + std::to_string(result); break;
-            }
-            throw std::runtime_error(msg);
-        }
+        glfwCreateWindowSurface(instance, curWindow, nullptr, &curSurface);
 
         if (firstSurface) {
             surface = curSurface;
@@ -378,19 +400,16 @@ class Render::Vulkan {
         // creates the views for the imagese in the swapchain
         CreateImageViews(surface->swapChainImageViews, surface->swapChainImages);
 
-        // the passes to be executed on the data
-        CreateRenderPass(surface->renderPass, renderPassInfo);
-
         CreateDescriptorSetLayout(surface);
 
+        surface->pipelineData = RenderPassInfoToVK(graphicPipeLineInfo);
+
         // create the rendering procedure that the data passes to be rendered
-        CreateGraphicPipeline(windows[curWindow].get(), surface->pipeline, surface->layout, surface->renderPass, graphicPipeLineInfo, surface->descriptorSetLayout);  // need a CreatePipelineInfo later
+        CreateGraphicPipeline(windows[curWindow].get(), surface);  // need a CreatePipelineInfo later
 
         // creates depth resources for the surface so it can depth check
-        CreateDepthResources(surface, windows[curWindow]->swapChainExtent);
-
-        // creates the buffers for the images
-        CreateFramebuffers(surface->swapChainFramebuffers, surface->swapChainImageViews, surface->renderPass, windows[curWindow].get(), surface->depthImageView);
+        if(surface->pipelineData.depthTestEnable || surface->pipelineData.depthWriteEnable)
+            CreateDepthResources(surface, windows[curWindow]->swapChainExtent);
 
         CreateUniformBuffers(surface);
 
@@ -443,7 +462,7 @@ class Render::Vulkan {
         UpdateElementBuffers();
     }
 
-    bool IsValidSurface(int surfaceIndex) { return surfaceAccess.count(surfaceIndex) > 0; }
+    bool IsValidSurface(int surfaceIndex) { return surfaceAccess.find(surfaceIndex) != surfaceAccess.end(); }
 
     void Draw(int surfaceIndex) {
         if (surfaceAccess.count(surfaceIndex) > 0) {
@@ -458,6 +477,10 @@ class Render::Vulkan {
         return nextElement++;
     }
 
+    void* GetWindowOfSurface(int surface) {
+        return surfaceAccess[surface].window;
+    }
+
    private:
     struct SwapChainSupportDetails {
         std::vector<VkSurfaceFormatKHR> formats;
@@ -467,8 +490,11 @@ class Render::Vulkan {
     const std::vector<const char *> validationLayers = {"VK_LAYER_KHRONOS_validation"};
 
     bool enableValidationLayers = false;
-
-    const std::vector<const char *> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME};
+    //VK_KHR_depth_stencil_resolve
+    const std::vector<const char *> deviceExtensions = {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
+        VK_EXT_ROBUSTNESS_2_EXTENSION_NAME
+    };
 
     const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -549,7 +575,6 @@ class Render::Vulkan {
 
         vkDestroyPipeline(device, data->pipeline, nullptr);
         vkDestroyPipelineLayout(device, data->layout, nullptr);
-        vkDestroyRenderPass(device, data->renderPass, nullptr);
 
         for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             vkDestroySemaphore(device, data->imageAvailableSemaphores[i], nullptr);
@@ -741,7 +766,6 @@ class Render::Vulkan {
         CreateSwapChain(data->swapChain, data->swapChainImages, windows[window].get(), window, surface);
         CreateImageViews(data->swapChainImageViews, data->swapChainImages);
         CreateDepthResources(data, windows[window]->swapChainExtent);
-        CreateFramebuffers(data->swapChainFramebuffers, data->swapChainImageViews, data->renderPass, windows[window].get(), data->depthImageView);
     }
 
     // assumes one element per surface
@@ -768,9 +792,9 @@ class Render::Vulkan {
         VkApplicationInfo appInfo{};
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         appInfo.pApplicationName = "Ignis Rendering";
-        appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+        appInfo.applicationVersion = VK_MAKE_VERSION(1, 4, 0);
         appInfo.pEngineName = "No Engine";
-        appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+        appInfo.engineVersion = VK_MAKE_VERSION(1, 4, 0);
         appInfo.apiVersion = VK_API_VERSION_1_4;
 
         VkInstanceCreateInfo createInfo{};
@@ -997,10 +1021,22 @@ class Render::Vulkan {
 
         std::array<VkDescriptorSetLayoutBinding, 2> bindings = {uboLayoutBinding, samplerBinding};
 
+        VkDescriptorBindingFlagsEXT bindingFlags[2] = {
+            0,
+            VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT |
+            VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT
+        };
+
+        VkDescriptorSetLayoutBindingFlagsCreateInfoEXT flagsInfo{};
+        flagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT;
+        flagsInfo.bindingCount = 2;
+        flagsInfo.pBindingFlags = bindingFlags;
+
         VkDescriptorSetLayoutCreateInfo layoutInfo{};
         layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
         layoutInfo.pBindings = bindings.data();
+        layoutInfo.pNext = &flagsInfo;
 
         if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &(surface->descriptorSetLayout)) != VK_SUCCESS) {
             throw std::runtime_error("failed to create descriptor set layout!");
@@ -1029,12 +1065,19 @@ class Render::Vulkan {
 
     // creates the actual descriptor sets
     void CreateDescriptorSets(SurfaceVulkanData *surface) {
+        VkDescriptorSetVariableDescriptorCountAllocateInfoEXT variableCount{};
+        variableCount.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT;
+        variableCount.descriptorSetCount = MAX_FRAMES_IN_FLIGHT;
+        std::vector<uint32_t> counts(MAX_FRAMES_IN_FLIGHT, MAX_TEXTURES);
+        variableCount.pDescriptorCounts = counts.data();
+
         std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, surface->descriptorSetLayout);
         VkDescriptorSetAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         allocInfo.descriptorPool = surface->descriptorPool;
         allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
         allocInfo.pSetLayouts = layouts.data();
+        allocInfo.pNext = &variableCount;
 
         surface->descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
         if (vkAllocateDescriptorSets(device, &allocInfo, surface->descriptorSets.data()) != VK_SUCCESS) {
@@ -1053,17 +1096,6 @@ class Render::Vulkan {
             bufferInfo.range = sizeof(UniformBufferObject);
 
             std::vector<VkDescriptorImageInfo> imageInfos(MAX_TEXTURES);
-
-            for (uint32_t t = 0; t < MAX_TEXTURES; t++) {
-                imageInfos[t].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-                if (nextTexture > t + 1)
-                    imageInfos[t].imageView = textureData[t].textureImageView;
-                else
-                    imageInfos[t].imageView = dummyImageView;
-
-                imageInfos[t].sampler = textureSampler;
-            }
 
             std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
 
@@ -1186,7 +1218,7 @@ class Render::Vulkan {
         }
     }
     // records command to commandbuffer, also need the image's index that you want to write to
-    void RecordCommandBuffer(SurfaceVulkanData *surface, VkExtent2D extent, uint32_t imageIndex) {
+    void RecordCommandBuffer(SurfaceVulkanData *surface, VkExtent2D& extent, uint32_t& imageIndex) {
         int frame = surface->currentFrame;
         VkCommandBuffer cmdBuffer = surface->commandBuffers[frame];
 
@@ -1200,23 +1232,60 @@ class Render::Vulkan {
             throw std::runtime_error("failed to begin recording command buffer!");
         }
 
-        // begining the render pass on the framebuffer
-        VkRenderPassBeginInfo renderPassInfo{};
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        renderPassInfo.renderPass = surface->renderPass;
-        renderPassInfo.framebuffer = surface->swapChainFramebuffers[imageIndex];
-
-        renderPassInfo.renderArea.offset = {0, 0};
-        renderPassInfo.renderArea.extent = extent;
-
         std::array<VkClearValue, 2> clearValues{};
-        clearValues[0].color = {{0.388235f, 0.643137f, 0.839216f, 1.0f}};
-        clearValues[1].depthStencil = {1.0f, 0};
+        clearValues[0].color = { {0.388235f, 0.643137f, 0.839216f, 1.0f} };
+        clearValues[1].depthStencil = { 1.0f, 0 };
 
-        renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-        renderPassInfo.pClearValues = clearValues.data();
 
-        vkCmdBeginRenderPass(cmdBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+        VkRenderingAttachmentInfoKHR colorAttachmentInfo{};
+        colorAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        colorAttachmentInfo.imageView = surface->swapChainImageViews[imageIndex];
+        colorAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+        colorAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        colorAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        colorAttachmentInfo.clearValue = clearValues[0];
+
+        
+        VkRenderingAttachmentInfoKHR depthAttachmentInfo{};
+        depthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        depthAttachmentInfo.imageView = surface->depthImageView;
+        depthAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        depthAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        depthAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        depthAttachmentInfo.clearValue = clearValues[1];
+
+        VkRect2D renderArea{};
+        renderArea.offset = { 0, 0 };
+        renderArea.extent = extent;
+
+        VkRenderingInfoKHR renderInfo{};
+        renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+        renderInfo.renderArea = renderArea;
+        renderInfo.layerCount = 1;
+        renderInfo.colorAttachmentCount = 1;
+        renderInfo.pColorAttachments = &colorAttachmentInfo;
+        renderInfo.pDepthAttachment = (surface->pipelineData.depthTestEnable) ? &depthAttachmentInfo : nullptr;
+
+
+        VkImageMemoryBarrier imageMemoryBarrier{};
+        imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        imageMemoryBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        imageMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        imageMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        imageMemoryBarrier.image = surface->swapChainImages[imageIndex];
+        imageMemoryBarrier.subresourceRange = {
+          .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+          .baseMipLevel = 0,
+          .levelCount = 1,
+          .baseArrayLayer = 0,
+          .layerCount = 1,
+        };
+
+        vkCmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
+            0, 0, nullptr, 0, nullptr, 1, &imageMemoryBarrier);
+
+        vkCmdBeginRendering(cmdBuffer, &renderInfo);
 
         // commands to record
         vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, surface->pipeline);
@@ -1250,7 +1319,23 @@ class Render::Vulkan {
         vkCmdDrawIndexed(cmdBuffer, static_cast<uint32_t>(surface->indiceCount), 1, 0, 0, 0);
 
         // ending the render pass
-        vkCmdEndRenderPass(cmdBuffer);
+        vkCmdEndRendering(cmdBuffer);
+
+        imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        imageMemoryBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        imageMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        imageMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        imageMemoryBarrier.image = surface->swapChainImages[imageIndex];
+        imageMemoryBarrier.subresourceRange = {
+              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+              .baseMipLevel = 0,
+              .levelCount = 1,
+              .baseArrayLayer = 0,
+              .layerCount = 1,
+        };
+
+        vkCmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+            0, 0, nullptr, 0, nullptr, 1, &imageMemoryBarrier);
 
         // ending the command recording
         if (vkEndCommandBuffer(cmdBuffer) != VK_SUCCESS) {
@@ -1507,28 +1592,6 @@ class Render::Vulkan {
     VkFormat findDepthFormat() { return findSupportedFormat({VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT}, VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT); }
     bool hasStencilComponent(VkFormat format) { return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT; }
 
-    // framebuffer creation
-    void CreateFramebuffers(std::vector<VkFramebuffer> &buffers, std::vector<VkImageView> &views, VkRenderPass renderPass, WindowVulkanData *window, VkImageView depthImageView) {
-        buffers.resize(views.size());
-
-        for (size_t i = 0; i < views.size(); i++) {
-            std::array<VkImageView, 2> attachments = {views[i], depthImageView};
-
-            VkFramebufferCreateInfo framebufferInfo{};
-            framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-            framebufferInfo.renderPass = renderPass;
-            framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-            framebufferInfo.pAttachments = attachments.data();
-            framebufferInfo.width = window->swapChainExtent.width;
-            framebufferInfo.height = window->swapChainExtent.height;
-            framebufferInfo.layers = 1;
-
-            if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &buffers[i]) != VK_SUCCESS) {
-                throw std::runtime_error("failed to create framebuffer!");
-            }
-        }
-    }
-
     void GetSwapChainData() {
         swapChainSupport = QuerySwapChainSupport(physicalDevice);
 
@@ -1608,11 +1671,11 @@ class Render::Vulkan {
     }
 
     // creates the pipeline
-    void CreateGraphicPipeline(WindowVulkanData *window, VkPipeline &pipeline, VkPipelineLayout &layout, VkRenderPass renderPass, CreateGraphicPipeLineInfo graphicPipeLineInfo, VkDescriptorSetLayout &decriptorSetLayout) {
+    void CreateGraphicPipeline(WindowVulkanData *window, SurfaceVulkanData* surface) {
         // reads in the binary shader data
-        CompileShader(graphicPipeLineInfo.vertexShader, "vert");
+        CompileShader(surface->pipelineData.vertexShader, "vert");
         auto vertShaderCode = readFile("vert.spv");
-        CompileShader(graphicPipeLineInfo.fragmentShader, "frag");
+        CompileShader(surface->pipelineData.fragmentShader, "frag");
         auto fragShaderCode = readFile("frag.spv");
 
         std::filesystem::remove("vert.spv");
@@ -1645,13 +1708,12 @@ class Render::Vulkan {
         vertexInputInfo.vertexBindingDescriptionCount = 1;
         vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
         vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-        ;
         vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
         //!!! what type of data it uses (lines, triangles), and how (reusing vertecies or not)
         VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
         inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-        inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        inputAssembly.topology = surface->pipelineData.topology;                                    //feature
         inputAssembly.primitiveRestartEnable = VK_FALSE;
 
         // sets where and in what size the frambuffer is visible
@@ -1695,8 +1757,8 @@ class Render::Vulkan {
         rasterizer.lineWidth = 1.0f;
 
         // culling
-        rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-        rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+        rasterizer.cullMode = surface->pipelineData.cullMode;                                   //feature
+        rasterizer.frontFace = surface->pipelineData.frontFace;                                 //feature
 
         rasterizer.depthBiasEnable = VK_FALSE;
         rasterizer.depthBiasConstantFactor = 0.0f;  // Optional
@@ -1707,7 +1769,7 @@ class Render::Vulkan {
         VkPipelineMultisampleStateCreateInfo multisampling{};
         multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
         multisampling.sampleShadingEnable = VK_FALSE;
-        multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+        multisampling.rasterizationSamples = surface->pipelineData.rasterizationSamples;        //feature
         multisampling.minSampleShading = 1.0f;           // Optional
         multisampling.pSampleMask = nullptr;             // Optional
         multisampling.alphaToCoverageEnable = VK_FALSE;  // Optional
@@ -1715,13 +1777,13 @@ class Render::Vulkan {
 
         VkPipelineColorBlendAttachmentState colorBlendAttachment{};
         colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-        colorBlendAttachment.blendEnable = VK_TRUE;
-        colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-        colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-        colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-        colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-        colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-        colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+        colorBlendAttachment.blendEnable = surface->pipelineData.blendEnable;                   //feature
+        colorBlendAttachment.srcColorBlendFactor = surface->pipelineData.srcColorBlendFactor;   //feature
+        colorBlendAttachment.dstColorBlendFactor = surface->pipelineData.dstColorBlendFactor;   //feature
+        colorBlendAttachment.colorBlendOp = surface->pipelineData.colorBlendOp;                 //feature
+        colorBlendAttachment.srcAlphaBlendFactor = surface->pipelineData.srcAlphaBlendFactor;   //feature
+        colorBlendAttachment.dstAlphaBlendFactor = surface->pipelineData.dstAlphaBlendFactor;   //feature
+        colorBlendAttachment.alphaBlendOp = surface->pipelineData.alphaBlendOp;                 //feature
 
         VkPipelineColorBlendStateCreateInfo colorBlending{};
         colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -1731,8 +1793,8 @@ class Render::Vulkan {
 
         VkPipelineDepthStencilStateCreateInfo depthStencil{};
         depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-        depthStencil.depthTestEnable = VK_TRUE;
-        depthStencil.depthWriteEnable = VK_FALSE;
+        depthStencil.depthTestEnable = surface->pipelineData.depthTestEnable;                   //feature
+        depthStencil.depthWriteEnable = surface->pipelineData.depthWriteEnable;                 //feature
         depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
 
         depthStencil.depthBoundsTestEnable = VK_FALSE;
@@ -1743,14 +1805,23 @@ class Render::Vulkan {
         depthStencil.front = {};  // Optional
         depthStencil.back = {};   // Optional
 
+        VkFormat depthFormat = findDepthFormat(); // e.g., VK_FORMAT_D32_SFLOAT
+
+        VkPipelineRenderingCreateInfo renderCreateInfo{
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+            .colorAttachmentCount = 1,
+            .pColorAttachmentFormats = &swapChainImageFormat.format,
+            .depthAttachmentFormat = depthFormat
+        };
+
         VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutInfo.setLayoutCount = 1;                 // Optional
-        pipelineLayoutInfo.pSetLayouts = &decriptorSetLayout;  // Optional
+        pipelineLayoutInfo.pSetLayouts = &surface->descriptorSetLayout;  // Optional
         pipelineLayoutInfo.pushConstantRangeCount = 0;         // Optional
         pipelineLayoutInfo.pPushConstantRanges = nullptr;      // Optional
 
-        if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &layout) != VK_SUCCESS) {
+        if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &surface->layout) != VK_SUCCESS) {
             throw std::runtime_error("failed to create pipeline layout!");
         }
 
@@ -1768,93 +1839,21 @@ class Render::Vulkan {
         pipelineInfo.pColorBlendState = &colorBlending;
         pipelineInfo.pDynamicState = &dynamicState;
 
-        pipelineInfo.layout = layout;
+        pipelineInfo.layout = surface->layout;
 
-        pipelineInfo.renderPass = renderPass;
-        pipelineInfo.subpass = 0;
+        pipelineInfo.renderPass = nullptr;
+        pipelineInfo.pNext = &renderCreateInfo;
 
         // can derive render passes from one-another so it can have a parent-child hierarchy, faster, easier
         pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
         pipelineInfo.basePipelineIndex = -1;
 
-        if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline) != VK_SUCCESS) {
+        if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &surface->pipeline) != VK_SUCCESS) {
             throw std::runtime_error("failed to create graphics pipeline!");
         }
 
         vkDestroyShaderModule(device, fragShaderModule, nullptr);
         vkDestroyShaderModule(device, vertShaderModule, nullptr);
-    }
-    // create the render pass(es)
-    void CreateRenderPass(VkRenderPass &renderPass, CreateRenderPassInfo infoIn) {
-        CreateRenderPassInfoVKConvert info = RenderPassInfoToVK(infoIn);
-
-        VkAttachmentDescription colorAttachment{};
-        colorAttachment.format = swapChainImageFormat.format;
-        colorAttachment.samples = info.samples;
-
-        // what to do with the data before and after rendering (applies to color and depth data)
-        colorAttachment.loadOp = info.loadOp;    // clears framebuffer before rendering
-        colorAttachment.storeOp = info.storeOp;  // leave the data in the buffer
-
-        colorAttachment.stencilLoadOp = info.stencilLoadOp;
-        colorAttachment.stencilStoreOp = info.stencilStoreOp;
-
-        // what layout should the buffer have before and after the pass
-        colorAttachment.initialLayout = info.initialLayout;
-        colorAttachment.finalLayout = info.finalLayout;
-
-        // depth tesint pass
-        VkAttachmentDescription depthAttachment{};
-        depthAttachment.format = findDepthFormat();
-        depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-        depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-        // subpass, good for post processing, need only one for rendering
-        VkAttachmentReference colorAttachmentRef{};
-        colorAttachmentRef.attachment = 0;
-        colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-        VkAttachmentReference depthAttachmentRef{};
-        depthAttachmentRef.attachment = 1;
-        depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-        VkSubpassDescription subpass{};
-        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        subpass.colorAttachmentCount = 1;
-        subpass.pColorAttachments = &colorAttachmentRef;
-        subpass.pDepthStencilAttachment = &depthAttachmentRef;
-
-        // subpass dependency woodoo shit
-        VkSubpassDependency dependency{};
-        dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-        dependency.dstSubpass = 0;
-
-        dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-        dependency.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-        dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-        // creating the render pass
-        std::array<VkAttachmentDescription, 2> attachments = {colorAttachment, depthAttachment};
-
-        VkRenderPassCreateInfo renderPassInfo{};
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-        renderPassInfo.pAttachments = attachments.data();
-        renderPassInfo.subpassCount = 1;
-        renderPassInfo.pSubpasses = &subpass;
-        renderPassInfo.dependencyCount = 1;
-        renderPassInfo.pDependencies = &dependency;
-
-        if (vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create render pass!");
-        }
     }
 
     // creates the structs for the vk shaders
@@ -1951,10 +1950,23 @@ class Render::Vulkan {
         VkPhysicalDeviceFeatures deviceFeatures{};
         deviceFeatures.samplerAnisotropy = VK_TRUE;
 
+        VkPhysicalDeviceRobustness2FeaturesEXT robustness2Features{};
+        robustness2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT;
+        robustness2Features.nullDescriptor = VK_TRUE;
+
         VkPhysicalDeviceVulkan12Features features12{};
         features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
         features12.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
         features12.descriptorIndexing = VK_TRUE;
+        features12.runtimeDescriptorArray = VK_TRUE;
+        features12.descriptorBindingPartiallyBound = VK_TRUE;
+        features12.descriptorBindingVariableDescriptorCount = VK_TRUE;
+        features12.pNext = &robustness2Features;
+
+        VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeature{};
+        dynamicRenderingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
+        dynamicRenderingFeature.dynamicRendering = VK_TRUE;
+        dynamicRenderingFeature.pNext = &features12;
 
         // main device creation struct
         VkDeviceCreateInfo createInfo{};
@@ -1968,7 +1980,7 @@ class Render::Vulkan {
         createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
         createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
-        createInfo.pNext = &features12;
+        createInfo.pNext = &dynamicRenderingFeature;
 
         // not needed in newer vulkan versions, but can be set for compatibility
         if (enableValidationLayers) {
@@ -2107,6 +2119,11 @@ class Render::Vulkan {
         return true;
     }
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData) {
+        std::string msg = pCallbackData->pMessage;
+
+        //we dont talk about the api version around here
+        if (msg.find("is older than the application specified API version") != std::string::npos) return VK_FALSE;
+
         std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
 
         return VK_FALSE;
@@ -2146,7 +2163,7 @@ class Render::Vulkan {
 
 Window Render::CreateAppWindow(int width, int height, const char *title, GLFWmonitor *screen, GLFWwindow *share) { return instance->CreateVulkanWindow(width, height, title, screen, share); }
 
-int Render::CreateSurface(Window window, CreateGraphicPipeLineInfo graphicPipeLineInfo, CreateRenderPassInfo renderPassInfo) { return instance->CreateSurface(window, graphicPipeLineInfo, renderPassInfo); }
+int Render::CreateSurface(Window window, CreateGraphicPipeLineInfo graphicPipeLineInfo) { return instance->CreateSurface(window, graphicPipeLineInfo); }
 
 void Render::Draw(int surface) { instance->Draw(surface); }
 
@@ -2163,6 +2180,10 @@ void Render::Init(bool debugging) { instance = new Render::Vulkan(debugging); }
 void Render::Clean() { delete instance; }
 
 int Render::CreateFontPage(const std::vector<uint8_t> &rgbaData, uint32_t width, uint32_t height) { return instance->CreateFontPage(rgbaData, width, height); };
+
+void* Render::GetWindowOfSurface(int surface) {
+    return instance->GetWindowOfSurface(surface);
+}
 
 Render::Vulkan *Render::instance = nullptr;
 }  // namespace Ignis

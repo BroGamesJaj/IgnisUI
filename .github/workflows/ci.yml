@@ -35,14 +35,19 @@ jobs:
             cmake \
             pkg-config \
             libglfw3-dev \
-            libvulkan-dev \
             libxkbcommon-dev \
             libxinerama-dev \
             libxcursor-dev \
             libx11-dev \
             libxrandr-dev \
             libxi-dev
-            
+      
+      - name: Install Vulkan SDK
+        uses: humbletim/install-vulkan-sdk@v1.2
+        with:
+          version: 1.4.309.0
+          cache: true
+     
       - name: configure
         working-directory: IgnisTester
         run: cmake -S . -B build
