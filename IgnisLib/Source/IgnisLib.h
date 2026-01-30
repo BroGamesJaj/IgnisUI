@@ -89,8 +89,13 @@ struct Vec2 {
         return *this;
     }
 
-    Vec2 normalize() { return Vec2(x, y) / sqrt(pow(x, 2) + pow(y, 2)); }
-    T crossProduct(const Vec2 &other) { return x * other.y - y * other.x; }
+    bool operator==(const Vec2 &other) { return x == other.x && y == other.y; }
+    bool operator!=(const Vec2 &other) { return x != other.x || y != other.y; }
+
+    float distance(const Vec2 &other) { return sqrt(pow(other.x - x, 2) + pow(other.y - y,2)); }
+    Vec2 normalize() { return Vec2(x, y) / sqrt(x * x + y * y); }
+    float crossProduct(const Vec2 &other) { return x * other.y - y * other.x; }
+    float dotProduct(const Vec2 &other) { return x * other.x + y * other.y; }
 };
 
 #if defined(IGNIS_RENDER) || defined(IGNIS_UI)
