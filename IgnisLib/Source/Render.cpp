@@ -408,7 +408,8 @@ class Render::Vulkan {
         CreateGraphicPipeline(windows[curWindow].get(), surface);  // need a CreatePipelineInfo later
 
         // creates depth resources for the surface so it can depth check
-        CreateDepthResources(surface, windows[curWindow]->swapChainExtent);
+        if(surface->pipelineData.depthTestEnable || surface->pipelineData.depthWriteEnable)
+            CreateDepthResources(surface, windows[curWindow]->swapChainExtent);
 
         CreateUniformBuffers(surface);
 
@@ -461,7 +462,7 @@ class Render::Vulkan {
         UpdateElementBuffers();
     }
 
-    bool IsValidSurface(int surfaceIndex) { return surfaceAccess.count(surfaceIndex) > 0; }
+    bool IsValidSurface(int surfaceIndex) { return surfaceAccess.find(surfaceIndex) != surfaceAccess.end(); }
 
     void Draw(int surfaceIndex) {
         if (surfaceAccess.count(surfaceIndex) > 0) {
@@ -491,7 +492,8 @@ class Render::Vulkan {
     bool enableValidationLayers = false;
     //VK_KHR_depth_stencil_resolve
     const std::vector<const char *> deviceExtensions = {
-        VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
+        VK_EXT_ROBUSTNESS_2_EXTENSION_NAME
     };
 
     const int MAX_FRAMES_IN_FLIGHT = 2;
@@ -1019,10 +1021,22 @@ class Render::Vulkan {
 
         std::array<VkDescriptorSetLayoutBinding, 2> bindings = {uboLayoutBinding, samplerBinding};
 
+        VkDescriptorBindingFlagsEXT bindingFlags[2] = {
+            0,
+            VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT |
+            VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT
+        };
+
+        VkDescriptorSetLayoutBindingFlagsCreateInfoEXT flagsInfo{};
+        flagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT;
+        flagsInfo.bindingCount = 2;
+        flagsInfo.pBindingFlags = bindingFlags;
+
         VkDescriptorSetLayoutCreateInfo layoutInfo{};
         layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
         layoutInfo.pBindings = bindings.data();
+        layoutInfo.pNext = &flagsInfo;
 
         if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &(surface->descriptorSetLayout)) != VK_SUCCESS) {
             throw std::runtime_error("failed to create descriptor set layout!");
@@ -1051,12 +1065,19 @@ class Render::Vulkan {
 
     // creates the actual descriptor sets
     void CreateDescriptorSets(SurfaceVulkanData *surface) {
+        VkDescriptorSetVariableDescriptorCountAllocateInfoEXT variableCount{};
+        variableCount.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT;
+        variableCount.descriptorSetCount = MAX_FRAMES_IN_FLIGHT;
+        std::vector<uint32_t> counts(MAX_FRAMES_IN_FLIGHT, MAX_TEXTURES);
+        variableCount.pDescriptorCounts = counts.data();
+
         std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, surface->descriptorSetLayout);
         VkDescriptorSetAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         allocInfo.descriptorPool = surface->descriptorPool;
         allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
         allocInfo.pSetLayouts = layouts.data();
+        allocInfo.pNext = &variableCount;
 
         surface->descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
         if (vkAllocateDescriptorSets(device, &allocInfo, surface->descriptorSets.data()) != VK_SUCCESS) {
@@ -1075,17 +1096,6 @@ class Render::Vulkan {
             bufferInfo.range = sizeof(UniformBufferObject);
 
             std::vector<VkDescriptorImageInfo> imageInfos(MAX_TEXTURES);
-
-            for (uint32_t t = 0; t < MAX_TEXTURES; t++) {
-                imageInfos[t].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-                if (nextTexture > t + 1)
-                    imageInfos[t].imageView = textureData[t].textureImageView;
-                else
-                    imageInfos[t].imageView = dummyImageView;
-
-                imageInfos[t].sampler = textureSampler;
-            }
 
             std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
 
@@ -1237,6 +1247,7 @@ class Render::Vulkan {
             .clearValue = clearValues[0],
         };
 
+        
         const VkRenderingAttachmentInfoKHR depthAttachmentInfo{
             .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
             .imageView = surface->depthImageView,
@@ -1257,7 +1268,7 @@ class Render::Vulkan {
             .layerCount = 1,
             .colorAttachmentCount = 1,
             .pColorAttachments = &colorAttachmentInfo,
-            .pDepthAttachment = &depthAttachmentInfo
+            .pDepthAttachment = (surface->pipelineData.depthTestEnable) ? &depthAttachmentInfo : nullptr
         };
 
 
@@ -1946,10 +1957,18 @@ class Render::Vulkan {
         VkPhysicalDeviceFeatures deviceFeatures{};
         deviceFeatures.samplerAnisotropy = VK_TRUE;
 
+        VkPhysicalDeviceRobustness2FeaturesKHR robustness2Features{};
+        robustness2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_KHR;
+        robustness2Features.nullDescriptor = VK_TRUE;
+
         VkPhysicalDeviceVulkan12Features features12{};
         features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
         features12.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
         features12.descriptorIndexing = VK_TRUE;
+        features12.runtimeDescriptorArray = VK_TRUE;
+        features12.descriptorBindingPartiallyBound = VK_TRUE;
+        features12.descriptorBindingVariableDescriptorCount = VK_TRUE;
+        features12.pNext = &robustness2Features;
 
         VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeature{};
         dynamicRenderingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;

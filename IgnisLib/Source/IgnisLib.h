@@ -506,6 +506,9 @@ using Button = UI::Button;
 #endif
 
 #if defined(IGNIS_INPUT) || defined(IGNIS_UI)
+#if defined(IGNIS_UI) && !defined(IGNIS_INPUT)
+#define IGNIS_INPUT
+#endif
 class Input {
 public:
     typedef void (*HookFunction)(Window);
