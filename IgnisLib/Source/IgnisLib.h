@@ -93,7 +93,8 @@ struct Vec2 {
     bool operator==(const Vec2 &other) { return x == other.x && y == other.y; }
     bool operator!=(const Vec2 &other) { return x != other.x || y != other.y; }
 
-    float distance(const Vec2 &other) { return sqrt(pow(other.x - x, 2) + pow(other.y - y,2)); }
+    float distanceCmp(const Vec2& other) const { return (other.x - x) * (other.x - x) + (other.y - y) * (other.y - y); }
+    float distance(const Vec2 &other) const { return sqrt(pow(other.x - x, 2) + pow(other.y - y,2)); }
     Vec2 normalize() { return Vec2(x, y) / sqrt(x * x + y * y); }
     float crossProduct(const Vec2 &other) { return x * other.y - y * other.x; }
     float dotProduct(const Vec2 &other) { return x * other.x + y * other.y; }
@@ -127,6 +128,51 @@ class Render {
         friend class Render;
         friend class Input;
         friend class UI;
+    };
+
+    enum class SamplerFilter {
+        NEAREST,
+        LINEAR
+    };
+    enum class SamplerMipmapMode {
+        NEAREST,
+        LINEAR
+    };
+
+    enum class SamplerAddressing {
+        REPEAT,
+        MIRRORED_REPEAT,
+        CLAMP_TO_EDGE,
+        CLAMP_TO_BORDER,
+        MIRROR_CLAMP_TO_EDGE,
+    };
+
+    enum ShaderStage {
+        VERTEX = 1 << 0,
+        FRAGMENT = 1 << 1,
+        COMPUTE = 1 << 2
+    };
+
+    struct DescriptorInfo {
+        DescriptorInfo() {};
+
+        enum class DescriptorType { UNIFORM, STORAGE, IMAGE};
+
+        DescriptorType type;
+        int binding;
+        int count;
+        ShaderStage stage;
+        int data;
+    };
+
+    struct DescriptorSetInfo {
+        DescriptorSetInfo() {};
+
+        DescriptorSetInfo(std::vector<DescriptorInfo> descriptorInfo, int setIndex)
+            : descriptorInfo(std::move(descriptorInfo)), setIndex(setIndex) {}
+
+        std::vector<DescriptorInfo> descriptorInfo;
+        int setIndex; //must be larger then the previous for now
     };
 
     struct CreateGraphicPipeLineInfo {
@@ -170,6 +216,8 @@ class Render {
         bool depthTesting = false;
         bool depthWriting = false;
 
+        int constantsSize = 0;
+        std::vector<DescriptorSetInfo> descriptorSets;
     };
 
     struct UIRenderData {
@@ -193,6 +241,13 @@ class Render {
     static void Update();
     static bool IsValidSurface(int surfaceIndex);
 
+    static int CreateSampler(SamplerFilter filter = SamplerFilter::LINEAR, 
+        SamplerAddressing addressing = SamplerAddressing::REPEAT, SamplerMipmapMode mipmapMode = SamplerMipmapMode::LINEAR);
+
+    static DescriptorInfo CreateUniformDescriptor(int binding, int size, ShaderStage stage);
+    static DescriptorInfo CreateStorageDescriptor(int binding, int size, ShaderStage stage);
+    static DescriptorInfo CreateImageDescriptor(int binding, int count, int sampler, ShaderStage stage);
+
    private:
     class Vulkan;
 
@@ -208,6 +263,9 @@ class Render {
 #ifdef IGNIS_RENDER_NAMES
 using Window = Render::Window;
 using CreateGraphicPipeLineInfo = Render::CreateGraphicPipeLineInfo;
+using SamplerFilter = Render::SamplerFilter;
+using SamplerAddressing = Render::SamplerAddressing;
+using SamplerMipmapMode = Render::SamplerMipmapMode;
 #endif
 
 #endif

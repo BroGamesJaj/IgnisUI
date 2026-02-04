@@ -12,6 +12,8 @@
 #include <map>
 #include <unordered_map>
 #include <vector>
+#include <numbers>
+#include <array>
 
 #include "freetype/freetype.h"
 #include "freetype/ftbbox.h"
@@ -417,7 +419,7 @@ struct Outline {
     void populateBounds();
     void populateBeziers();
     void getSegments(float acceptedAngleDeviation);
-    Bezier &findClosestBez(const Vec2f point, float *distOut, float *t);
+    Bezier &findClosestBez(const Vec2f& point, float *distOut, float *t);
 
     Vec2f transformCoord(const float x, const float y);
     uint8_t distToColor(const float dist, const float maxDist);
@@ -461,9 +463,12 @@ void Outline::populateBounds() {
         yMin = std::min(p.y, yMin);
         yMax = std::max(p.y, yMax);
     }
+
+    /*
     std::cout << "\nBounds:\n";
     std::cout << "xMin: " << xMin << " xMax: " << xMax << "\n";
     std::cout << "yMin: " << yMin << " yMax: " << yMax << "\n";
+    */
 
     // uint16_t padding = unitsPerEM / 8;
     // xMin -= padding;
@@ -757,38 +762,86 @@ float Outline::signOfDistance(const Vec2f &point, const Bezier &bezier, const fl
     return derivativeOfBezier(bezier, t).crossProduct(pointAtTOnBezier(bezier, t) - point) < 0 ? -1.0f : 1.0f;
 }
 
-Bezier &Outline::findClosestBez(const Vec2f point, float *distOut = nullptr, float *tOut = nullptr) {
+Bezier &Outline::findClosestBez(const Vec2f &point, float *distOut = nullptr, float *tOut = nullptr) {
     // TODO: this should be changed so it can fail gracefully
     assert(curvesInContours.size() > 0 && "curvesInContours cannot be 0");
     Bezier *mBez = nullptr;
     float mDist = INFINITY;
     float mOrt = -INFINITY;
     float t = -1;
-    for (auto &[contIdx, beziers] : curvesInContours) {
-        for (auto &bez : beziers) {
-            float dist = shortestDistanceToBezier(point, bez, &t);
-            float ort = ortogonality(point, bez, t);
 
-            // TODO: remove
-            // std::cout << "dist:" << dist << ", ort:" << ort << " t: " << t << "\n";
-            // std::cout << "pIdxs: ";
-            // for (auto &pIdx : bez.pointsIdx) {
-            //     std::cout << pIdx << " ";
-            // }
-            // std::cout << "\n";
+    std::vector<Bezier*> shortest;
+    float smollest = INFINITY;
 
-            if (fabs(dist - mDist) < 1e-6f && ort > mOrt) {
-                mBez = &bez;
-                mDist = dist;
-                mOrt = ort;
+    for (auto& [contIdx, beziers] : curvesInContours) {
+        for (auto& bez : beziers)
+        {
+            Vec2f pos1;
+            Vec2f pos2;
+
+            switch (bez.order)
+            {
+            case LINEAR:
+                pos1 = points[bez.pointsIdx[0]];
+                pos2 = points[bez.pointsIdx[1]];
+                break;
+
+            case QUADRATIC:
+            {
+                std::array tmp = {
+                    point.distanceCmp(points[bez.pointsIdx[0]]),
+                    point.distanceCmp(points[bez.pointsIdx[1]]),
+                    point.distanceCmp(points[bez.pointsIdx[2]])
+                };
+
+                int i1 = 0, i2 = 1;
+                if (tmp[1] < tmp[0]) std::swap(i1, i2);
+                if (tmp[2] < tmp[i2]) i2 = 2;
+
+                pos1 = points[bez.pointsIdx[i1]];
+                pos2 = points[bez.pointsIdx[i2]];
+                break;
             }
-            if (dist < mDist) {
-                mBez = &bez;
-                mDist = dist;
-                mOrt = ort;
+            case CUBIC:
+                assert(false && "not implemented");
+                break;
+
+            default:
+                break;
+            }
+
+            if (pos1 != pos2)
+                t = (point - pos1).dotProduct(pos2 - pos1) / (pos2 - pos1).dotProduct(pos2 - pos1);
+            t = std::clamp(t, 0.0f, 1.0f);
+
+            Vec2f base = pos1 + (pos2 - pos1) * t;
+
+            float distance = point.distanceCmp(base);
+
+            if (distance <= smollest) {
+                if (distance < smollest) shortest.clear();
+                shortest.push_back(&bez);
+                smollest = distance;
             }
         }
     }
+
+    for (auto bez : shortest) {
+        float dist = shortestDistanceToBezier(point, *bez, &t);
+        float ort = ortogonality(point, *bez, t);
+
+        if (fabs(dist - mDist) < 1e-6f && ort > mOrt ) {
+            mBez = bez;
+            mDist = dist;
+            mOrt = ort;
+        }
+        if (dist < mDist) {
+            mBez = bez;
+            mDist = dist;
+            mOrt = ort;
+        }
+    }
+
     if (distOut != nullptr) *distOut = signOfDistance(point, *mBez, t) * mDist;
     if (tOut != nullptr) *tOut = t;
     return *mBez;
@@ -1006,7 +1059,7 @@ void Font::packUnicodeRangeSDF(const uint32_t unicodeStart, const uint32_t unico
             if (ftFace->glyph->format == FT_GLYPH_FORMAT_OUTLINE) {
                 auto &ol = ftFace->glyph->outline;
                 uint16_t units = ftFace->units_per_EM;
-                std::cout << "unitsPerEM: " << units << "\n";
+                //std::cout << "unitsPerEM: " << units << "\n";
                 Outline outline(ol, units);
                 generateMSDF(bitmap, outline);
             };
@@ -1014,7 +1067,7 @@ void Font::packUnicodeRangeSDF(const uint32_t unicodeStart, const uint32_t unico
             if (bitmap.empty()) {
                 std::cout << "why\n";
             }
-            std::cout << "elp\n";
+            //std::cout << "elp\n";
 
             for (uint16_t py = 0; py < 64; ++py) {
                 for (uint16_t px = 0; px < 64; ++px) {

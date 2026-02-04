@@ -12,18 +12,31 @@ void CursorMoved(Window window) {
 	std::cout << "Curent cursor position: " << curPos.x << "; " << curPos.y << std::endl;
 }
 
+struct UniformData {
+	int x;
+	int y;
+};
+
 int main() {
     std::vector<int> surfaces;
 
 	//need to initialize the input before using/
 	Input::Init();
+	Render::Init(true);
 
 	CreateGraphicPipeLineInfo gpInfo{};
 	gpInfo.vertexShader = "../Resources/Shaders/shader.vert";
 	gpInfo.fragmentShader = "../Resources/Shaders/shader.frag";
 	gpInfo.blendEnable = true;
-
-	Render::Init(true);
+    gpInfo.descriptorSets = {  
+		{
+		   {
+				Render::CreateUniformDescriptor(0, sizeof(UniformData), Render::ShaderStage::VERTEX),
+				Render::CreateImageDescriptor(1, 1028, Render::CreateSampler(), Render::ShaderStage::FRAGMENT),
+		   },
+		   0
+		}
+    };
 
 	Window window1 = Render::CreateAppWindow(1200, 800, "Gup 1");
 
@@ -34,23 +47,23 @@ int main() {
 	int surface = Render::CreateSurface(window1, gpInfo);
 	surfaces.push_back(surface);
 
-	//int monika = Render::CreateTexture("../Resources/Textures/monika2.png");
+	int monika = Render::CreateTexture("../Resources/Textures/monika2.png");
 	int sus = Render::CreateTexture("../Resources/Textures/goated0.bmp");
 
-	int fontId = UI::LoadFont("../DejaVuSans.ttf");
+	//int fontId = UI::LoadFont("../DejaVuSans.ttf");
 
 	UI::SetMainSurface(surface);
 
 	Color tip(0, 255, 0);
 	Color base = tip.Inverted();
 
-	Text text = Text(Vec2f(40, 10), Vec2f(100,100), "heooo fak yeah", fontId);
+	//Text text = Text(Vec2f(40, 10), Vec2f(100,100), "heooo fak yeah", fontId);
 
-	View view = View(Vec2f(40, 10), Vec2f(20, 20), sus);
+	View view = View(Vec2f(40, 10), Vec2f(20, 20), base);
 	Image image2 = Image(Vec2f(25, 40), Vec2f(50, 20), tip);
+	Image image3 = Image(Vec2f(0, 0), Vec2f(100, 100), monika);
 	view.Add(image2);
-	view.Add(text);
-	UI::AddToSurface(surface, view);
+	UI::AddToSurface(surface, image3, view);
 	UI::SubmitSurface();
 
 	while (surfaces.size() != 0)
