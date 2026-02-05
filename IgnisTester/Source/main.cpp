@@ -37,6 +37,7 @@ int main() {
 		   0
 		}
     };
+	gpInfo.constantsSize = sizeof(float);
 
 	Window window1 = Render::CreateAppWindow(1200, 800, "Gup 1");
 
@@ -66,13 +67,20 @@ int main() {
 	UI::AddToSurface(surface, image3, view);
 	UI::SubmitSurface();
 
+	float color = 0.0;
+
 	while (surfaces.size() != 0)
 	{
 		Input::Event();
 		Render::Update();
 
+		if (color > 1.0f) color = 0.0f;
+
+		color += 0.004f;
+
 		for (auto it = surfaces.begin(); it != surfaces.end(); ) {
 			if (Render::IsValidSurface(*it)) {
+				Render::PushConstants(*it, &color, sizeof(color));
 				Render::Draw(*it);
 				it++;
 			}

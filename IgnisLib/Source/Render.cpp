@@ -452,6 +452,8 @@ class Render::Vulkan {
     int nextSamplerData = 0;
     int nextSampler = 0;
 
+    std::unordered_map<VkSurfaceKHR, void*> constantsData;
+
 
    public:
     Vulkan(bool debuging = false) {
@@ -544,6 +546,8 @@ class Render::Vulkan {
 
         surface->haveVertexData = false;
 
+        constantsData[curSurface] = nullptr;
+
         // creates the swapchain, the images that are rendered onto the screen
         CreateSwapChain(surface->swapChain, surface->swapChainImages, windows[curWindow].get(), curWindow, curSurface);
 
@@ -623,6 +627,14 @@ class Render::Vulkan {
         CreateSamplerVKConvert samplerVK = SamplerInfoToVK(filter, addressing, mipmapMode);
         samplerCreateDatas.push_back(samplerVK);
         return nextSamplerData++;
+    }
+
+    void PushConstants(int surface, void* data, uint32_t size) {
+        if (constantsData[surfaceAccess[surface].surface] != nullptr)
+            free(constantsData[surfaceAccess[surface].surface]);
+
+        constantsData[surfaceAccess[surface].surface] = malloc(size);
+        memcpy(constantsData[surfaceAccess[surface].surface], data, size);
     }
 
 
@@ -706,6 +718,10 @@ class Render::Vulkan {
 
     // Cleans up upon closing all the windows
     void CleanUp() {
+        for (auto& [surface, data] : constantsData) {
+            if (data != nullptr) free(data);
+        }
+
         for (auto &[window, windowData] : windows) {
             for (auto &[surface, surfaceData] : windowData->surfaces) {
                 CleanUpSurface(&surfaceData);
@@ -774,7 +790,7 @@ class Render::Vulkan {
 
         // resets and records the command buffer
         vkResetCommandBuffer(data->commandBuffers[data->currentFrame], 0);
-        RecordCommandBuffer(data, windows[window]->swapChainExtent, imageIndex);
+        RecordCommandBuffer(data, windows[window]->swapChainExtent, imageIndex, *surface);
 
         // submiting it to the graphics family queue
         VkSubmitInfo submitInfo{};
@@ -1465,7 +1481,7 @@ class Render::Vulkan {
         }
     }
     // records command to commandbuffer, also need the image's index that you want to write to
-    void RecordCommandBuffer(SurfaceVulkanData *surface, VkExtent2D& extent, uint32_t& imageIndex) {
+    void RecordCommandBuffer(SurfaceVulkanData *surface, VkExtent2D& extent, uint32_t& imageIndex, VkSurfaceKHR surfaceKey) {
         int frame = surface->currentFrame;
         VkCommandBuffer cmdBuffer = surface->commandBuffers[frame];
 
@@ -1561,6 +1577,8 @@ class Render::Vulkan {
         vkCmdBindIndexBuffer(cmdBuffer, surface->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
         vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, surface->layout, 0, 1, &surface->descriptorSets[0][frame], 0, nullptr);
+
+        vkCmdPushConstants(cmdBuffer, surface->layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, surface->pipelineData.constantsSize, constantsData[surfaceKey]);
 
         // draw call
         vkCmdDrawIndexed(cmdBuffer, static_cast<uint32_t>(surface->indiceCount), 1, 0, 0, 0);
@@ -2039,7 +2057,7 @@ class Render::Vulkan {
         VkPushConstantRange constRange{};
         constRange.offset = 0;
         constRange.size = surface->pipelineData.constantsSize;
-        constRange.stageFlags = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        constRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
         VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -2458,6 +2476,10 @@ Render::DescriptorInfo Render::CreateImageDescriptor(int binding, int count, int
     output.data = sampler;
 
     return output;
+}
+
+void Render::PushConstants(int surface, void* data, uint32_t size) {
+    instance->PushConstants(surface, data, size);
 }
 
 Render::Vulkan *Render::instance = nullptr;

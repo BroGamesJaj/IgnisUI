@@ -248,6 +248,8 @@ class Render {
     static DescriptorInfo CreateStorageDescriptor(int binding, int size, ShaderStage stage);
     static DescriptorInfo CreateImageDescriptor(int binding, int count, int sampler, ShaderStage stage);
 
+    static void PushConstants(int surface, void* data, uint32_t size);
+
    private:
     class Vulkan;
 
