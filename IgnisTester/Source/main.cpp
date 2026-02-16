@@ -34,7 +34,7 @@ int main() {
 	int surface = Render::CreateSurface(window1, gpInfo);
 	surfaces.push_back(surface);
 
-	//int monika = Render::CreateTexture("../Resources/Textures/monika2.png");
+	int monika = Render::CreateTexture("../Resources/Textures/monika2.png");
 	int sus = Render::CreateTexture("../Resources/Textures/goated0.bmp");
 
 	int fontId = UI::LoadFont("../DejaVuSans.ttf");
@@ -44,13 +44,15 @@ int main() {
 	Color tip(0, 255, 0);
 	Color base = tip.Inverted();
 
-	Text text = Text(Vec2f(40, 10), Vec2f(100,100), "heooo fak yeah", fontId);
+	// Text text = Text(Vec2f(40, 10), Vec2f(100,100), "heooo fak yeah", fontId);
 
 	View view = View(Vec2f(40, 10), Vec2f(20, 20), sus);
 	Image image2 = Image(Vec2f(25, 40), Vec2f(50, 20), tip);
+	// Image image = Image(Vec2f(0, 0), Vec2f(100, 100), monika,Color(1.f, 0.412f, 0.706f));
 	view.Add(image2);
-	view.Add(text);
-	UI::AddToSurface(surface, view);
+	// view.Add(image);
+	// view.Add(text);
+	UI::AddToSurface(surface, view/*,image*/);
 	UI::SubmitSurface();
 
 	while (surfaces.size() != 0)

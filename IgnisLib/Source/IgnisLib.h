@@ -1,20 +1,13 @@
 #pragma once
 
-#include <algorithm>
-#include <array>
-#include <concepts>
-#include <fstream>
 #include <iostream>
-#include <limits>
-#include <memory>
 #include <optional>
 #include <set>
 #include <string>
-#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
-#include <vector>
-#include <functional>
+#include <fstream>
+#include <algorithm>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -32,10 +25,31 @@ struct GLFWmonitor;
 
 namespace Ignis {
 namespace Font {
-enum class TextDirection { LTR, RTL, BTT, TTB, GUESS };
-enum class TextAlign { LEFT, CENTER, RIGHT, GUESS };
-enum class Script { LATIN, CYRILLIC, ARABIC, DEVANAGARI, THAI, GREEK, HANGUL, HIRAGANA, KATAKANA, HAN, TAMIL, GUESS };
-enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
+enum class TextDirection { LTR,
+                           RTL,
+                           BTT,
+                           TTB,
+                           GUESS };
+enum class TextAlign { LEFT,
+                       CENTER,
+                       RIGHT,
+                       GUESS };
+enum class Script { LATIN,
+                    CYRILLIC,
+                    ARABIC,
+                    DEVANAGARI,
+                    THAI,
+                    GREEK,
+                    HANGUL,
+                    HIRAGANA,
+                    KATAKANA,
+                    HAN,
+                    TAMIL,
+                    GUESS };
+enum class Style { REGULAR,
+                   BOLD,
+                   ITALIC,
+                   UNDERLINE };
 
 class Font;
 }  // namespace Font
@@ -51,52 +65,56 @@ struct Vec2 {
     T x;
     T y;
 
-    Vec2 operator+(const Vec2 &other) const { return Vec2{ x + other.x, y + other.y }; }
-    Vec2 operator-(const Vec2 &other) const { return Vec2{ x - other.x, y - other.y }; }
-    Vec2 &operator+=(const Vec2 &other) {
+    constexpr inline Vec2 operator+(const Vec2 &other) const noexcept { return Vec2{ x + other.x, y + other.y }; }
+    constexpr inline Vec2 operator-(const Vec2 &other) const noexcept { return Vec2{ x - other.x, y - other.y }; }
+    constexpr inline Vec2 &operator+=(const Vec2 &other) {
         x += other.x;
         y += other.y;
         return *this;
     }
-    Vec2 &operator-=(const Vec2 &other) {
+    constexpr inline Vec2 &operator-=(const Vec2 &other) {
         x -= other.x;
         y -= other.y;
         return *this;
     }
-    Vec2 operator*(const Vec2 &other) const { return Vec2{ x * other.x, y * other.y }; }
-    Vec2 operator*(const T &scalar) const { return { x * scalar, y * scalar }; }
+    constexpr inline Vec2 operator*(const Vec2 &other) const { return Vec2{ x * other.x, y * other.y }; }
+    constexpr inline Vec2 operator*(const T &scalar) const { return { x * scalar, y * scalar }; }
 
-    Vec2 operator/(const Vec2 &other) const { return Vec2{ x / other.x, y / other.y }; }
-    Vec2 operator/(const T &scalar) const { return { x / scalar, y / scalar }; }
+    constexpr inline Vec2 operator/(const Vec2 &other) const { return Vec2{ x / other.x, y / other.y }; }
+    constexpr inline Vec2 operator/(const T &scalar) const { return { x / scalar, y / scalar }; }
 
-    Vec2 &operator*=(const Vec2 &other) {
+    constexpr inline Vec2 &operator*=(const Vec2 &other) {
         x *= other.x;
         y *= other.y;
         return *this;
     }
-    Vec2 &operator/=(const Vec2 &other) {
+    constexpr inline Vec2 &operator/=(const Vec2 &other) {
         x /= other.x;
         y /= other.y;
         return *this;
     }
-    Vec2 &operator*=(const T &scalar) {
+    constexpr inline Vec2 &operator*=(const T &scalar) {
         x *= scalar;
         y *= scalar;
         return *this;
     }
-    Vec2 &operator/=(const T &scalar) {
+    constexpr inline Vec2 &operator/=(const T &scalar) {
         x /= scalar;
         y /= scalar;
         return *this;
     }
 
-    bool operator==(const Vec2 &other) { return x == other.x && y == other.y; }
-    bool operator!=(const Vec2 &other) { return x != other.x || y != other.y; }
+    constexpr inline bool operator==(const Vec2 &other) const noexcept { return x == other.x && y == other.y; }
+    constexpr inline bool operator!=(const Vec2 &other) const noexcept { return x != other.x || y != other.y; }
 
-    float distance(const Vec2 &other) { return sqrt(pow(other.x - x, 2) + pow(other.y - y,2)); }
-    Vec2 normalize() { return Vec2(x, y) / sqrt(x * x + y * y); }
-    float crossProduct(const Vec2 &other) { return x * other.y - y * other.x; }
-    float dotProduct(const Vec2 &other) { return x * other.x + y * other.y; }
+    constexpr inline float distance(const Vec2 &other) const { return sqrt((other.x - x) * (other.x - x) + (other.y - y) * (other.y - y)); }
+    constexpr inline float distanceCmp(const Vec2 &other) const {
+        return (other.x - x) * (other.x - x) + (other.y - y) * (other.y - y);
+    }
+    constexpr inline Vec2 normalize() const { return Vec2(x, y) / sqrt(x * x + y * y); }
+    constexpr inline float crossProduct(const Vec2 &other) const { return x * other.y - y * other.x; }
+    constexpr inline float dotProduct(const Vec2 &other) const { return x * other.x + y * other.y; }
+    constexpr inline const std::string toString() const { return "(" + std::to_string(x) + "," + std::to_string(y) + ")";};
 };
 using Vec2f = Vec2<float>;
 using Vec2i = Vec2<int>;
@@ -120,9 +138,9 @@ class Render {
     };
 
     struct Window {
-    private:
+       private:
         GLFWwindow *ptr;
-        
+
         friend class Vulkan;
         friend class Render;
         friend class Input;
@@ -132,15 +150,32 @@ class Render {
     struct CreateGraphicPipeLineInfo {
         CreateGraphicPipeLineInfo() {};
 
-        enum class Samples { x1, x2, x4, x8 };
-        enum class Topology { Point, Line, Triangle };
-        enum class Culling { Front, Back, None };
-        enum class FrontFace { Clockwise, CounterClockwise };
-        enum class BlendFactor { 
-            SrcAlpha, DstAlpha, OneMinusSrcAlpha, OneMinusDstAlpha,
-            SrcColor, DstColor, OneMinusSrcColor, OneMinusDstColor
+        enum class Samples { x1,
+                             x2,
+                             x4,
+                             x8 };
+        enum class Topology { Point,
+                              Line,
+                              Triangle };
+        enum class Culling { Front,
+                             Back,
+                             None };
+        enum class FrontFace { Clockwise,
+                               CounterClockwise };
+        enum class BlendFactor {
+            SrcAlpha,
+            DstAlpha,
+            OneMinusSrcAlpha,
+            OneMinusDstAlpha,
+            SrcColor,
+            DstColor,
+            OneMinusSrcColor,
+            OneMinusDstColor
         };
-        enum class BlendMode { Add, Sub, Max, Min };
+        enum class BlendMode { Add,
+                               Sub,
+                               Max,
+                               Min };
 
         std::string vertexShader;
         std::string fragmentShader;
@@ -169,7 +204,6 @@ class Render {
 
         bool depthTesting = false;
         bool depthWriting = false;
-
     };
 
     struct UIRenderData {
@@ -202,7 +236,7 @@ class Render {
 
     static int AddUIElementData(UIRenderData &data);
 
-    static void* GetWindowOfSurface(int surface);
+    static void *GetWindowOfSurface(int surface);
 };
 
 #ifdef IGNIS_RENDER_NAMES
@@ -219,7 +253,6 @@ class UI {
     template <typename T>
         requires std::is_arithmetic_v<T>
     struct Area2 {
-
         Area2() = default;
 
         Area2(Vec2<T> x, Vec2<T> y) {
@@ -238,8 +271,8 @@ class UI {
             TR = Vec2<T>(BR.x, TL.y);
             BL = Vec2<T>(TL.x, BR.y);
         }
-        inline bool Contains(Vec2<T>& position) const { 
-            return (position.x > TL.x && position.x < BR.x && position.y > TL.y && position.y < BR.y); 
+        inline bool Contains(Vec2<T> &position) const {
+            return (position.x > TL.x && position.x < BR.x && position.y > TL.y && position.y < BR.y);
         };
     };
 
@@ -262,7 +295,10 @@ class UI {
     };
 
    private:
-    enum UIType { TEXT, BUTTON, IMAGE, VIEW };
+    enum UIType { TEXT,
+                  BUTTON,
+                  IMAGE,
+                  VIEW };
 
     struct UIData {
         UIData(void *ptr, UIType type);
@@ -302,7 +338,7 @@ class UI {
 
     struct ViewData {
         ElementData base;
-        std::vector<UIData*> elements;
+        std::vector<UIData *> elements;
     };
 
     class Element {
@@ -310,21 +346,19 @@ class UI {
         UIData *data;
 
        public:
-        Element(UIType type) : data(CreateData(type)), position(GetPosition(data)), size(GetSize(data)), id(nextId++), 
-            textureId(GetTexture(data)), color(GetColor(data)), area(GetArea(data)), onClick(GetOnClick(data)), onHoverEnter(GetOnHoverEnter(data)),
-            onHoverExit(GetOnHoverExit(data)), isHovered(GetIsHovered(data)) {
+        Element(UIType type) : data(CreateData(type)), position(GetPosition(data)), size(GetSize(data)), id(nextId++), textureId(GetTexture(data)), color(GetColor(data)), area(GetArea(data)), onClick(GetOnClick(data)), onHoverEnter(GetOnHoverEnter(data)), onHoverExit(GetOnHoverExit(data)), isHovered(GetIsHovered(data)) {
             if (!dataPtrs.contains(data)) dataPtrs.insert(data);
         }
 
         Vec2f &position;
         Vec2f &size;
-        int& textureId;
-        Color& color;
-        std::function<void()>& onClick;
-        std::function<void()>& onHoverEnter;
-        bool& isHovered;
-        std::function<void()>& onHoverExit;
-        Area2<float>& area;
+        int &textureId;
+        Color &color;
+        std::function<void()> &onClick;
+        std::function<void()> &onHoverEnter;
+        bool &isHovered;
+        std::function<void()> &onHoverExit;
+        Area2<float> &area;
 
         bool Valid() { return data; }
 
@@ -393,8 +427,8 @@ class UI {
     };
 
     class View : public Element {
-    public:
-        View(Vec2f position, Vec2f size, int textureId, Color color, bool dummy) : Element(VIEW), elements(GetChildrens(data)) { 
+       public:
+        View(Vec2f position, Vec2f size, int textureId, Color color, bool dummy) : Element(VIEW), elements(GetChildrens(data)) {
             this->position = position;
             this->size = size;
             this->textureId = textureId;
@@ -407,12 +441,12 @@ class UI {
 
         View(Vec2f position, Vec2f size, int textureId) : View(position, size, textureId, Color(), true) {}
 
-        void Add(Element& element) { elements.push_back(element.data); }
+        void Add(Element &element) { elements.push_back(element.data); }
 
-        void Pop(Element& element) {}
+        void Pop(Element &element) {}
 
-    private:
-        std::vector<UIData*> &elements;
+       private:
+        std::vector<UIData *> &elements;
 
         friend class UI;
     };
@@ -462,7 +496,7 @@ class UI {
 
    private:
     static int mainSurface;
-    static std::unordered_map<int, std::vector<UIData*>> elements;
+    static std::unordered_map<int, std::vector<UIData *>> elements;
     static int nextId;
     static std::unordered_set<UIData *> dataPtrs;
     static std::unordered_map<int, Font::Font *> fonts;
@@ -478,7 +512,7 @@ class UI {
         std::vector<uint32_t> indicies;
     };
 
-    static Render::UIRenderData ProcessVertecies(ProcessData data, std::vector<UIData*> &elements);
+    static Render::UIRenderData ProcessVertecies(ProcessData data, std::vector<UIData *> &elements);
     static UIVertexData GenerateVertecies(UI::ProcessData procData, int textureId, Color color);
 
     // Data Handling
@@ -488,13 +522,13 @@ class UI {
     // Element
     static Vec2f &GetPosition(UIData *data);
     static Vec2f &GetSize(UIData *data);
-    static int& GetTexture(UIData* data);
-    static Color& GetColor(UIData* data);
-    static Area2<float>& GetArea(UIData* data);
-    static std::function<void()>& GetOnClick(UIData* data);
-    static std::function<void()>& GetOnHoverEnter(UIData* data);
-    static std::function<void()>& GetOnHoverExit(UIData* data);
-    static bool& GetIsHovered(UIData* data);
+    static int &GetTexture(UIData *data);
+    static Color &GetColor(UIData *data);
+    static Area2<float> &GetArea(UIData *data);
+    static std::function<void()> &GetOnClick(UIData *data);
+    static std::function<void()> &GetOnHoverEnter(UIData *data);
+    static std::function<void()> &GetOnHoverExit(UIData *data);
+    static bool &GetIsHovered(UIData *data);
 
     // Text
     static std::string &GetText(UIData *data);
@@ -504,17 +538,17 @@ class UI {
     static UIVertexData GenerateTextVertecies(UI::ProcessData procData, UIData *data, UI::Color color);
 
     // View
-    static std::vector<UIData*> &GetChildrens(UIData *data);
+    static std::vector<UIData *> &GetChildrens(UIData *data);
 
     // Button
     static void *&GetFunction(UIData *data);
     static Text &GetTextElement(UIData *data);
 
     static void HandleClick(Window window);
-    static UIData* FindFirstClicked(std::vector<UIData*>& elements, Vec2<float>& position);
+    static UIData *FindFirstClicked(std::vector<UIData *> &elements, Vec2<float> &position);
 
     static void HandleCursorMove(Window window);
-    static void ProcHoveredElements(std::vector<UIData*>& elements, Vec2<float>& position);
+    static void ProcHoveredElements(std::vector<UIData *> &elements, Vec2<float> &position);
 
     friend class Input;
 };
@@ -534,7 +568,7 @@ using Button = UI::Button;
 #define IGNIS_INPUT
 #endif
 class Input {
-public:
+   public:
     typedef void (*HookFunction)(Window);
 
     struct Keydata {
@@ -555,18 +589,18 @@ public:
     };
     struct DropData {
         int count;
-        const char** paths;
+        const char **paths;
     };
 
-private:
+   private:
     enum class Callbacks : int;
 
-    using Action = std::pair<GLFWwindow*, Callbacks>;
+    using Action = std::pair<GLFWwindow *, Callbacks>;
     using Callback = HookFunction;
 
     struct KeyHash {
-        size_t operator()(const Action& k) const noexcept {
-            return std::hash<GLFWwindow*>()(k.first) ^ (std::hash<int>()(static_cast<int>(k.second)) << 1);
+        size_t operator()(const Action &k) const noexcept {
+            return std::hash<GLFWwindow *>()(k.first) ^ (std::hash<int>()(static_cast<int>(k.second)) << 1);
         }
     };
 
@@ -585,36 +619,36 @@ private:
     };
 
     static std::unordered_map<Action, Callback, KeyHash> customCallbacks;
-    static std::unordered_map <GLFWwindow*, WindowInputData> windowCallbackData;
+    static std::unordered_map<GLFWwindow *, WindowInputData> windowCallbackData;
 
-    static void WindowPosCallback(GLFWwindow* window, int xpos, int ypos);
-    static void WindowSizeCallback(GLFWwindow* window, int width, int height);
-    static void WindowCloseCallback(GLFWwindow* window);
-    static void WindowRefreshCallback(GLFWwindow* window);
-    static void WindowFocusCallback(GLFWwindow* window, int focused);
-    static void WindowIconifyCallback(GLFWwindow* window, int iconified);
-    static void WindowMaximizeCallback(GLFWwindow* window, int maximized);
-    static void FramebufferSizeCallback(GLFWwindow* window, int width, int height);
-    //static void WindowContentScaleCallback(GLFWwindow* window, float xscale, float yscale);
+    static void WindowPosCallback(GLFWwindow *window, int xpos, int ypos);
+    static void WindowSizeCallback(GLFWwindow *window, int width, int height);
+    static void WindowCloseCallback(GLFWwindow *window);
+    static void WindowRefreshCallback(GLFWwindow *window);
+    static void WindowFocusCallback(GLFWwindow *window, int focused);
+    static void WindowIconifyCallback(GLFWwindow *window, int iconified);
+    static void WindowMaximizeCallback(GLFWwindow *window, int maximized);
+    static void FramebufferSizeCallback(GLFWwindow *window, int width, int height);
+    // static void WindowContentScaleCallback(GLFWwindow* window, float xscale, float yscale);
 
-    static void InputKeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
-    static void InputCharCallback(GLFWwindow* window, unsigned int codepoint);
-    static void InputCharModsCallback(GLFWwindow* window, unsigned int codepoint, int mods);
-    static void InputMouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
-    static void InputCursorPositionCallback(GLFWwindow* window, double xpos, double ypos);
-    static void InputCursorEnterCallback(GLFWwindow* window, int entered);
-    static void InputScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
-    static void InputDropCallback(GLFWwindow* window, int count, const char** paths);
+    static void InputKeyCallback(GLFWwindow *window, int key, int scancode, int action, int mods);
+    static void InputCharCallback(GLFWwindow *window, unsigned int codepoint);
+    static void InputCharModsCallback(GLFWwindow *window, unsigned int codepoint, int mods);
+    static void InputMouseButtonCallback(GLFWwindow *window, int button, int action, int mods);
+    static void InputCursorPositionCallback(GLFWwindow *window, double xpos, double ypos);
+    static void InputCursorEnterCallback(GLFWwindow *window, int entered);
+    static void InputScrollCallback(GLFWwindow *window, double xoffset, double yoffset);
+    static void InputDropCallback(GLFWwindow *window, int count, const char **paths);
 
-    //static void MonitorCallback(Render::Window window, void* function);
+    // static void MonitorCallback(Render::Window window, void* function);
 
-    //static void ErrorCallback(Render::Window window, void* function);
+    // static void ErrorCallback(Render::Window window, void* function);
 
-    static void CallFunction(GLFWwindow* window, Callbacks type);
+    static void CallFunction(GLFWwindow *window, Callbacks type);
 
-public:
+   public:
     static void Init();
-    static void InitWindow(Window& window);
+    static void InitWindow(Window &window);
     static void Event();
 
     static void HookWindowPosCallback(Render::Window window, HookFunction function);
@@ -625,7 +659,7 @@ public:
     static void HookWindowIconifyCallback(Render::Window window, HookFunction function);
     static void HookWindowMaximizeCallback(Render::Window window, HookFunction function);
     static void HookFramebufferSizeCallback(Render::Window window, HookFunction function);
-    //static void HookWindowContentScaleCallback(Render::Window window, HookFunction function);
+    // static void HookWindowContentScaleCallback(Render::Window window, HookFunction function);
 
     static void HookInputKeyCallback(Render::Window window, HookFunction function);
     static void HookInputCharCallback(Render::Window window, HookFunction function);
@@ -636,9 +670,9 @@ public:
     static void HookInputScrollCallback(Render::Window window, HookFunction function);
     static void HookInputDropCallback(Render::Window window, HookFunction function);
 
-    //static void HookMonitorCallback(Render::Window window, void* function);
+    // static void HookMonitorCallback(Render::Window window, void* function);
 
-    //static void HookErrorCallback(Render::Window window, void* function);
+    // static void HookErrorCallback(Render::Window window, void* function);
 
     static Vec2i WindowPosition(Render::Window window);
     static Vec2i WindowSize(Render::Window window);
