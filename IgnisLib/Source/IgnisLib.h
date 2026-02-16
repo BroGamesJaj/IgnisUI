@@ -495,10 +495,6 @@ class UI {
 
     private:
         std::vector<UIData*> &elements;
-
-       private:
-        std::vector<UIData *> &elements;
-
         friend class UI;
     };
 
