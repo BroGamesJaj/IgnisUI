@@ -16,6 +16,8 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
+#include <numbers>
+#include <array>
 
 #include "freetype/freetype.h"
 #include "freetype/ftbbox.h"
@@ -468,7 +470,7 @@ struct Outline {
     void populateBounds();
     void populateBeziers();
     void getSegments(float acceptedAngleDeviation);
-    Bezier &findClosestBez(const Vec2f point, float *distOut, float *t);
+    Bezier &findClosestBez(const Vec2f& point, float *distOut, float *t);
 
     Vec2f transformCoord(const float x, const float y);
     uint8_t distToColor(const float dist, const float maxDist);
@@ -929,7 +931,7 @@ float Outline::signOfDistance(const Vec2f &point, Bezier &bezier, const float &t
     return derivativeOfBezier(bezier, t).crossProduct(pointAtTOnBezier(bezier, t) - point) < 0 ? -1.0f : 1.0f;
 }
 
-Bezier &Outline::findClosestBez(const Vec2f point, float *distOut = nullptr, float *tOut = nullptr) {
+Bezier &Outline::findClosestBez(const Vec2f &point, float *distOut = nullptr, float *tOut = nullptr) {
     // TODO: this should be changed so it can fail gracefully
     assert(curvesInContours.size() > 0 && "curvesInContours cannot be 0");
     Bezier *mBez = nullptr;
@@ -1497,6 +1499,7 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
 
             auto [unicode, cp] = validPageCodepoints[rects[i].id];
             FT_Load_Glyph(ftFace, cp, FT_LOAD_RENDER);
+            
 
             const FT_Bitmap &bmp = ftFace->glyph->bitmap;
             FT_GlyphSlot slot = ftFace->glyph;

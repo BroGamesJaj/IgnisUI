@@ -72,6 +72,15 @@ struct CreateGraphicPipeLineInfoVKConvert {
 
     float clearBit[3];
     float stencilBit[2];
+
+    int constantsSize = 0;
+    std::vector<Render::DescriptorSetInfo> descriptorSets;
+};
+
+struct CreateSamplerVKConvert {
+    VkFilter filter;
+    VkSamplerMipmapMode mipmapMode;
+    VkSamplerAddressMode addressMode;
 };
 
 struct SurfaceVulkanData {
@@ -100,13 +109,17 @@ struct SurfaceVulkanData {
     VkDeviceMemory indexBufferMemory;
     uint32_t indiceCount;
 
-    VkDescriptorSetLayout descriptorSetLayout;
+    std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
     VkDescriptorPool descriptorPool;
-    std::vector<VkDescriptorSet> descriptorSets;
+    std::vector<std::vector<VkDescriptorSet>> descriptorSets;
 
-    std::vector<VkBuffer> uniformBuffers;
-    std::vector<VkDeviceMemory> uniformBuffersMemory;
-    std::vector<void *> uniformBuffersMapped;
+    std::unordered_map<int, std::vector<VkBuffer>> uniformBuffers;
+    std::unordered_map<int, std::vector<VkDeviceMemory>> uniformBuffersMemory;
+    std::unordered_map<int, std::vector<void *>> uniformBuffersMapped;
+
+    std::unordered_map<int, std::vector<VkBuffer>> storageBuffers;
+    std::unordered_map<int, std::vector<VkDeviceMemory>> storageBuffersMemory;
+    std::unordered_map<int, std::vector<void*>> storageBuffersMapped;
 
     VkImage depthImage;
     VkDeviceMemory depthImageMemory;
@@ -271,38 +284,26 @@ static CreateGraphicPipeLineInfoVKConvert RenderPassInfoToVK(CreateGraphicPipeLi
 
     auto ConvertBlendFactor = [](CreateGraphicPipeLineInfo::BlendFactor factor) -> VkBlendFactor {
         switch (factor) {
-            case CreateGraphicPipeLineInfo::BlendFactor::SrcAlpha:
-                return VK_BLEND_FACTOR_SRC_ALPHA;
-            case CreateGraphicPipeLineInfo::BlendFactor::DstAlpha:
-                return VK_BLEND_FACTOR_DST_ALPHA;
-            case CreateGraphicPipeLineInfo::BlendFactor::OneMinusSrcAlpha:
-                return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-            case CreateGraphicPipeLineInfo::BlendFactor::OneMinusDstAlpha:
-                return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
-            case CreateGraphicPipeLineInfo::BlendFactor::SrcColor:
-                return VK_BLEND_FACTOR_SRC_COLOR;
-            case CreateGraphicPipeLineInfo::BlendFactor::DstColor:
-                return VK_BLEND_FACTOR_DST_COLOR;
-            case CreateGraphicPipeLineInfo::BlendFactor::OneMinusSrcColor:
-                return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
-            case CreateGraphicPipeLineInfo::BlendFactor::OneMinusDstColor:
-                return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+        case CreateGraphicPipeLineInfo::BlendFactor::SrcAlpha:        return VK_BLEND_FACTOR_SRC_ALPHA;
+        case CreateGraphicPipeLineInfo::BlendFactor::DstAlpha:        return VK_BLEND_FACTOR_DST_ALPHA;
+        case CreateGraphicPipeLineInfo::BlendFactor::OneMinusSrcAlpha:return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        case CreateGraphicPipeLineInfo::BlendFactor::OneMinusDstAlpha:return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+        case CreateGraphicPipeLineInfo::BlendFactor::SrcColor:        return VK_BLEND_FACTOR_SRC_COLOR;
+        case CreateGraphicPipeLineInfo::BlendFactor::DstColor:        return VK_BLEND_FACTOR_DST_COLOR;
+        case CreateGraphicPipeLineInfo::BlendFactor::OneMinusSrcColor:return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+        case CreateGraphicPipeLineInfo::BlendFactor::OneMinusDstColor:return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
         }
-        return VK_BLEND_FACTOR_ONE;  // fallback
+        return VK_BLEND_FACTOR_ONE; // fallback
     };
 
     auto ConvertBlendOp = [](CreateGraphicPipeLineInfo::BlendMode mode) -> VkBlendOp {
         switch (mode) {
-            case CreateGraphicPipeLineInfo::BlendMode::Add:
-                return VK_BLEND_OP_ADD;
-            case CreateGraphicPipeLineInfo::BlendMode::Sub:
-                return VK_BLEND_OP_SUBTRACT;
-            case CreateGraphicPipeLineInfo::BlendMode::Max:
-                return VK_BLEND_OP_MAX;
-            case CreateGraphicPipeLineInfo::BlendMode::Min:
-                return VK_BLEND_OP_MIN;
+        case CreateGraphicPipeLineInfo::BlendMode::Add: return VK_BLEND_OP_ADD;
+        case CreateGraphicPipeLineInfo::BlendMode::Sub: return VK_BLEND_OP_SUBTRACT;
+        case CreateGraphicPipeLineInfo::BlendMode::Max: return VK_BLEND_OP_MAX;
+        case CreateGraphicPipeLineInfo::BlendMode::Min: return VK_BLEND_OP_MIN;
         }
-        return VK_BLEND_OP_ADD;  // fallback
+        return VK_BLEND_OP_ADD; // fallback
     };
 
     output.srcColorBlendFactor = ConvertBlendFactor(info.scrColorBlend);
@@ -319,10 +320,149 @@ static CreateGraphicPipeLineInfoVKConvert RenderPassInfoToVK(CreateGraphicPipeLi
     for (int i = 0; i < 3; i++) output.clearBit[i] = info.clearBit[i];
     for (int i = 0; i < 2; i++) output.stencilBit[i] = info.stencilBit[i];
 
+    output.constantsSize = info.constantsSize;
+    output.descriptorSets = info.descriptorSets;
+
+    return output;
+}
+
+static CreateSamplerVKConvert SamplerInfoToVK(SamplerFilter filter, SamplerAddressing addressing, SamplerMipmapMode mipmapMode) {
+    CreateSamplerVKConvert output;
+
+    switch (filter) {
+    case SamplerFilter::LINEAR:
+        output.filter = VK_FILTER_LINEAR;
+        break;
+    case SamplerFilter::NEAREST:
+        output.filter = VK_FILTER_NEAREST;
+        break;
+    }
+
+    switch (addressing) {
+    case SamplerAddressing::REPEAT:
+        output.addressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        break;
+    case SamplerAddressing::MIRRORED_REPEAT:
+        output.addressMode = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+        break;
+    case SamplerAddressing::CLAMP_TO_EDGE:
+        output.addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        break;
+    case SamplerAddressing::CLAMP_TO_BORDER:
+        output.addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+        break;
+    case SamplerAddressing::MIRROR_CLAMP_TO_EDGE:
+        output.addressMode = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+        break;
+    }
+
+    switch (mipmapMode) {
+    case SamplerMipmapMode::LINEAR:
+        output.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        break;
+    case SamplerMipmapMode::NEAREST:
+        output.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+        break;
+    }
+
+    return output;
+}
+
+static VkDescriptorType DescriptorTypeToVK(Render::DescriptorInfo::DescriptorType type) {
+    VkDescriptorType output;
+
+    switch (type)
+    {
+    case Ignis::Render::DescriptorInfo::DescriptorType::UNIFORM:
+        output = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        break;
+    case Ignis::Render::DescriptorInfo::DescriptorType::STORAGE:
+        output = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        break;
+    case Ignis::Render::DescriptorInfo::DescriptorType::IMAGE:
+        output = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        break;
+    default:
+        break;
+    }
+
+    return output;
+}
+
+static VkShaderStageFlags ShaderStageToVK(Render::ShaderStage stage) {
+    VkShaderStageFlags output = 0;
+    if (stage & Render::ShaderStage::VERTEX)   output |= VK_SHADER_STAGE_VERTEX_BIT;
+    if (stage & Render::ShaderStage::FRAGMENT) output |= VK_SHADER_STAGE_FRAGMENT_BIT;
     return output;
 }
 
 class Render::Vulkan {
+
+   private:
+    struct SwapChainSupportDetails {
+        std::vector<VkSurfaceFormatKHR> formats;
+        std::vector<VkPresentModeKHR> presentModes;
+    };
+
+    struct SurfaceAccess {
+        GLFWwindow* window;
+        VkSurfaceKHR surface;
+    };
+
+    const std::vector<const char*> validationLayers = { "VK_LAYER_KHRONOS_validation" };
+
+    bool enableValidationLayers = false;
+
+    const std::vector<const char*> deviceExtensions = {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
+        VK_EXT_ROBUSTNESS_2_EXTENSION_NAME
+    };
+
+    const int MAX_FRAMES_IN_FLIGHT = 2;
+
+    bool firstSurface = true;
+
+    std::unordered_map<GLFWwindow*, std::unique_ptr<WindowVulkanData>> windows;
+    VkInstance instance;
+
+    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+    VkDebugUtilsMessengerEXT debugMessenger;
+
+    VkDevice device;
+    VkQueue graphicsQueue;
+    VkQueue presentQueue;
+
+    VkSurfaceKHR surface;
+
+    SwapChainSupportDetails swapChainSupport;
+    VkSurfaceFormatKHR swapChainImageFormat;
+    VkPresentModeKHR swapChainPresentMode;
+
+    VkCommandPool commandPool;
+
+    std::unordered_map<int, TextureData> textureData;
+    VkSampler textureSampler;
+    unsigned int nextTexture = 1;
+    uint32_t MAX_TEXTURES;
+
+    VkImageView dummyImageView;
+    VkImage dummyImage;
+    VkDeviceMemory dummyImageMemory;
+
+    std::unordered_map<int, UIRenderData> renderData;
+    int nextElement = 0;
+
+    std::unordered_map<int, SurfaceAccess> surfaceAccess;
+    int nextSurface = 0;
+
+    std::vector <CreateSamplerVKConvert> samplerCreateDatas;
+    std::unordered_map<int, VkSampler> samplerAccess;
+    int nextSamplerData = 0;
+    int nextSampler = 0;
+
+    std::unordered_map<VkSurfaceKHR, void*> constantsData;
+
+
    public:
     Vulkan(bool debuging = false) {
 #ifndef IGNIS_INPUT
@@ -401,9 +541,9 @@ class Render::Vulkan {
             // command pool is managing the memory used for the command buffers
             CreateCommandPool();
 
-            firstSurface = false;
+            CreateSamplerFromData();
 
-            CreateTextureSampler();
+            firstSurface = false;
         }
 
         windows[curWindow]->surfaces[curSurface] = SurfaceVulkanData{};
@@ -411,6 +551,8 @@ class Render::Vulkan {
         SurfaceVulkanData *surface = &(windows[curWindow]->surfaces[curSurface]);
 
         surface->haveVertexData = false;
+
+        constantsData[curSurface] = nullptr;
 
         // creates the swapchain, the images that are rendered onto the screen
         CreateSwapChain(surface->swapChain, surface->swapChainImages, windows[curWindow].get(), curWindow, curSurface);
@@ -424,16 +566,6 @@ class Render::Vulkan {
 
         // create the rendering procedure that the data passes to be rendered
         CreateGraphicPipeline(windows[curWindow].get(), surface);  // need a CreatePipelineInfo later
-
-        // creates depth resources for the surface so it can depth check
-        if (surface->pipelineData.depthTestEnable || surface->pipelineData.depthWriteEnable)
-            CreateDepthResources(surface, windows[curWindow]->swapChainExtent);
-
-        CreateUniformBuffers(surface);
-
-        CreateDescriptorPool(surface);
-
-        CreateDescriptorSets(surface);
 
         // creates command buffer that can be used to submit commands to specific queues
         CreateCommandBuffers(surface->commandBuffers);
@@ -494,71 +626,26 @@ class Render::Vulkan {
         return nextElement++;
     }
 
-    void *GetWindowOfSurface(int surface) {
+    void* GetWindowOfSurface(int surface) {
         return surfaceAccess[surface].window;
     }
 
+    int CreateSampler(SamplerFilter filter, SamplerAddressing addressing, SamplerMipmapMode mipmapMode) {
+        CreateSamplerVKConvert samplerVK = SamplerInfoToVK(filter, addressing, mipmapMode);
+        samplerCreateDatas.push_back(samplerVK);
+        return nextSamplerData++;
+    }
+
+    void PushConstants(int surface, void* data, uint32_t size) {
+        if (constantsData[surfaceAccess[surface].surface] != nullptr)
+            free(constantsData[surfaceAccess[surface].surface]);
+
+        constantsData[surfaceAccess[surface].surface] = malloc(size);
+        memcpy(constantsData[surfaceAccess[surface].surface], data, size);
+    }
+
+
    private:
-    struct SwapChainSupportDetails {
-        std::vector<VkSurfaceFormatKHR> formats;
-        std::vector<VkPresentModeKHR> presentModes;
-    };
-
-    const std::vector<const char *> validationLayers = { "VK_LAYER_KHRONOS_validation" };
-
-    bool enableValidationLayers = false;
-
-    bool gpuAssistedEnabledValidation = true;
-
-    // VK_KHR_depth_stencil_resolve
-    const std::vector<const char *> deviceExtensions = {
-        VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
-    };
-
-    const int MAX_FRAMES_IN_FLIGHT = 2;
-
-    bool firstSurface = true;
-
-    bool firstTexture = true;
-
-    std::unordered_map<GLFWwindow *, std::unique_ptr<WindowVulkanData>> windows;
-    VkInstance instance;
-
-    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
-    VkDebugUtilsMessengerEXT debugMessenger;
-
-    VkDevice device;
-    VkQueue graphicsQueue;
-    VkQueue presentQueue;
-
-    VkSurfaceKHR surface;
-
-    SwapChainSupportDetails swapChainSupport;
-    VkSurfaceFormatKHR swapChainImageFormat;
-    VkPresentModeKHR swapChainPresentMode;
-
-    VkCommandPool commandPool;
-
-    std::unordered_map<int, TextureData> textureData;
-    VkSampler textureSampler;
-    unsigned int nextTexture = 1;
-    uint32_t MAX_TEXTURES;
-
-    VkImageView dummyImageView;
-    VkImage dummyImage;
-    VkDeviceMemory dummyImageMemory;
-
-    std::unordered_map<int, UIRenderData> renderData;
-    int nextElement = 0;
-
-    struct SurfaceAccess {
-        GLFWwindow *window;
-        VkSurfaceKHR surface;
-    };
-
-    std::unordered_map<int, SurfaceAccess> surfaceAccess;
-    int nextSurface = 0;
-
     void CleanupSwapChain(SurfaceVulkanData *surface) {
         vkDestroyImageView(device, surface->depthImageView, nullptr);
         vkDestroyImage(device, surface->depthImage, nullptr);
@@ -578,7 +665,9 @@ class Render::Vulkan {
     void CleanUpSurface(SurfaceVulkanData *data) {
         CleanupSwapChain(data);
 
-        vkDestroyDescriptorSetLayout(device, data->descriptorSetLayout, nullptr);
+        for (auto& layout : data->descriptorSetLayouts)
+            vkDestroyDescriptorSetLayout(device, layout, nullptr);
+
         vkDestroyDescriptorPool(device, data->descriptorPool, nullptr);
 
         vkDestroyBuffer(device, data->vertexBuffer, nullptr);
@@ -587,10 +676,14 @@ class Render::Vulkan {
         vkDestroyBuffer(device, data->indexBuffer, nullptr);
         vkFreeMemory(device, data->indexBufferMemory, nullptr);
 
-        for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-            vkDestroyBuffer(device, data->uniformBuffers[i], nullptr);
-            vkFreeMemory(device, data->uniformBuffersMemory[i], nullptr);
+        for (int j = 0; j < data->uniformBuffers.size(); j++)
+        {
+            for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+                vkDestroyBuffer(device, data->uniformBuffers[j][i], nullptr);
+                vkFreeMemory(device, data->uniformBuffersMemory[j][i], nullptr);
+            }
         }
+
 
         vkDestroyPipeline(device, data->pipeline, nullptr);
         vkDestroyPipelineLayout(device, data->layout, nullptr);
@@ -632,6 +725,10 @@ class Render::Vulkan {
 
     // Cleans up upon closing all the windows
     void CleanUp() {
+        for (auto& [surface, data] : constantsData) {
+            if (data != nullptr) free(data);
+        }
+
         for (auto &[window, windowData] : windows) {
             for (auto &[surface, surfaceData] : windowData->surfaces) {
                 CleanUpSurface(&surfaceData);
@@ -700,7 +797,7 @@ class Render::Vulkan {
 
         // resets and records the command buffer
         vkResetCommandBuffer(data->commandBuffers[data->currentFrame], 0);
-        RecordCommandBuffer(data, windows[window]->swapChainExtent, imageIndex);
+        RecordCommandBuffer(data, windows[window]->swapChainExtent, imageIndex, *surface);
 
         // submiting it to the graphics family queue
         VkSubmitInfo submitInfo{};
@@ -766,7 +863,7 @@ class Render::Vulkan {
 
         ubo.proj[1][1] *= -1;
 
-        memcpy(surface->uniformBuffersMapped[surface->currentFrame], &ubo, sizeof(ubo));
+        memcpy(surface->uniformBuffersMapped[0][surface->currentFrame], &ubo, sizeof(ubo));
     }
 
     void RecreateSwapChain(GLFWwindow *window, VkSurfaceKHR surface) {
@@ -897,6 +994,43 @@ class Render::Vulkan {
         }
     }
 
+    void CreateSamplerFromData() {
+        for (auto& samplerVK : samplerCreateDatas) {
+
+            VkSamplerCreateInfo samplerInfo{};
+
+            samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+
+            samplerInfo.magFilter = samplerVK.filter;
+            samplerInfo.minFilter = samplerVK.filter;
+
+            samplerInfo.addressModeU = samplerVK.addressMode;
+            samplerInfo.addressModeV = samplerVK.addressMode;
+            samplerInfo.addressModeW = samplerVK.addressMode;
+
+            VkPhysicalDeviceProperties properties{};
+            vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+
+            samplerInfo.anisotropyEnable = VK_TRUE;
+            samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+
+            samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+            samplerInfo.unnormalizedCoordinates = VK_FALSE;
+
+            samplerInfo.compareEnable = VK_FALSE;
+            samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+
+            samplerInfo.mipmapMode = samplerVK.mipmapMode;
+            samplerInfo.mipLodBias = 0.0f;
+            samplerInfo.minLod = 0.0f;
+            samplerInfo.maxLod = 0.0f;
+
+            if (vkCreateSampler(device, &samplerInfo, nullptr, &samplerAccess[nextSampler++]) != VK_SUCCESS) {
+                throw std::runtime_error("failed to create texture sampler!");
+            }
+        }
+    }
+
     // creates a buffer
     void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &bufferMemory) {
         // basic vertex buffer data
@@ -1021,81 +1155,125 @@ class Render::Vulkan {
     }
 
     // uniform buffer creation
-    void CreateUniformBuffers(SurfaceVulkanData *surface) {
-        VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+    void CreateUniformBuffers(SurfaceVulkanData *surface, int size, int index) {
+        VkDeviceSize bufferSize = size;
 
-        surface->uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-        surface->uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
-        surface->uniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
+        surface->uniformBuffers[index].resize(MAX_FRAMES_IN_FLIGHT);
+        surface->uniformBuffersMemory[index].resize(MAX_FRAMES_IN_FLIGHT);
+        surface->uniformBuffersMapped[index].resize(MAX_FRAMES_IN_FLIGHT);
 
         for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-            CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, surface->uniformBuffers[i], surface->uniformBuffersMemory[i]);
+            CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, surface->uniformBuffers[index][i], surface->uniformBuffersMemory[index][i]);
 
-            vkMapMemory(device, surface->uniformBuffersMemory[i], 0, bufferSize, 0, &surface->uniformBuffersMapped[i]);
+            vkMapMemory(device, surface->uniformBuffersMemory[index][i], 0, bufferSize, 0, &surface->uniformBuffersMapped[index][i]);
+        }
+    }
+
+    void CreateStorageBuffers(SurfaceVulkanData* surface, int size, int index) {
+        VkDeviceSize bufferSize = size;
+
+        surface->storageBuffers[index].resize(MAX_FRAMES_IN_FLIGHT);
+        surface->storageBuffersMemory[index].resize(MAX_FRAMES_IN_FLIGHT);
+        surface->storageBuffersMapped[index].resize(MAX_FRAMES_IN_FLIGHT);
+
+        for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+            CreateBuffer(bufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, surface->storageBuffers[index][i], surface->storageBuffersMemory[index][i]);
+
+            vkMapMemory(device, surface->storageBuffersMemory[index][i], 0, bufferSize, 0, &surface->storageBuffersMapped[index][i]);
         }
     }
 
     // makes the descriptors for "Uniform"(set) bindings, need to make all of them here
     void CreateDescriptorSetLayout(SurfaceVulkanData *surface) {
-        VkDescriptorSetLayoutBinding uboLayoutBinding{};
-        uboLayoutBinding.binding = 0;
-        uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        uboLayoutBinding.descriptorCount = 1;
-        uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        uboLayoutBinding.pImmutableSamplers = nullptr;
-
         VkPhysicalDeviceProperties props;
         vkGetPhysicalDeviceProperties(physicalDevice, &props);
-        MAX_TEXTURES = props.limits.maxPerStageDescriptorSamplers;
-        if (MAX_TEXTURES < 1028) throw std::runtime_error("Necessary texture amount not available on the GPU");
-        MAX_TEXTURES = (1028 < MAX_TEXTURES) ? 1028 : MAX_TEXTURES;
 
-        VkDescriptorSetLayoutBinding samplerBinding{};
-        samplerBinding.binding = 1;
-        samplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        samplerBinding.descriptorCount = MAX_TEXTURES;  // array size
-        samplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        samplerBinding.pImmutableSamplers = nullptr;
+        surface->descriptorSetLayouts.resize(surface->pipelineData.descriptorSets.size());
 
-        std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerBinding };
+        for (size_t i = 0; i < surface->pipelineData.descriptorSets.size(); i++)
+        {
+            auto& item = surface->pipelineData.descriptorSets[i];
+            std::vector<VkDescriptorBindingFlagsEXT> bindingFlags(item.descriptorInfo.size(), 0);
+            std::vector<VkDescriptorSetLayoutBinding> bindings(item.descriptorInfo.size());
 
-        VkDescriptorBindingFlags bindingFlags[2] = {
-            0,
-            VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT |
-                VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT
-        };
+            bool hasImage = false;
+            bool hasUBO = false;
+            bool hasStorage = false;
 
-        VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo{};
-        flagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
-        flagsInfo.bindingCount = 2;
-        flagsInfo.pBindingFlags = bindingFlags;
+            for (size_t j = 0; j < item.descriptorInfo.size(); j++)
+            {
+                auto& descriptor = item.descriptorInfo[j];
 
-        VkDescriptorSetLayoutCreateInfo layoutInfo{};
-        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-        layoutInfo.pBindings = bindings.data();
-        addPNext(&layoutInfo, &flagsInfo);
+                VkDescriptorSetLayoutBinding descriptorBinding{};
+                descriptorBinding.binding = descriptor.binding;
+                descriptorBinding.descriptorCount = descriptor.count;
+                descriptorBinding.descriptorType = DescriptorTypeToVK(descriptor.type);
+                descriptorBinding.stageFlags = ShaderStageToVK(descriptor.stage);
 
-        if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &(surface->descriptorSetLayout)) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create descriptor set layout!");
+                if (descriptor.type == Render::DescriptorInfo::DescriptorType::IMAGE) {
+                    if (hasImage) throw std::runtime_error("cant have multiple image descriptor");
+                    else hasImage = true;
+
+                    uint32_t maxTextures = props.limits.maxPerStageDescriptorSamplers;
+                    if (maxTextures < descriptor.count) throw std::runtime_error("asked texture amount not available on the GPU");
+
+                    bindingFlags[j] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT;
+                }
+                else if(descriptor.type == Render::DescriptorInfo::DescriptorType::UNIFORM){
+                    if (hasUBO) throw std::runtime_error("cant have multiple uniform buffer descriptor");
+                    else hasUBO = true;
+                }
+                else if (descriptor.type == Render::DescriptorInfo::DescriptorType::STORAGE) {
+                    if (hasStorage) throw std::runtime_error("cant have multiple storage buffer descriptor");
+                    else hasStorage = true;
+                }
+
+                bindings[j] = descriptorBinding;
+            }
+
+            VkDescriptorSetLayoutBindingFlagsCreateInfoEXT flagsInfo{};
+            flagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT;
+            flagsInfo.bindingCount = bindingFlags.size();
+            flagsInfo.pBindingFlags = bindingFlags.data();
+
+            VkDescriptorSetLayoutCreateInfo layoutInfo{};
+            layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+            layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+            layoutInfo.pBindings = bindings.data();
+            layoutInfo.pNext = &flagsInfo;
+
+            if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &(surface->descriptorSetLayouts[i])) != VK_SUCCESS) {
+                throw std::runtime_error("failed to create descriptor set layout!");
+            }
         }
     }
 
     // creates the pool for the descriptor sets
     void CreateDescriptorPool(SurfaceVulkanData *surface) {
-        std::array<VkDescriptorPoolSize, 2> poolSizes{};
-        poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+        std::unordered_map<VkDescriptorType, uint32_t> counts;
 
-        poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * MAX_TEXTURES);
+        for (auto& set : surface->pipelineData.descriptorSets) {
+            for (auto& descriptor : set.descriptorInfo) {
+                VkDescriptorType type = DescriptorTypeToVK(descriptor.type);
+                counts[type] += MAX_FRAMES_IN_FLIGHT * descriptor.count;
+            }
+        }
+
+        std::vector<VkDescriptorPoolSize> poolSizes;
+        poolSizes.reserve(counts.size());
+
+        for (auto& [type, count] : counts) {
+            VkDescriptorPoolSize ps{};
+            ps.type = type;
+            ps.descriptorCount = count;
+            poolSizes.push_back(ps);
+        }
 
         VkDescriptorPoolCreateInfo poolInfo{};
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
         poolInfo.pPoolSizes = poolSizes.data();
-        poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-        poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+        poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * surface->pipelineData.descriptorSets.size());
 
         if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &surface->descriptorPool) != VK_SUCCESS) {
             throw std::runtime_error("failed to create descriptor pool!");
@@ -1103,64 +1281,130 @@ class Render::Vulkan {
     }
 
     // creates the actual descriptor sets
-    void CreateDescriptorSets(SurfaceVulkanData *surface) {
-        VkDescriptorSetVariableDescriptorCountAllocateInfo variableCount{};
-        variableCount.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO;
-        variableCount.descriptorSetCount = MAX_FRAMES_IN_FLIGHT;
-        std::vector<uint32_t> counts(MAX_FRAMES_IN_FLIGHT, MAX_TEXTURES);
+    void CreateDescriptorSets(SurfaceVulkanData* surface) {
+        std::vector<uint32_t> variableCountsPerSet;
+
+        for (auto& set : surface->pipelineData.descriptorSets) {
+            uint32_t countForThisSet = 0;
+
+            for (auto& descriptor : set.descriptorInfo) {
+                if (descriptor.type == Render::DescriptorInfo::DescriptorType::IMAGE)
+                    countForThisSet = descriptor.count;    
+            }
+
+            variableCountsPerSet.push_back(countForThisSet);
+        }
+
+        std::vector<uint32_t> counts;
+
+        for (uint32_t f = 0; f < MAX_FRAMES_IN_FLIGHT; f++) {
+            for (auto c : variableCountsPerSet) {
+                counts.push_back(c);
+            }
+        }
+
+        VkDescriptorSetVariableDescriptorCountAllocateInfoEXT variableCount{};
+        variableCount.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT;
+        variableCount.descriptorSetCount = counts.size();
         variableCount.pDescriptorCounts = counts.data();
 
-        std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, surface->descriptorSetLayout);
+        std::vector<VkDescriptorSetLayout> layouts;
+        std::vector<VkDescriptorSet> flatLayouts;
+
+        for (uint32_t f = 0; f < MAX_FRAMES_IN_FLIGHT; f++) {
+            for (auto layout : surface->descriptorSetLayouts) {
+                layouts.push_back(layout);
+                flatLayouts.push_back(VK_NULL_HANDLE);
+            }
+        }
+
         VkDescriptorSetAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         allocInfo.descriptorPool = surface->descriptorPool;
-        allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+        allocInfo.descriptorSetCount = layouts.size();
         allocInfo.pSetLayouts = layouts.data();
-        addPNext(&allocInfo, &variableCount);
+        allocInfo.pNext = &variableCount;
 
-        surface->descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
-        if (vkAllocateDescriptorSets(device, &allocInfo, surface->descriptorSets.data()) != VK_SUCCESS) {
+        if (vkAllocateDescriptorSets(device, &allocInfo, flatLayouts.data()) != VK_SUCCESS) {
             throw std::runtime_error("failed to allocate descriptor sets!");
         }
 
-        CreateImage(1, 1, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, dummyImage, dummyImageMemory);
-        dummyImageView = CreateTextureImageView(dummyImage);
+        surface->descriptorSets.resize(surface->descriptorSetLayouts.size());
+        for (size_t i = 0; i < surface->descriptorSetLayouts.size(); i++)
+            surface->descriptorSets[i].resize(MAX_FRAMES_IN_FLIGHT);
 
-        // idk what the pp happening here
-        // update: now i know what the pp is happening
-        for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-            VkDescriptorBufferInfo bufferInfo{};
-            bufferInfo.buffer = surface->uniformBuffers[i];
-            bufferInfo.offset = 0;
-            bufferInfo.range = sizeof(UniformBufferObject);
-
-            std::vector<VkDescriptorImageInfo> imageInfos(MAX_TEXTURES);
-            for (uint32_t t = 0; t < MAX_TEXTURES; t++) {
-                imageInfos[t].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                if (nextTexture > t + 1)
-                    imageInfos[t].imageView = textureData[t].textureImageView;
-
-                imageInfos[t].sampler = textureSampler;
+        size_t index = 0;
+        for (uint32_t f = 0; f < MAX_FRAMES_IN_FLIGHT; f++) {
+            for (size_t s = 0; s < surface->descriptorSetLayouts.size(); s++) {
+                surface->descriptorSets[s][f] = flatLayouts[index++];
             }
-            std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
+        }
 
-            descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            descriptorWrites[0].dstSet = surface->descriptorSets[i];
-            descriptorWrites[0].dstBinding = 0;
-            descriptorWrites[0].dstArrayElement = 0;
-            descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            descriptorWrites[0].descriptorCount = 1;
-            descriptorWrites[0].pBufferInfo = &bufferInfo;
+        for (size_t i = 0; i < surface->pipelineData.descriptorSets.size(); i++)
+        {
+            auto& set = surface->pipelineData.descriptorSets[i];
 
-            descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            descriptorWrites[1].dstSet = surface->descriptorSets[i];
-            descriptorWrites[1].dstBinding = 1;
-            descriptorWrites[1].dstArrayElement = 0;
-            descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            descriptorWrites[1].descriptorCount = MAX_TEXTURES;
-            descriptorWrites[1].pImageInfo = imageInfos.data();
+            std::vector<VkWriteDescriptorSet> writes;
+            std::vector<VkDescriptorImageInfo> imageInfos;
+            VkDescriptorBufferInfo uniformBufferInfo{};
+            VkDescriptorBufferInfo storageBufferInfo{};
 
-            vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+            for (size_t j = 0; j < set.descriptorInfo.size(); j++)
+            {
+                auto& descriptor = set.descriptorInfo[j];
+                if (descriptor.type == Render::DescriptorInfo::DescriptorType::UNIFORM)
+                    CreateUniformBuffers(surface, descriptor.data, i);
+                else if (descriptor.type == Render::DescriptorInfo::DescriptorType::STORAGE)
+                    CreateStorageBuffers(surface, descriptor.data, i);
+
+                for (int f = 0; f < MAX_FRAMES_IN_FLIGHT; f++) {
+
+                    VkWriteDescriptorSet write{};
+                    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                    write.dstSet = surface->descriptorSets[i][f];
+                    write.dstBinding = descriptor.binding;
+                    write.dstArrayElement = 0;
+
+                    if (descriptor.type == Render::DescriptorInfo::DescriptorType::UNIFORM) {
+                        uniformBufferInfo.buffer = surface->uniformBuffers[i][f];
+                        uniformBufferInfo.offset = 0;
+                        uniformBufferInfo.range = descriptor.data;
+
+                        write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                        write.descriptorCount = 1;
+                        write.pBufferInfo = &uniformBufferInfo;
+
+                        writes.push_back(write);
+                    }
+                    else if (descriptor.type == Render::DescriptorInfo::DescriptorType::STORAGE) {
+                        storageBufferInfo.buffer = surface->storageBuffers[i][f];
+                        storageBufferInfo.offset = 0;
+                        storageBufferInfo.range = descriptor.data;
+
+                        write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                        write.descriptorCount = 1;
+                        write.pBufferInfo = &storageBufferInfo;
+
+                        writes.push_back(write);
+                    }
+                    else { 
+                        imageInfos.resize(descriptor.count);
+                        for (auto& info : imageInfos) {
+                            info.sampler = samplerAccess[descriptor.data];
+                            info.imageView = VK_NULL_HANDLE;
+                            info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                        }
+
+                        write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                        write.descriptorCount = descriptor.count;
+                        write.pImageInfo = imageInfos.data();
+
+                        writes.push_back(write);
+                    }
+                }
+            }
+
+            vkUpdateDescriptorSets(device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
         }
     }
 
@@ -1168,14 +1412,14 @@ class Render::Vulkan {
         VkDescriptorImageInfo imageInfo{};
         imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         imageInfo.imageView = textureView;
-        imageInfo.sampler = textureSampler;
+        imageInfo.sampler = samplerAccess[0];
 
         for (auto &[window, windowData] : windows) {
             for (auto &[surface, surfaceData] : windowData->surfaces) {
                 for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
                     VkWriteDescriptorSet write{};
                     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                    write.dstSet = surfaceData.descriptorSets[i];
+                    write.dstSet = surfaceData.descriptorSets[0][i];
                     write.dstBinding = 1;
                     write.dstArrayElement = index;
                     write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -1263,7 +1507,7 @@ class Render::Vulkan {
         }
     }
     // records command to commandbuffer, also need the image's index that you want to write to
-    void RecordCommandBuffer(SurfaceVulkanData *surface, VkExtent2D &extent, uint32_t &imageIndex) {
+    void RecordCommandBuffer(SurfaceVulkanData *surface, VkExtent2D& extent, uint32_t& imageIndex, VkSurfaceKHR surfaceKey) {
         int frame = surface->currentFrame;
         VkCommandBuffer cmdBuffer = surface->commandBuffers[frame];
 
@@ -1278,8 +1522,10 @@ class Render::Vulkan {
         }
 
         std::array<VkClearValue, 2> clearValues{};
-        clearValues[0].color = { { 0.388235f, 0.643137f, 0.839216f, 1.0f } };
+        clearValues[0].color = { {0.388235f, 0.643137f, 0.839216f, 1.0f} };
         clearValues[1].depthStencil = { 1.0f, 0 };
+
+
 
         VkRenderingAttachmentInfoKHR colorAttachmentInfo{};
         colorAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
@@ -1289,6 +1535,7 @@ class Render::Vulkan {
         colorAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         colorAttachmentInfo.clearValue = clearValues[0];
 
+        
         VkRenderingAttachmentInfoKHR depthAttachmentInfo{};
         depthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
         depthAttachmentInfo.imageView = surface->depthImageView;
@@ -1309,6 +1556,7 @@ class Render::Vulkan {
         renderInfo.pColorAttachments = &colorAttachmentInfo;
         renderInfo.pDepthAttachment = (surface->pipelineData.depthTestEnable) ? &depthAttachmentInfo : nullptr;
 
+
         VkImageMemoryBarrier imageMemoryBarrier{};
         imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
         imageMemoryBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
@@ -1316,15 +1564,15 @@ class Render::Vulkan {
         imageMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         imageMemoryBarrier.image = surface->swapChainImages[imageIndex];
         imageMemoryBarrier.subresourceRange = {
-            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-            .baseMipLevel = 0,
-            .levelCount = 1,
-            .baseArrayLayer = 0,
-            .layerCount = 1,
+          .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+          .baseMipLevel = 0,
+          .levelCount = 1,
+          .baseArrayLayer = 0,
+          .layerCount = 1,
         };
 
-        vkCmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                             0, 0, nullptr, 0, nullptr, 1, &imageMemoryBarrier);
+        vkCmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
+            0, 0, nullptr, 0, nullptr, 1, &imageMemoryBarrier);
 
         vkCmdBeginRendering(cmdBuffer, &renderInfo);
 
@@ -1354,7 +1602,9 @@ class Render::Vulkan {
         // binds the index buffer to the said binding
         vkCmdBindIndexBuffer(cmdBuffer, surface->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-        vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, surface->layout, 0, 1, &surface->descriptorSets[frame], 0, nullptr);
+        vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, surface->layout, 0, 1, &surface->descriptorSets[0][frame], 0, nullptr);
+
+        vkCmdPushConstants(cmdBuffer, surface->layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, surface->pipelineData.constantsSize, constantsData[surfaceKey]);
 
         // draw call
         vkCmdDrawIndexed(cmdBuffer, static_cast<uint32_t>(surface->indiceCount), 1, 0, 0, 0);
@@ -1362,22 +1612,22 @@ class Render::Vulkan {
         // ending the render pass
         vkCmdEndRendering(cmdBuffer);
 
-        imageMemoryBarrier = {};
+        imageMemoryBarrier = VkImageMemoryBarrier{};
         imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
         imageMemoryBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
         imageMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         imageMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
         imageMemoryBarrier.image = surface->swapChainImages[imageIndex];
         imageMemoryBarrier.subresourceRange = {
-            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-            .baseMipLevel = 0,
-            .levelCount = 1,
-            .baseArrayLayer = 0,
-            .layerCount = 1,
+              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+              .baseMipLevel = 0,
+              .levelCount = 1,
+              .baseArrayLayer = 0,
+              .layerCount = 1,
         };
 
         vkCmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                             0, 0, nullptr, 0, nullptr, 1, &imageMemoryBarrier);
+            0, 0, nullptr, 0, nullptr, 1, &imageMemoryBarrier);
 
         // ending the command recording
         if (vkEndCommandBuffer(cmdBuffer) != VK_SUCCESS) {
@@ -1572,39 +1822,6 @@ class Render::Vulkan {
         return imageView;
     }
 
-    void CreateTextureSampler() {
-        VkSamplerCreateInfo samplerInfo{};
-
-        samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-        samplerInfo.magFilter = VK_FILTER_LINEAR;
-        samplerInfo.minFilter = VK_FILTER_LINEAR;
-
-        samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-
-        VkPhysicalDeviceProperties properties{};
-        vkGetPhysicalDeviceProperties(physicalDevice, &properties);
-
-        samplerInfo.anisotropyEnable = VK_TRUE;
-        samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
-
-        samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-        samplerInfo.unnormalizedCoordinates = VK_FALSE;
-
-        samplerInfo.compareEnable = VK_FALSE;
-        samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-
-        samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-        samplerInfo.mipLodBias = 0.0f;
-        samplerInfo.minLod = 0.0f;
-        samplerInfo.maxLod = 0.0f;
-
-        if (vkCreateSampler(device, &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create texture sampler!");
-        }
-    }
-
     // depth testing
     void CreateDepthResources(SurfaceVulkanData *surface, VkExtent2D extent) {
         VkFormat depthFormat = findDepthFormat();
@@ -1713,7 +1930,14 @@ class Render::Vulkan {
     }
 
     // creates the pipeline
-    void CreateGraphicPipeline(WindowVulkanData *window, SurfaceVulkanData *surface) {
+    void CreateGraphicPipeline(WindowVulkanData *window, SurfaceVulkanData* surface) {
+
+        CreateDescriptorSetLayout(surface);
+
+        if (surface->pipelineData.depthTestEnable || surface->pipelineData.depthWriteEnable)
+            CreateDepthResources(surface, window->swapChainExtent);
+
+
         // reads in the binary shader data
         CompileShader(surface->pipelineData.vertexShader, "vert");
         auto vertShaderCode = readFile("vert.spv");
@@ -1755,7 +1979,7 @@ class Render::Vulkan {
         //!!! what type of data it uses (lines, triangles), and how (reusing vertecies or not)
         VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
         inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-        inputAssembly.topology = surface->pipelineData.topology;  // feature
+        inputAssembly.topology = surface->pipelineData.topology;                                    //feature
         inputAssembly.primitiveRestartEnable = VK_FALSE;
 
         // sets where and in what size the frambuffer is visible
@@ -1799,8 +2023,8 @@ class Render::Vulkan {
         rasterizer.lineWidth = 1.0f;
 
         // culling
-        rasterizer.cullMode = surface->pipelineData.cullMode;    // feature
-        rasterizer.frontFace = surface->pipelineData.frontFace;  // feature
+        rasterizer.cullMode = surface->pipelineData.cullMode;                                   //feature
+        rasterizer.frontFace = surface->pipelineData.frontFace;                                 //feature
 
         rasterizer.depthBiasEnable = VK_FALSE;
         rasterizer.depthBiasConstantFactor = 0.0f;  // Optional
@@ -1811,21 +2035,21 @@ class Render::Vulkan {
         VkPipelineMultisampleStateCreateInfo multisampling{};
         multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
         multisampling.sampleShadingEnable = VK_FALSE;
-        multisampling.rasterizationSamples = surface->pipelineData.rasterizationSamples;  // feature
-        multisampling.minSampleShading = 1.0f;                                            // Optional
-        multisampling.pSampleMask = nullptr;                                              // Optional
-        multisampling.alphaToCoverageEnable = VK_FALSE;                                   // Optional
-        multisampling.alphaToOneEnable = VK_FALSE;                                        // Optional
+        multisampling.rasterizationSamples = surface->pipelineData.rasterizationSamples;        //feature
+        multisampling.minSampleShading = 1.0f;           // Optional
+        multisampling.pSampleMask = nullptr;             // Optional
+        multisampling.alphaToCoverageEnable = VK_FALSE;  // Optional
+        multisampling.alphaToOneEnable = VK_FALSE;       // Optional
 
         VkPipelineColorBlendAttachmentState colorBlendAttachment{};
         colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-        colorBlendAttachment.blendEnable = surface->pipelineData.blendEnable;                  // feature
-        colorBlendAttachment.srcColorBlendFactor = surface->pipelineData.srcColorBlendFactor;  // feature
-        colorBlendAttachment.dstColorBlendFactor = surface->pipelineData.dstColorBlendFactor;  // feature
-        colorBlendAttachment.colorBlendOp = surface->pipelineData.colorBlendOp;                // feature
-        colorBlendAttachment.srcAlphaBlendFactor = surface->pipelineData.srcAlphaBlendFactor;  // feature
-        colorBlendAttachment.dstAlphaBlendFactor = surface->pipelineData.dstAlphaBlendFactor;  // feature
-        colorBlendAttachment.alphaBlendOp = surface->pipelineData.alphaBlendOp;                // feature
+        colorBlendAttachment.blendEnable = surface->pipelineData.blendEnable;                   //feature
+        colorBlendAttachment.srcColorBlendFactor = surface->pipelineData.srcColorBlendFactor;   //feature
+        colorBlendAttachment.dstColorBlendFactor = surface->pipelineData.dstColorBlendFactor;   //feature
+        colorBlendAttachment.colorBlendOp = surface->pipelineData.colorBlendOp;                 //feature
+        colorBlendAttachment.srcAlphaBlendFactor = surface->pipelineData.srcAlphaBlendFactor;   //feature
+        colorBlendAttachment.dstAlphaBlendFactor = surface->pipelineData.dstAlphaBlendFactor;   //feature
+        colorBlendAttachment.alphaBlendOp = surface->pipelineData.alphaBlendOp;                 //feature
 
         VkPipelineColorBlendStateCreateInfo colorBlending{};
         colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -1835,8 +2059,8 @@ class Render::Vulkan {
 
         VkPipelineDepthStencilStateCreateInfo depthStencil{};
         depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-        depthStencil.depthTestEnable = surface->pipelineData.depthTestEnable;    // feature
-        depthStencil.depthWriteEnable = surface->pipelineData.depthWriteEnable;  // feature
+        depthStencil.depthTestEnable = surface->pipelineData.depthTestEnable;                   //feature
+        depthStencil.depthWriteEnable = surface->pipelineData.depthWriteEnable;                 //feature
         depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
 
         depthStencil.depthBoundsTestEnable = VK_FALSE;
@@ -1847,7 +2071,7 @@ class Render::Vulkan {
         depthStencil.front = {};  // Optional
         depthStencil.back = {};   // Optional
 
-        VkFormat depthFormat = findDepthFormat();  // e.g., VK_FORMAT_D32_SFLOAT
+        VkFormat depthFormat = findDepthFormat(); // e.g., VK_FORMAT_D32_SFLOAT
 
         VkPipelineRenderingCreateInfo renderCreateInfo{
             .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
@@ -1856,12 +2080,19 @@ class Render::Vulkan {
             .depthAttachmentFormat = depthFormat
         };
 
+        VkPushConstantRange constRange{};
+        constRange.offset = 0;
+        constRange.size = surface->pipelineData.constantsSize;
+        constRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+
         VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipelineLayoutInfo.setLayoutCount = 1;                           // Optional
-        pipelineLayoutInfo.pSetLayouts = &surface->descriptorSetLayout;  // Optional
-        pipelineLayoutInfo.pushConstantRangeCount = 0;                   // Optional
-        pipelineLayoutInfo.pPushConstantRanges = nullptr;                // Optional
+        pipelineLayoutInfo.setLayoutCount = surface->descriptorSetLayouts.size();
+        pipelineLayoutInfo.pSetLayouts = surface->descriptorSetLayouts.data();
+        if (constRange.size > 0) {
+            pipelineLayoutInfo.pushConstantRangeCount = 1;
+            pipelineLayoutInfo.pPushConstantRanges = &constRange;
+        }
 
         if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &surface->layout) != VK_SUCCESS) {
             throw std::runtime_error("failed to create pipeline layout!");
@@ -1896,6 +2127,9 @@ class Render::Vulkan {
 
         vkDestroyShaderModule(device, fragShaderModule, nullptr);
         vkDestroyShaderModule(device, vertShaderModule, nullptr);
+
+        CreateDescriptorPool(surface);
+        CreateDescriptorSets(surface);
     }
 
     // creates the structs for the vk shaders
@@ -2003,7 +2237,6 @@ class Render::Vulkan {
         features12.runtimeDescriptorArray = VK_TRUE;
         features12.descriptorBindingPartiallyBound = VK_TRUE;
         features12.descriptorBindingVariableDescriptorCount = VK_TRUE;
-        features12.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
         features12.pNext = &robustness2Features;
 
         VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeature{};
@@ -2164,7 +2397,7 @@ class Render::Vulkan {
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData) {
         std::string msg = pCallbackData->pMessage;
 
-        // we dont talk about the api version around here
+        //we dont talk about the api version around here
         if (msg.find("is older than the application specified API version") != std::string::npos) return VK_FALSE;
 
         std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
@@ -2204,6 +2437,11 @@ class Render::Vulkan {
     }
 };
 
+
+
+
+
+
 Window Render::CreateAppWindow(int width, int height, const char *title, GLFWmonitor *screen, GLFWwindow *share) { return instance->CreateVulkanWindow(width, height, title, screen, share); }
 
 int Render::CreateSurface(Window window, CreateGraphicPipeLineInfo graphicPipeLineInfo) { return instance->CreateSurface(window, graphicPipeLineInfo); }
@@ -2224,8 +2462,50 @@ void Render::Clean() { delete instance; }
 
 int Render::CreateFontPage(const std::vector<uint8_t> &rgbaData, uint32_t width, uint32_t height) { return instance->CreateFontPage(rgbaData, width, height); };
 
-void *Render::GetWindowOfSurface(int surface) {
+void* Render::GetWindowOfSurface(int surface) {
     return instance->GetWindowOfSurface(surface);
+}
+
+int Render::CreateSampler(SamplerFilter filter, SamplerAddressing addressing, SamplerMipmapMode mipmapMode) {
+    return instance->CreateSampler(filter, addressing, mipmapMode);
+}
+
+Render::DescriptorInfo Render::CreateUniformDescriptor(int binding, int size, ShaderStage stage) {
+    DescriptorInfo output;
+
+    output.type = Render::DescriptorInfo::DescriptorType::UNIFORM;
+    output.binding = binding;
+    output.count = 1;
+    output.stage = stage;
+    output.data = size;
+
+    return output;
+}
+Render::DescriptorInfo Render::CreateStorageDescriptor(int binding, int size, ShaderStage stage) {
+    DescriptorInfo output;
+
+    output.type = Render::DescriptorInfo::DescriptorType::STORAGE;
+    output.binding = binding;
+    output.count = 1;
+    output.stage = stage;
+    output.data = size;
+
+    return output;
+}
+Render::DescriptorInfo Render::CreateImageDescriptor(int binding, int count, int sampler, ShaderStage stage) {
+    DescriptorInfo output;
+
+    output.type = Render::DescriptorInfo::DescriptorType::IMAGE;
+    output.binding = binding;
+    output.count = count;
+    output.stage = stage;
+    output.data = sampler;
+
+    return output;
+}
+
+void Render::PushConstants(int surface, void* data, uint32_t size) {
+    instance->PushConstants(surface, data, size);
 }
 
 Render::Vulkan *Render::instance = nullptr;

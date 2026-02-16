@@ -1,12 +1,10 @@
 for full rendering:
 
-	need to implement compute shaders
-
-
 	needs the following descriptor set types modularized:
 	storage buffer
 	uniform buffer
-	texture/sampler //should not be per frame
+	texture //should not be per frame
+	sampler //should not be per frame
 	constants		//passed per draw call
 
 	descriptor set can only be created before creating the pipeline, no modification
@@ -24,3 +22,6 @@ for full rendering:
 
 	
 	make vertexdata customizable
+
+
+	need to implement compute shaders

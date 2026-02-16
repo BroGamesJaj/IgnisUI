@@ -12,18 +12,32 @@ void CursorMoved(Window window) {
 	std::cout << "Curent cursor position: " << curPos.x << "; " << curPos.y << std::endl;
 }
 
+struct UniformData {
+	int x;
+	int y;
+};
+
 int main() {
     std::vector<int> surfaces;
 
 	//need to initialize the input before using/
 	Input::Init();
+	Render::Init(true);
 
 	CreateGraphicPipeLineInfo gpInfo{};
 	gpInfo.vertexShader = "../Resources/Shaders/shader.vert";
 	gpInfo.fragmentShader = "../Resources/Shaders/shader.frag";
 	gpInfo.blendEnable = true;
-
-	Render::Init(true);
+    gpInfo.descriptorSets = {  
+		{
+		   {
+				Render::CreateUniformDescriptor(0, sizeof(UniformData), Render::ShaderStage::VERTEX),
+				Render::CreateImageDescriptor(1, 1028, Render::CreateSampler(), Render::ShaderStage::FRAGMENT),
+		   },
+		   0
+		}
+    };
+	gpInfo.constantsSize = sizeof(float);
 
 	Window window1 = Render::CreateAppWindow(1200, 800, "Gup 1");
 
@@ -37,31 +51,36 @@ int main() {
 	int monika = Render::CreateTexture("../Resources/Textures/monika2.png");
 	int sus = Render::CreateTexture("../Resources/Textures/goated0.bmp");
 
-	int fontId = UI::LoadFont("../DejaVuSans.ttf");
+	//int fontId = UI::LoadFont("../DejaVuSans.ttf");
 
 	UI::SetMainSurface(surface);
 
 	Color tip(0, 255, 0);
 	Color base = tip.Inverted();
 
-	// Text text = Text(Vec2f(40, 10), Vec2f(100,100), "heooo fak yeah", fontId);
+	//Text text = Text(Vec2f(40, 10), Vec2f(100,100), "heooo fak yeah", fontId);
 
-	View view = View(Vec2f(40, 10), Vec2f(20, 20), sus);
+	View view = View(Vec2f(40, 10), Vec2f(20, 20), base);
 	Image image2 = Image(Vec2f(25, 40), Vec2f(50, 20), tip);
-	// Image image = Image(Vec2f(0, 0), Vec2f(100, 100), monika,Color(1.f, 0.412f, 0.706f));
+	Image image3 = Image(Vec2f(0, 0), Vec2f(100, 100), monika);
 	view.Add(image2);
-	// view.Add(image);
-	// view.Add(text);
-	UI::AddToSurface(surface, view/*,image*/);
+	UI::AddToSurface(surface, image3, view);
 	UI::SubmitSurface();
+
+	float color = 0.0;
 
 	while (surfaces.size() != 0)
 	{
 		Input::Event();
 		Render::Update();
 
+		if (color > 1.0f) color = 0.0f;
+
+		color += 0.004f;
+
 		for (auto it = surfaces.begin(); it != surfaces.end(); ) {
 			if (Render::IsValidSurface(*it)) {
+				Render::PushConstants(*it, &color, sizeof(color));
 				Render::Draw(*it);
 				it++;
 			}
