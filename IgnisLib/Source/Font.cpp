@@ -4,12 +4,16 @@
 //  creates bitmap struct? class?
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <complex>
 #include <cstdint>
 #include <iomanip>
 #include <iostream>
+#include <latch>
 #include <map>
+#include <queue>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 #include <numbers>
@@ -28,7 +32,22 @@ namespace Ignis {
 namespace Font {
 using unicode_t = uint32_t;
 
+static std::atomic<int> testc = 0;
+static std::atomic<int> test2c = 0;
 // debug
+struct Timer {
+    using clock = std::chrono::high_resolution_clock;
+    clock::time_point start;
+
+    Timer() { start = clock::now(); }
+
+    double elapsed_ms() const {
+        return std::chrono::duration<double, std::milli>(
+                   clock::now() - start)
+            .count();
+    }
+};
+
 void saveAtlasAsBMP(FILE *f, std::vector<uint8_t> &rgbaData, uint16_t width, uint16_t height) {
     const int row_bytes = width * 4;
     // const int palette_size = 256 * 4; no palette currently
@@ -204,7 +223,14 @@ void Font::initializeFont(const std::string filename) {
 
     // preloadAscii
     preloadPageByRange(0x0021, 0x007E);
-    packUnicodeRangeSDF(0x0021, 0x007E);
+    Timer t{};
+    for (int i = 1; i <= 1; i++) {
+        packUnicodeRangeSDF(0x0021, 0x007F);  // 1BC
+
+        std::cout << i << ". time elapsed: " << t.elapsed_ms() / i << "ms\n";
+    }
+    std::cout << "time elapsed: " << t.elapsed_ms() << "ms\n";
+    std::cout << "average: " << t.elapsed_ms() / 1000 << "ms\n";
 }
 
 std::vector<ShapedGlyph> Font::shapeText(const std::u32string &text, int fontSize, TextAlign align, TextDirection direction, Style style) {
@@ -315,23 +341,35 @@ BezierOrder getBezierOrder(unsigned char tag) {
         return QUADRATIC;
     }
 }
+struct BBox {
+    float minX = INFINITY, maxX = -INFINITY;
+    float minY = INFINITY, maxY = -INFINITY;
+};
+
 struct Bezier {
     std::vector<uint16_t> pointsIdx;
     BezierOrder order = UNSET;
+    BBox box;
+    Vec2f aux1 = Vec2f(INFINITY, INFINITY);
+    Vec2f aux2;
+    Vec2f aux3;
 };
 
 // one or multiple bezier curve indexes
 struct Segment {
     uint16_t contourIdx;
     std::vector<uint16_t> bezierIdxs;
+
+    BBox box;
 };
 struct Outline {
-    Outline(FT_Outline &ftOutline, const uint16_t &units) {
+    Outline(FT_Outline &ftOutline, const uint16_t &units, const uint32_t &charcode) {
         unitsPerEM = units;
 
         flags = ftOutline.flags;
         numContours = ftOutline.n_contours;
         numPoints = ftOutline.n_points;
+        unicode = charcode;
 
         points.resize(numPoints);
         tags.resize(numPoints);
@@ -346,6 +384,9 @@ struct Outline {
         for (int cIdx = 0; cIdx < numContours; cIdx++) {
             contours[cIdx] = ftOutline.contours[cIdx];
         }
+        curvesInContours.resize(numContours);
+
+        tResults.reserve(5);
     }
 
     void printOutline() {
@@ -363,8 +404,8 @@ struct Outline {
     void printBeziers() {
         std::cout << "\nPrint Beziers\n";
         int idx = 0;
-        for (auto &[contourIdx, curves] : curvesInContours) {
-            std::cout << "contourIdx: " << contourIdx << "\n";
+        for (auto &curves : curvesInContours) {
+            std::cout << "contourIdx: " << idx << "\n";
             for (auto &bez : curves) {
                 std::cout << "idx: " << idx << " pIdxs: ";
                 for (auto &pIdx : bez.pointsIdx) {
@@ -397,6 +438,7 @@ struct Outline {
     uint16_t unitsPerEM;
     float xMin = INFINITY, xMax = -INFINITY;
     float yMin = INFINITY, yMax = -INFINITY;
+    uint32_t unicode;
 
     uint16_t numContours;
     uint16_t numPoints;
@@ -406,15 +448,24 @@ struct Outline {
     std::vector<unsigned char> tags;  // length of numPoints
     std::vector<uint16_t> contours;   // length of numContours
 
-    std::unordered_map<uint16_t, std::vector<Bezier>> curvesInContours;
+    std::vector<std::vector<Bezier>> curvesInContours;
+
     std::vector<Segment> segments;
 
-    Vec2f pointAtTOnBezier(const Bezier &bez, const float t);
-    Vec2f derivativeOfBezier(const Bezier &bez, const float t);
-    float shortestDistanceToBezier(const Vec2f &point, const Bezier &bezier, float *tOut);
-    float signOfDistance(const Vec2f &point, const Bezier &bezier, const float &t);
-    float ortogonality(const Vec2f &point, const Bezier &bezier, const float t);
+    float padding = 64.0f * 64 / 2;
 
+    float xSize;
+    float ySize;
+    float xPadding;
+    float yPadding;
+
+    Vec2f pointAtTOnBezier(Bezier &bez, const float &t);
+    Vec2f derivativeOfBezier(const Bezier &bez, const float t);
+    float shortestDistanceToBezier(const Vec2f &point, Bezier &bezier, float *tOut);
+    float signOfDistance(const Vec2f &point, Bezier &bezier, const float &t);
+    float ortogonality(const Vec2f &point, Bezier &bezier, const float t);
+
+    void sanitize();
     void addImpliedPoints();
     void populateBounds();
     void populateBeziers();
@@ -423,8 +474,38 @@ struct Outline {
 
     Vec2f transformCoord(const float x, const float y);
     uint8_t distToColor(const float dist, const float maxDist);
-    void createBitmap(std::vector<uint8_t> &bmp, const uint16_t width, const uint16_t height);
+    void createSDFBitmap(std::vector<uint8_t> &atlas, const uint32_t &atlasWidth, const uint32_t &atlasHeight, const uint32_t startX, const uint32_t startY, const uint16_t width = 64, const uint16_t height = 64);
+
+    // help
+    std::vector<float> tResults;
 };
+
+void Outline::sanitize() {
+    uint16_t contourStart = 0;
+    uint16_t contourEnd = 0;
+    uint16_t removedPointsCount = 0;
+    for (uint16_t contIdx = 0; contIdx < numContours; contIdx++) {
+        // Every contour after the first starts at cotours[i] + 1
+        if (contIdx > 0) contourStart = contourEnd + 1;
+        contourEnd = contours[contIdx] - removedPointsCount;
+        for (uint16_t pIdx = contourStart + 1; pIdx <= contourEnd; pIdx++) {
+            if (points[pIdx - 1] == points[pIdx]) {
+                if (!isOnCurve(tags[pIdx])) {
+                    points.erase(points.begin() + pIdx);
+                    tags.erase(tags.begin() + pIdx);
+                } else {
+                    points.erase(points.begin() + pIdx - 1);
+                    tags.erase(tags.begin() + pIdx - 1);
+                }
+                pIdx--;
+                contourEnd--;
+                removedPointsCount++;
+            }
+        }
+        contours[contIdx] = contourEnd;
+    }
+    numPoints = points.size();
+}
 
 void Outline::addImpliedPoints() {
     // first contour starts at point 0
@@ -463,12 +544,14 @@ void Outline::populateBounds() {
         yMin = std::min(p.y, yMin);
         yMax = std::max(p.y, yMax);
     }
+    xSize = xMax - xMin;
+    ySize = yMax - yMin;
+    xPadding = (xSize < ySize) ? (1 - (xSize / ySize)) * ySize + padding : padding;
+    yPadding = (ySize < xSize) ? (1 - (ySize / xSize)) * xSize + padding : padding;
 
-    /*
-    std::cout << "\nBounds:\n";
-    std::cout << "xMin: " << xMin << " xMax: " << xMax << "\n";
-    std::cout << "yMin: " << yMin << " yMax: " << yMax << "\n";
-    */
+    // std::cout << "\nBounds:\n";
+    // std::cout << "xMin: " << xMin << " xMax: " << xMax << "\n";
+    // std::cout << "yMin: " << yMin << " yMax: " << yMax << "\n";
 
     // uint16_t padding = unitsPerEM / 8;
     // xMin -= padding;
@@ -489,8 +572,19 @@ void Outline::populateBeziers() {
         if (contIdx > 0) contourStart = contourEnd + 1;
         contourEnd = contours[contIdx];
         Bezier bz{};
-        for (uint16_t pIdx = contourStart; pIdx <= contourEnd + 1; ++pIdx) {
-            uint16_t idx = (pIdx == contourEnd + 1) ? contourStart : pIdx;
+        bool firstIsOnCurve = true;
+
+        for (uint16_t pIdx = contourStart; pIdx <= contourEnd + 1 + !(firstIsOnCurve); ++pIdx) {
+            if (pIdx == contourStart && !isOnCurve(tags[pIdx]) && firstIsOnCurve) {
+                firstIsOnCurve = false;
+                continue;
+            }
+            uint16_t idx = pIdx;
+            if (pIdx == contourEnd + 1) {
+                idx = contourStart;
+            } else if (pIdx == contourEnd + 2) {
+                idx = contourStart + 1;
+            }
             bool onCurve = isOnCurve(tags[idx]);
 
             bz.pointsIdx.push_back(idx);
@@ -507,6 +601,13 @@ void Outline::populateBeziers() {
                     bz = {};
                     continue;
                 }
+                for (auto &pIdx : bz.pointsIdx) {
+                    Vec2f &point = points[pIdx];
+                    if (point.x < bz.box.minX) bz.box.minX = point.x;
+                    if (point.x > bz.box.maxX) bz.box.maxX = point.x;
+                    if (point.y < bz.box.minY) bz.box.minY = point.y;
+                    if (point.y > bz.box.maxY) bz.box.maxY = point.y;
+                }
                 curvesInContours[contIdx].push_back(bz);
                 bz = {};
                 bz.pointsIdx.push_back(idx);
@@ -515,15 +616,26 @@ void Outline::populateBeziers() {
     }
 }
 
-Vec2f Outline::pointAtTOnBezier(const Bezier &bez, const float t) {
-    assert(t <= 1 && t >= 0 && "t must be between 0 and 1");
+Vec2f Outline::pointAtTOnBezier(Bezier &bez, const float &t) {
+    if (!(t <= 1.0f && t >= 0.0f)) {
+        std::cerr << "t: " << t << "\n";
+    }
+    assert(t <= 1.0f && t >= 0.0f && "t must be between 0 and 1");
     if (bez.order == LINEAR) {
+        if (t == 0.0f)
+            return points[bez.pointsIdx[0]];
+        else if (t == 1.0f)
+            return points[bez.pointsIdx[1]];
         Vec2f &P0 = points[bez.pointsIdx[0]];
         Vec2f &P1 = points[bez.pointsIdx[1]];
 
         // P0 + t(P1 - P0)
         return P0 + (P1 - P0) * t;
     } else if (bez.order == QUADRATIC) {
+        if (t == 0.0f)
+            return points[bez.pointsIdx[0]];
+        else if (t == 1.0f)
+            return points[bez.pointsIdx[2]];
         Vec2f &P0 = points[bez.pointsIdx[0]];
         Vec2f &P1 = points[bez.pointsIdx[1]];
         Vec2f &P2 = points[bez.pointsIdx[2]];
@@ -531,6 +643,11 @@ Vec2f Outline::pointAtTOnBezier(const Bezier &bez, const float t) {
         // P0 + 2t(P1 − P0) + t^2(P2 − 2P1 + P0)
         return P0 + (P1 - P0) * 2.0f * t + (P2 - P1 * 2.0f + P0) * t * t;
     } else if (bez.order == CUBIC) {
+        if (t == 0.0f)
+            return points[bez.pointsIdx[0]];
+        else if (t == 1.0f)
+            return points[bez.pointsIdx[3]];
+
         Vec2f &P0 = points[bez.pointsIdx[0]];
         Vec2f &P1 = points[bez.pointsIdx[1]];
         Vec2f &P2 = points[bez.pointsIdx[2]];
@@ -558,10 +675,10 @@ Vec2f Outline::derivativeOfBezier(const Bezier &bez, const float t) {
             return (P1 - P0) * 2.0f;
         else if (t == 1)
             // 2(P2 - P1)
-            return (P2 - P1) * 2.0f;
+            return (P2 - P1 * 2.0f + P0) * 2.0f + (P1 - P0) * 2.0f;
         else
             // 2t(P2 - 2P1 + P0) + 2(P1 - P0)
-            return (P2 - P1 * 2.0f + P0) * 2 * t + (P1 - P0) * 2.0f;
+            return (P2 - P1 * 2.0f + P0) * 2.0f * t + (P1 - P0) * 2.0f;
 
     } else if (bez.order == CUBIC) {
         Vec2f &P0 = points[bez.pointsIdx[0]];
@@ -609,18 +726,34 @@ void Outline::getSegments(float acceptedAngleDeviation) {
             // check if its a corner
             // NOTE: this may need a check if vectors are opposite
             if (std::fabs(crossProduct) > sinDev) {
+                for (auto &bezIdx : seg.bezierIdxs) {
+                    Bezier &bz = beziers[bezIdx];
+                    if (bz.box.minX < seg.box.minX) seg.box.minX = bz.box.minX;
+                    if (bz.box.maxX > seg.box.maxX) seg.box.maxX = bz.box.maxX;
+                    if (bz.box.minY < seg.box.minY) seg.box.minY = bz.box.minY;
+                    if (bz.box.maxY > seg.box.maxY) seg.box.maxY = bz.box.maxY;
+                }
                 segments.push_back(seg);
                 seg.bezierIdxs.clear();
             }
         }
-        if (!seg.bezierIdxs.empty()) segments.push_back(seg);
+        if (!seg.bezierIdxs.empty()) {
+            for (auto &bezIdx : seg.bezierIdxs) {
+                Bezier &bz = beziers[bezIdx];
+                if (bz.box.minX < seg.box.minX) seg.box.minX = bz.box.minX;
+                if (bz.box.maxX > seg.box.maxX) seg.box.maxX = bz.box.maxX;
+                if (bz.box.minY < seg.box.minY) seg.box.minY = bz.box.minY;
+                if (bz.box.maxY > seg.box.maxY) seg.box.maxY = bz.box.maxY;
+            }
+            segments.push_back(seg);
+        }
     }
 }
 
 // Otrogonality matters for when two beziers are the same
 // distance away from a point.
 // in that case we need to maximize Ortogonality.
-float Outline::ortogonality(const Vec2f &point, const Bezier &bezier, const float t) {
+float Outline::ortogonality(const Vec2f &point, Bezier &bezier, const float t) {
     Vec2f detNorm = derivativeOfBezier(bezier, t).normalize();
     Vec2f dispNorm = (point - pointAtTOnBezier(bezier, t)).normalize();
 
@@ -629,27 +762,30 @@ float Outline::ortogonality(const Vec2f &point, const Bezier &bezier, const floa
 }
 
 // Classic quadratic
-std::vector<float> quadraticSolver(const float a, const float b, const float c) {
-    std::vector<float> roots;
-
+int quadraticSolver(std::vector<float> &roots, const float a, const float b, const float c) {
+    if (a == 0) {
+        assert(fabs(b) > 1e-8f && "god save us");
+        // x = -c/b;
+        roots.push_back(-c / b);
+        return roots.size();
+    }
     float discriminant = b * b - 4 * a * c;
 
-    if (discriminant > 0) {
-        roots.push_back((-b + sqrt(discriminant)) / (2 * a));
-        roots.push_back((-b - sqrt(discriminant)) / (2 * a));
-    } else if (discriminant == 0) {
+    if (discriminant >= 1e-8f) {
+        roots.push_back((-b + fsqrt(discriminant)) / (2 * a));
+        roots.push_back((-b - fsqrt(discriminant)) / (2 * a));
+    } else if (discriminant < 1e-8f) {
         roots.push_back(-b / (2 * a));
     } else {
         // for our purposes the complex root is not needed
         assert(false && "only complex solution to quadratic");
     }
-    return roots;
+    return roots.size();
 }
 
 // Cardano's formula
-std::vector<float> cubicSolver(const float a, const float b, const float c, const float d) {
-    if (a == 0) return quadraticSolver(b, c, d);  // not a cubic
-    std::vector<float> roots;
+int cubicSolver(std::vector<float> &roots, const float a, const float b, const float c, const float d) {
+    if (a == 0) return quadraticSolver(roots, b, c, d);  // not a cubic
 
     // we need to depress this happy boy
     // ie.: make the quadratic part 0
@@ -658,98 +794,131 @@ std::vector<float> cubicSolver(const float a, const float b, const float c, cons
 
     float discriminant = (q * q) / 4.0f + (p * p * p) / 27.0f;
 
-    const float eps = 1e-12;
+    const float eps = 1e-8f;
 
     // if discriminant is positive there is only one root
     if (discriminant > eps) {  // one real root
-        float sqrt_disc = sqrt(discriminant);
-        float u = cbrt(-q / 2.0f + sqrt_disc);
-        float v = cbrt(-q / 2.0f - sqrt_disc);
+        float sqrt_disc = fsqrt(discriminant);
+        float u = cbrtf(-q / 2.0f + sqrt_disc);
+        float v = cbrtf(-q / 2.0f - sqrt_disc);
         roots.push_back(u + v - b / (3.0f * a));
 
         // If discrimanant is negative it has 3 roots
         // and if its 0 it has two or 3, but
         // if thats the case we just get some duplicates
     } else {  // three real roots
-        float r = sqrt(-p * p * p / 27.0f);
-        float phi = acos(std::clamp(-q / (2.0f * r), -1.0f, 1.0f));
-        float t = 2 * cbrt(r);
-        roots.push_back(t * cos(phi / 3.0f) - b / (3.0f * a));
-        roots.push_back(t * cos((phi + 2.0f * std::numbers::pi) / 3.0f) - b / (3.0f * a));
-        roots.push_back(t * cos((phi + 4.0f * std::numbers::pi) / 3.0f) - b / (3.0f * a));
+        float r = fsqrt(-p * p * p / 27.0f);
+        float phi = acosf(std::clamp(-q / (2.0f * r), -1.0f, 1.0f));
+        float t = 2 * cbrtf(r);
+        roots.push_back(t * cosf(phi / 3.0f) - b / (3.0f * a));
+        roots.push_back(t * cosf((phi + 2.0f * std::numbers::pi) / 3.0f) - b / (3.0f * a));
+        roots.push_back(t * cosf((phi + 4.0f * std::numbers::pi) / 3.0f) - b / (3.0f * a));
     }
 
-    return roots;
+    return roots.size();
 }
 
-float Outline::shortestDistanceToBezier(const Vec2f &point, const Bezier &bezier, float *tOut = nullptr) {
+float Outline::shortestDistanceToBezier(const Vec2f &point, Bezier &bezier, float *tOut = nullptr) {
     if (bezier.order == LINEAR) {
         Vec2f &P0 = points[bezier.pointsIdx[0]];
         Vec2f &P1 = points[bezier.pointsIdx[1]];
 
-        // TODO: write equality operator for Vec2
         // P = Point
         // t = [(P - P0) * (P1 - P0)] / [(P1 - P0 ) * ( P1 - P0)]
+        Vec2 aux0 = P1 - P0;
         float t = 0;
         if (P0 != P1)
-            t = (point - P0).dotProduct(P1 - P0) / (P1 - P0).dotProduct(P1 - P0);
+            t = (point - P0).dotProduct(aux0) / (aux0).dotProduct(aux0);
+
         t = std::clamp(t, 0.0f, 1.0f);
         Vec2f Pt = pointAtTOnBezier(bezier, t);
         if (tOut != nullptr) *tOut = t;
         return Pt.distance(point);
     } else if (bezier.order == QUADRATIC) {
+        float shortestDist = INFINITY;
+        float sT = -1;
+
         Vec2f &P0 = points[bezier.pointsIdx[0]];
-        Vec2f &P1 = points[bezier.pointsIdx[1]];
-        Vec2f &P2 = points[bezier.pointsIdx[2]];
         Vec2f aux0 = point - P0;
-        // NOTE: these should be computed only once per bezier
-        Vec2f aux1 = P1 - P0;
-        Vec2f aux2 = P2 - P1 * 2.0f + P0;
+        if (bezier.aux1.x == INFINITY) {
+            Vec2f &P1 = points[bezier.pointsIdx[1]];
+            Vec2f &P2 = points[bezier.pointsIdx[2]];
+
+            bezier.aux1 = P1 - P0;
+            bezier.aux2 = P2 - P1 * 2.0f + P0;
+        }
 
         // cringe af generic cubic equation
         // ( aux2 · aux2)t^3 + 3( aux1 · aux2 )t^2 + (2aux1 · aux1 − aux2 · aux0)t − aux1 · aux0 = 0
-        std::vector<float> tResults = cubicSolver(aux2.dotProduct(aux2), aux1.dotProduct(aux2) * 3.0f, aux1.dotProduct(aux1) * 2.0f - aux2.dotProduct(aux0), -aux1.dotProduct(aux0));
-        assert(!tResults.empty() && "t results cannot be empty");
+        tResults.clear();
+        int tCount = cubicSolver(tResults, bezier.aux2.dotProduct(bezier.aux2), bezier.aux1.dotProduct(bezier.aux2) * 3.0f, bezier.aux1.dotProduct(bezier.aux1 * 2.0f) - bezier.aux2.dotProduct(aux0), -bezier.aux1.dotProduct(aux0));
+        if (tCount == 0) {
+            printBeziers();
+            printOutline();
+            printSegments();
+            std::cerr << bezier.pointsIdx[0] << " " << bezier.pointsIdx[1] << " " << bezier.pointsIdx[2] << "\n";
+            std::wcerr << "char: " << (wchar_t)unicode << "unicode: 0x" << std::hex << unicode << std::dec << "\n";
+        }
+        assert(tCount != 0 && "t results cannot be empty");
 
-        std::unordered_map<float, float> dists;  // key: t, value: dist
+        float dist;
         // Get the distances for every unique t
         for (auto &t : tResults) {
-            if (dists.contains(t)) continue;
+            if (t == sT) continue;
+            if (std::isnan(t)) {
+                std::cerr << "nan\n";
+                std::cerr << "a: " << bezier.aux2.dotProduct(bezier.aux2) << " b: " << bezier.aux1.dotProduct(bezier.aux2) * 3.0f << " c: " << bezier.aux1.dotProduct(bezier.aux1) * 2.0f - bezier.aux2.dotProduct(aux0) << " d: " << -bezier.aux1.dotProduct(aux0) << "\n";
+                for (size_t i = 0; i < tResults.size(); i++) {
+                    std::cerr << " t" << i << ": " << tResults[i];
+                }
+                std::cerr << "\n";
+
+                continue;
+            }
+
             t = std::clamp(t, 0.0f, 1.0f);
             Vec2f p = pointAtTOnBezier(bezier, t);
-            dists[t] = p.distance(point);
-        }
-        if (!dists.contains(1.0f)) {
-            Vec2f p = pointAtTOnBezier(bezier, 1.0f);
-            dists[1.0f] = p.distance(point);
-        }
-        if (!dists.contains(0.0f)) {
-            Vec2f p = pointAtTOnBezier(bezier, 0.0f);
-            dists[0.0f] = p.distance(point);
-        }
+            dist = p.distance(point);
 
-        // find the shortest distance
-        float shortestDist = INFINITY;
-        float sT = -1;
-        for (auto &[t, dist] : dists) {
             if (dist < shortestDist) {
                 shortestDist = dist;
                 sT = t;
             }
         }
+
+        // if (std::find(tResults.cbegin(), tResults.cend(), 0.0f) != tResults.cend()) {
+        //     Vec2f p = pointAtTOnBezier(bezier, 0.0f);
+        //     dist = p.distance(point);
+        //
+        //     if (dist < shortestDist) {
+        //         shortestDist = dist;
+        //         sT = 0.0f;
+        //     }
+        // }
+        // if (std::find(tResults.cbegin(), tResults.cend(), 1.0f) != tResults.cend()) {
+        //     Vec2f p = pointAtTOnBezier(bezier, 1.0f);
+        //     dist = p.distance(point);
+        //
+        //     if (dist < shortestDist) {
+        //         shortestDist = dist;
+        //         sT = 1.0f;
+        //     }
+        // }
+
         if (tOut != nullptr) *tOut = sT;
         return shortestDist;
     } else if (bezier.order == CUBIC) {
         Vec2f &P0 = points[bezier.pointsIdx[0]];
-        Vec2f &P1 = points[bezier.pointsIdx[1]];
-        Vec2f &P2 = points[bezier.pointsIdx[2]];
-        Vec2f &P3 = points[bezier.pointsIdx[3]];
+        // Vec2f aux0 = point - P0;
+        if (bezier.aux1.x == INFINITY) {
+            Vec2f &P1 = points[bezier.pointsIdx[1]];
+            Vec2f &P2 = points[bezier.pointsIdx[2]];
+            Vec2f &P3 = points[bezier.pointsIdx[3]];
 
-        Vec2f aux0 = point - P0;
-        // NOTE: these should be computed only once per bezier
-        Vec2f aux1 = P1 - P0;
-        Vec2f aux2 = P2 - P1 * 2.0f + P0;
-        Vec2f aux3 = P3 - P2 * 3.0f + P1 * 3.0f - P0;
+            bezier.aux1 = P1 - P0;
+            bezier.aux2 = P2 - P1 * 2.0f + P0;
+            bezier.aux3 = P3 - P2 * 3.0f + P1 * 3.0f - P0;
+        }
 
         assert(false && "not implemented");
     }
@@ -757,7 +926,7 @@ float Outline::shortestDistanceToBezier(const Vec2f &point, const Bezier &bezier
     assert(false && "unreachable");
 }
 
-float Outline::signOfDistance(const Vec2f &point, const Bezier &bezier, const float &t) {
+float Outline::signOfDistance(const Vec2f &point, Bezier &bezier, const float &t) {
     // sign = dB/dt(t) x (B(t) - P)
     return derivativeOfBezier(bezier, t).crossProduct(pointAtTOnBezier(bezier, t) - point) < 0 ? -1.0f : 1.0f;
 }
@@ -768,151 +937,276 @@ Bezier &Outline::findClosestBez(const Vec2f &point, float *distOut = nullptr, fl
     Bezier *mBez = nullptr;
     float mDist = INFINITY;
     float mOrt = -INFINITY;
+    float mT = -1;
     float t = -1;
+    float ort = 0;
 
-    std::vector<Bezier*> shortest;
+    std::vector<Bezier *> shortest;
+    shortest.reserve(10);
     float smollest = INFINITY;
+    float distance = 0;
+    Vec2f pos1;
+    Vec2f pos2;
+    float dx = 0, dy = 0;
+    float dist = 0;
 
-    for (auto& [contIdx, beziers] : curvesInContours) {
-        for (auto& bez : beziers)
-        {
-            Vec2f pos1;
-            Vec2f pos2;
+    for (auto &beziers : curvesInContours) {
+        for (auto &bez : beziers) {
+            dx = 0;
+            if (point.x < bez.box.minX)
+                dx = bez.box.minX - point.x;
+            else if (point.x > bez.box.maxX)
+                dx = point.x - bez.box.maxX;
 
-            switch (bez.order)
-            {
-            case LINEAR:
-                pos1 = points[bez.pointsIdx[0]];
-                pos2 = points[bez.pointsIdx[1]];
-                break;
+            dy = 0;
+            if (point.y < bez.box.minY)
+                dy = bez.box.minY - point.y;
+            else if (point.y > bez.box.maxY)
+                dy = point.y - bez.box.maxY;
 
-            case QUADRATIC:
-            {
-                std::array tmp = {
-                    point.distanceCmp(points[bez.pointsIdx[0]]),
-                    point.distanceCmp(points[bez.pointsIdx[1]]),
-                    point.distanceCmp(points[bez.pointsIdx[2]])
-                };
+            dist = dx * dx + dy * dy;
+            if (dist <= smollest) {
+                switch (bez.order) {
+                    case LINEAR:
+                        pos1 = points[bez.pointsIdx[0]];
+                        pos2 = points[bez.pointsIdx[1]];
+                        break;
 
-                int i1 = 0, i2 = 1;
-                if (tmp[1] < tmp[0]) std::swap(i1, i2);
-                if (tmp[2] < tmp[i2]) i2 = 2;
+                    case QUADRATIC: {
+                        auto tmp0 = point.distanceCmp(points[bez.pointsIdx[0]]);
+                        auto tmp1 = point.distanceCmp(points[bez.pointsIdx[1]]);
+                        auto tmp2 = point.distanceCmp(points[bez.pointsIdx[2]]);
 
-                pos1 = points[bez.pointsIdx[i1]];
-                pos2 = points[bez.pointsIdx[i2]];
-                break;
-            }
-            case CUBIC:
-                assert(false && "not implemented");
-                break;
+                        bool swapped = false;
+                        if (tmp1 < tmp0) {
+                            swapped = true;
+                            pos1 = points[bez.pointsIdx[1]];
+                        } else {
+                            pos1 = points[bez.pointsIdx[0]];
+                        }
 
-            default:
-                break;
-            }
+                        if (swapped && tmp2 < tmp0)
+                            pos2 = points[bez.pointsIdx[2]];
+                        else if (swapped)
+                            pos2 = points[bez.pointsIdx[0]];
+                        else if (tmp2 < tmp1)
+                            pos2 = points[bez.pointsIdx[2]];
+                        else
+                            pos2 = points[bez.pointsIdx[1]];
 
-            if (pos1 != pos2)
-                t = (point - pos1).dotProduct(pos2 - pos1) / (pos2 - pos1).dotProduct(pos2 - pos1);
-            t = std::clamp(t, 0.0f, 1.0f);
+                        break;
+                    }
+                    case CUBIC:
+                        assert(false && "not implemented");
+                        break;
 
-            Vec2f base = pos1 + (pos2 - pos1) * t;
+                    default:
+                        break;
+                }
 
-            float distance = point.distanceCmp(base);
+                Vec2f aux0 = pos2 - pos1;
+                if (pos1 == pos2) {
+                    printBeziers();
+                    printOutline();
+                    printSegments();
+                    std::cerr << bez.pointsIdx[0] << "\n";
+                    std::cerr << bez.pointsIdx[1] << "\n";
+                    std::wcerr << "char: " << (wchar_t)unicode << "unicode: 0x" << std::hex << unicode << std::dec << "\n";
+                    assert(false && "two points in a bezier cannot be at same position!");
+                }
+                t = (point - pos1).dotProduct(aux0) / (aux0).dotProduct(aux0);
+                t = std::clamp(t, 0.0f, 1.0f);
+                distance = point.distanceCmp(pos1 + (aux0)*t);
 
-            if (distance <= smollest) {
-                if (distance < smollest) shortest.clear();
-                shortest.push_back(&bez);
-                smollest = distance;
+                if (distance < smollest) {
+                    smollest = distance;
+                }
             }
         }
     }
+    for (auto &beziers : curvesInContours) {
+        for (auto &bez : beziers) {
+            dx = 0;
+            if (point.x < bez.box.minX)
+                dx = bez.box.minX - point.x;
+            else if (point.x > bez.box.maxX)
+                dx = point.x - bez.box.maxX;
 
+            dy = 0;
+            if (point.y < bez.box.minY)
+                dy = bez.box.minY - point.y;
+            else if (point.y > bez.box.maxY)
+                dy = point.y - bez.box.maxY;
+
+            dist = dx * dx + dy * dy;
+            if (dist <= smollest) {
+                switch (bez.order) {
+                    case LINEAR:
+                        pos1 = points[bez.pointsIdx[0]];
+                        pos2 = points[bez.pointsIdx[1]];
+                        break;
+
+                    case QUADRATIC: {
+                        auto tmp0 = point.distanceCmp(points[bez.pointsIdx[0]]);
+                        auto tmp1 = point.distanceCmp(points[bez.pointsIdx[1]]);
+                        auto tmp2 = point.distanceCmp(points[bez.pointsIdx[2]]);
+
+                        bool swapped = false;
+                        if (tmp1 < tmp0) {
+                            swapped = true;
+                            pos1 = points[bez.pointsIdx[1]];
+                        } else {
+                            pos1 = points[bez.pointsIdx[0]];
+                        }
+
+                        if (swapped && tmp2 < tmp0)
+                            pos2 = points[bez.pointsIdx[2]];
+                        else if (swapped)
+                            pos2 = points[bez.pointsIdx[0]];
+                        else if (tmp2 < tmp1)
+                            pos2 = points[bez.pointsIdx[2]];
+                        else
+                            pos2 = points[bez.pointsIdx[1]];
+                        break;
+                    }
+                    case CUBIC:
+                        assert(false && "not implemented");
+                        break;
+
+                    default:
+                        break;
+                }
+
+                Vec2f aux0 = pos2 - pos1;
+                if (pos1 == pos2) assert(false && "two points in a bezier cannot be at same position!");
+                t = (point - pos1).dotProduct(aux0) / (aux0).dotProduct(aux0);
+                t = std::clamp(t, 0.0f, 1.0f);
+                distance = point.distanceCmp(pos1 + (aux0)*t);
+
+                if (distance - smollest < 1e-10f) {
+                    shortest.push_back(&bez);
+                }
+            }
+        }
+    }
     for (auto bez : shortest) {
+        // testc++;
         float dist = shortestDistanceToBezier(point, *bez, &t);
-        float ort = ortogonality(point, *bez, t);
-
-        if (fabs(dist - mDist) < 1e-6f && ort > mOrt ) {
-            mBez = bez;
-            mDist = dist;
-            mOrt = ort;
+        t = std::clamp(t, 0.0f, 1.0f);
+        if (!(t <= 1.0f && t >= 0.0f)) {
+            std::cerr << "1t: " << t << "\n";
         }
         if (dist < mDist) {
+            ort = ortogonality(point, *bez, t);
             mBez = bez;
             mDist = dist;
             mOrt = ort;
+            mT = t;
+        } else if (fabs(dist - mDist) < 1e-6f) {
+            ort = ortogonality(point, *bez, t);
+            if (ort > mOrt) {
+                mBez = bez;
+                mDist = dist;
+                mOrt = ort;
+                mT = t;
+            }
         }
     }
 
-    if (distOut != nullptr) *distOut = signOfDistance(point, *mBez, t) * mDist;
-    if (tOut != nullptr) *tOut = t;
+    if (distOut != nullptr) *distOut = mDist;
+    if (tOut != nullptr) *tOut = mT;
     return *mBez;
 };
 
 Vec2f Outline::transformCoord(const float x, const float y) {
-    float padding = 64.0f * 64 / 2;
-
-    float xSize = xMax - xMin;
-    float ySize = yMax - yMin;
-    float xPadding = (xSize < ySize) ? (1 - (xSize / ySize)) * ySize + padding : padding;
-    float yPadding = (ySize < xSize) ? (1 - (ySize / xSize)) * xSize + padding : padding;
-
     return { x * (xMax + xPadding) + (xMin - (xPadding / 2)), (yMax + (yPadding / 2)) - y * ((yMax + yPadding) - (yMin - (yPadding / 2))) };
 }
 
 uint8_t Outline::distToColor(const float dist, const float maxDist) {
+    // return (dist < maxDist) ? 255 : 0;
     return std::clamp((dist / (2 * maxDist) + 0.5f) * 255, 0.0f, 255.0f);
 }
 
-void Outline::createBitmap(std::vector<uint8_t> &bmp, const uint16_t width = 64, const uint16_t height = 64) {
-    bmp.resize(width * height * 4, 0);
+void Outline::createSDFBitmap(std::vector<uint8_t> &atlas, const uint32_t &atlasWidth, const uint32_t &atlasHeight, const uint32_t startX, const uint32_t startY, const uint16_t width, const uint16_t height) {
     for (float x = 0; x < width; x++) {
         for (float y = 0; y < height; y++) {
             Vec2f p = transformCoord((x + 0.5f) / width, (y + 0.5f) / height);  // +0.5 so it uses the middle of the pixel
             float t;
-            Bezier &bez = findClosestBez(p);
-            float dist = shortestDistanceToBezier(p, bez, &t);
+            float dist;
+            Bezier &bez = findClosestBez(p, &dist, &t);
+            t = std::clamp(t, 0.0f, 2.0f);
             dist *= signOfDistance(p, bez, t) / 8;
 
-            uint8_t color = distToColor(dist, 100);
-            uint32_t idx = (y * width + x) * 4;
-            bmp[idx + 0] = color;
-            bmp[idx + 1] = color;
-            bmp[idx + 2] = color;
-            bmp[idx + 3] = 255;
+            uint8_t color = distToColor(dist, 128);
+            uint32_t idx = ((y + startY) * atlasWidth + x + startX) * 4;
+            // std::unordered_set<int> set = { 28, 29, 30 };
+            // if (bez.pointsIdx.size() == 3 && set.contains(bez.pointsIdx[1])) {
+            //     atlas[idx + 1] = 255;
+            //     atlas[idx + 3] = 255;
+            //     continue;
+            // }
+            if (color > 200) {
+                atlas[idx + 0] = color;
+                atlas[idx + 3] = 255;
+                // std::cout << "(" << x << "," << y << ")\n";
+                continue;
+            }
+
+            atlas[idx + 0] = color;
+            atlas[idx + 1] = color;
+            atlas[idx + 2] = color;
+            atlas[idx + 3] = 255;
         }
     }
-    char filename[20] = "precent.bmp";
-    FILE *fbmp = fopen(filename, "wb");
-    saveAtlasAsBMP(fbmp, bmp, width, height);
-    fclose(fbmp);
 }
 
-void generateMSDF(std::vector<uint8_t> &bmp, Outline outline, int channel = 1) {
+void generateMSDF(std::vector<uint8_t> &atlas, Outline outline, const uint32_t &atlasWidth, const uint32_t &atlasHeight, const uint32_t startX, const uint32_t startY, const uint32_t width = 64, const uint32_t height = 64, const int channel = 1) {
+    // outline.printOutline();
+    outline.sanitize();
     // std::cout << "generate MSDF\n";
     outline.addImpliedPoints();  // TODO: this can probably be moved to Outline Initialization
-    // outline.printOutline();
     outline.populateBounds();
-    outline.populateBeziers();  // TODO: this can probably be moved to Outline Initialization
-    // outline.printBeziers();
+    outline.populateBeziers();                        // TODO: this can probably be moved to Outline Initialization
     constexpr float maxDiff = std::numbers::pi / 18;  // 10 degrees
     outline.getSegments(maxDiff);
+
+    // outline.printOutline();
+    // outline.printBeziers();
     // outline.printSegments();
-    // Vec2f point{ 1000.0f, 2500.0f };
-    // std::cout << "Point: (" << point.x << "," << point.y << ")\n";
+    // std::vector<Vec2f> points = { Vec2f(-1184.05f, 1558.5f), Vec2f(-1184.05f, 1461.5f) };
+    // for (auto &point : points) {
+    //     std::cout << "Point: (" << point.x << "," << point.y << ")\n";
     //
-    // float t = -1;
-    // float dist = INFINITY;
-    // Bezier &bez = outline.findClosestBez(point, &dist, &t);
-    // std::cout << "closest bezier: \n";
-    // std::cout << "pIdxs: ";
-    // for (auto &pIdx : bez.pointsIdx) {
-    //     std::cout << pIdx << " ";
+    //     float t = -1;
+    //     float dist = INFINITY;
+    //     Bezier &bez = outline.findClosestBez(point, &dist, &t);
+    //     std::cout << "closest bezier: \n";
+    //     std::cout << "pIdxs: ";
+    //     for (auto &pIdx : bez.pointsIdx) {
+    //         std::cout << pIdx << " ";
+    //     }
+    //     std::cout << "\n";
+    //     std::cout << "bez order: " << bezierOrderToString(bez.order) << "\n";
+    //     std::cout << "distance: " << dist << " t: " << t << "\n";
+    //     std::cout << "sign: " << outline.signOfDistance(point, bez, t) << "\n";
+    //
+    //     std::cout << "der: " << outline.derivativeOfBezier(bez, t).toString() << "\n";
+    //     std::cout << (outline.pointAtTOnBezier(bez, t) - point).toString() << "\n";
+    //     auto a = outline.derivativeOfBezier(bez, t).crossProduct(point - outline.pointAtTOnBezier(bez, t));
+    //     std::cout << a << "\n";
+    //     float ort = outline.ortogonality(point, bez, t);
+    //     std::cout << "ort: " << ort << "\n";
+    //
+    //     float tT;
+    //     outline.shortestDistanceToBezier(point, bez, &tT);
+    //     std::cout << "T: " << tT << "\n";
     // }
-    // std::cout << "\n";
-    // std::cout << "bez order: " << bezierOrderToString(bez.order) << "\n";
-    // std::cout << "distance: " << dist << " t: " << t << "\n";
-    float ratio = 1;  //(outline.yMax - outline.yMin) / (outline.xMax - outline.xMin);
-    // std::cout << "ratio: " << ratio << "\n";
-    outline.createBitmap(bmp, 64, 64 * ratio);
+    //
+    // Vec2f p = outline.transformCoord((0 + 0.5f) / width, (25 + 0.5f) / height);
+    // Vec2f p1 = outline.transformCoord((0 + 0.5f) / width, (26 + 0.5f) / height);
+    // std::cout << "pos: (" << p.x << "," << p.y << ")\n";
+    // std::cout << "pos: (" << p1.x << "," << p1.y << ")\n";
+    outline.createSDFBitmap(atlas, atlasWidth, atlasHeight, startX, startY, width, height);
 }
 
 void Font::packUnicodeRangeSDF(const uint32_t unicodeStart, const uint32_t unicodeEnd, const Style style, const TextDirection, const int maxCharPerPage, const bool autoPageSize, const uint16_t pSize) {
@@ -923,32 +1217,12 @@ void Font::packUnicodeRangeSDF(const uint32_t unicodeStart, const uint32_t unico
 
     std::vector<std::pair<unicode_t, hb_codepoint_t>> scriptCodepoints;
 
-    FT_ULong shitToFind = 'u';
     FT_UInt glyphIndex;
     FT_ULong charcode = FT_Get_First_Char(ftFace, &glyphIndex);
     while (glyphIndex != 0) {
         if ((charcode >= unicodeStart && charcode <= unicodeEnd)) {
             scriptCodepoints.push_back({ charcode, glyphIndex });
-        }
-        if (charcode == shitToFind) {
-            std::cout << "found\n";
-            // EXPERIMENTAL
-            FT_Load_Glyph(ftFace, glyphIndex, FT_LOAD_DEFAULT);
-            if (ftFace->glyph->format == FT_GLYPH_FORMAT_OUTLINE) {
-                std::cout << "outline\n";
-                std::cout << (char)shitToFind << "\n";
-                auto &ol = ftFace->glyph->outline;
-                std::cout << "x ppem: " << ftFace->size->metrics.x_ppem;
-                std::cout << "x scale: " << ftFace->size->metrics.x_scale;
-                std::cout << "y ppem: " << ftFace->size->metrics.y_ppem;
-                std::cout << "y scale: " << ftFace->size->metrics.y_scale;
-                uint16_t units = ftFace->units_per_EM;
-                std::cout << "units: " << units << "\n";
-                Outline outline(ol, units);
-                std::vector<uint8_t> bitmap;
-                generateMSDF(bitmap, outline);
-            };
-            // EXPERIMENTAL END
+            // std::wcout << "cp: " << glyphIndex << " code: " << (wchar_t)charcode << "\n";
         }
         charcode = FT_Get_Next_Char(ftFace, charcode, &glyphIndex);
     }
@@ -1036,11 +1310,24 @@ void Font::packUnicodeRangeSDF(const uint32_t unicodeStart, const uint32_t unico
         stbrp_pack_rects(&context, rects.data(), rects.size());
 
         int failedPacks = 0;
-        // BLIT shit together
+
+        int threadCount = 0;
         for (size_t i = 0; i < rects.size(); ++i) {
             if (!rects[i].was_packed) {
                 failedPacks++;
                 scriptCodepoints.push_back(validPageCodepoints[i]);
+                continue;
+            }
+            threadCount++;
+        }
+
+        std::vector<std::jthread> threads;
+        threads.reserve(threadCount);
+        std::latch latch{ threadCount };
+
+        // BLIT shit together
+        for (size_t i = 0; i < rects.size(); ++i) {
+            if (!rects[i].was_packed) {
                 continue;
             }
 
@@ -1050,43 +1337,26 @@ void Font::packUnicodeRangeSDF(const uint32_t unicodeStart, const uint32_t unico
             FT_GlyphSlot slot = ftFace->glyph;
 
             // offset the boxes by padding
-            int32_t glyph_x = rects[i].x + (padding / 2);
-            int32_t glyph_y = rects[i].y + (padding / 2);
+            int32_t glyphX = rects[i].x + (padding / 2);
+            int32_t glyphY = rects[i].y + (padding / 2);
 
-            FT_Load_Glyph(ftFace, cp, FT_LOAD_DEFAULT);
+            if (ftFace->glyph->format != FT_GLYPH_FORMAT_OUTLINE) continue;
 
-            std::vector<uint8_t> bitmap;
-            if (ftFace->glyph->format == FT_GLYPH_FORMAT_OUTLINE) {
-                auto &ol = ftFace->glyph->outline;
-                uint16_t units = ftFace->units_per_EM;
-                //std::cout << "unitsPerEM: " << units << "\n";
-                Outline outline(ol, units);
-                generateMSDF(bitmap, outline);
-            };
+            auto &ol = ftFace->glyph->outline;
+            uint16_t units = ftFace->units_per_EM;
 
-            if (bitmap.empty()) {
-                std::cout << "why\n";
-            }
-            //std::cout << "elp\n";
-
-            for (uint16_t py = 0; py < 64; ++py) {
-                for (uint16_t px = 0; px < 64; ++px) {
-                    int x = glyph_x + px;
-                    int y = glyph_y + py;
-                    if ((unsigned)x >= pageWidth || (unsigned)y >= pageHeight) {
-                        continue;
-                    }
-
-                    uint32_t bmpIdx = (py * 64 + px) * 4;
-                    uint32_t idx = (y * pageWidth + x) * 4;
-                    textureData[idx + 0] = bitmap[bmpIdx];
-                    textureData[idx + 1] = bitmap[bmpIdx + 1];
-                    textureData[idx + 2] = bitmap[bmpIdx + 2];
-                    textureData[idx + 3] = bitmap[bmpIdx + 3];
-                }
+            Outline outline{ ol, units, unicode };
+            if (outline.numContours != 0 || outline.numPoints != 0) {
+                threads.emplace_back([&, outline, glyphX, glyphY]() mutable {
+                    generateMSDF(textureData, outline,
+                                 pageWidth, pageHeight, glyphX, glyphY);
+                    latch.count_down();
+                });
+            } else {
+                latch.count_down();
             }
             glyphsAdded++;
-            Glyph glyph(unicode, cp, glyph_x, glyph_y);
+            Glyph glyph(unicode, cp, glyphX, glyphY);
             glyph.w = 64;
             glyph.h = 64;
             glyph.bearingX = slot->metrics.horiBearingX;
@@ -1098,8 +1368,12 @@ void Font::packUnicodeRangeSDF(const uint32_t unicodeStart, const uint32_t unico
             page.addGlyph(glyph);
             pagePosition[64].insert({ cp, pages.size() });
         }
-        // page.textureId = Render::CreateFontPage(textureData, pageWidth, pageHeight);
 
+        latch.wait();
+
+        // std::cout << "testc: " << testc << "\n";
+        // std::cout << "test2c: " << test2c << "\n";
+        // page.textureId = Render::CreateFontPage(textureData, pageWidth, pageHeight);
         char filename[20];
         sprintf(filename, "sdf%u.bmp", pageCount);
         FILE *fbmp = fopen(filename, "wb");
@@ -1256,10 +1530,19 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
                     }
 
                     uint32_t idx = (y * pageWidth + x) * 4;
-                    textureData[idx + 0] = 255;
-                    textureData[idx + 1] = 255;
-                    textureData[idx + 2] = 255;
-                    textureData[idx + 3] = alpha;
+
+                    if ((py == 0 || py == bmp.rows - 1) || px == 0 || px == bmp.width - 1) {
+                        textureData[idx + 0] = 255;
+                        textureData[idx + 1] = 255;
+                        textureData[idx + 2] = 255;
+                        textureData[idx + 3] = 255;
+
+                    } else {
+                        textureData[idx + 0] = 255;
+                        textureData[idx + 1] = 255;
+                        textureData[idx + 2] = 255;
+                        textureData[idx + 3] = alpha;
+                    }
                 }
             }
             glyphsAdded++;
@@ -1278,7 +1561,7 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
         page.textureId = Render::CreateFontPage(textureData, pageWidth, pageHeight);
 
         char filename[20];
-        sprintf(filename, "goated%u.bmp", pageCount);
+        sprintf(filename, "goat%u.bmp", pageCount);
         FILE *fbmp = fopen(filename, "wb");
         saveAtlasAsBMP(fbmp, textureData, page.w, page.h);
         fclose(fbmp);
