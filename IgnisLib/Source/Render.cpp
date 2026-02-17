@@ -131,42 +131,6 @@ struct VertexData {
     std::vector<uint32_t> indicies;
 };
 
-static VkVertexInputBindingDescription GetVertexBindingDescription() {
-    VkVertexInputBindingDescription bindingDescription{};
-
-    bindingDescription.binding = 0;
-    bindingDescription.stride = sizeof(Vertex);
-    bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-    return bindingDescription;
-}
-
-static std::array<VkVertexInputAttributeDescription, 4> GetVertexAttributeDescriptions() {
-    std::array<VkVertexInputAttributeDescription, 4> attributeDescriptions{};
-
-    attributeDescriptions[0].binding = 0;
-    attributeDescriptions[0].location = 0;
-    attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-    attributeDescriptions[0].offset = offsetof(Vertex, pos);
-
-    attributeDescriptions[1].binding = 0;
-    attributeDescriptions[1].location = 1;
-    attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-    attributeDescriptions[1].offset = offsetof(Vertex, color);
-
-    attributeDescriptions[2].binding = 0;
-    attributeDescriptions[2].location = 2;
-    attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
-    attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
-
-    attributeDescriptions[3].binding = 0;
-    attributeDescriptions[3].location = 3;
-    attributeDescriptions[3].format = VK_FORMAT_R32_UINT;
-    attributeDescriptions[3].offset = offsetof(Vertex, texId);
-
-    return attributeDescriptions;
-}
-
 static std::vector<char> readFile(const std::string &filename) {
     // std::ios::ate - start reading from end
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
@@ -385,6 +349,7 @@ static VkShaderStageFlags ShaderStageToVK(Render::ShaderStage stage) {
     VkShaderStageFlags output = 0;
     if (stage & Render::ShaderStage::VERTEX)   output |= VK_SHADER_STAGE_VERTEX_BIT;
     if (stage & Render::ShaderStage::FRAGMENT) output |= VK_SHADER_STAGE_FRAGMENT_BIT;
+    if (stage & Render::ShaderStage::COMPUTE) output |= VK_SHADER_STAGE_COMPUTE_BIT;
     return output;
 }
 
@@ -453,6 +418,8 @@ class Render::Vulkan {
     int nextSampler = 0;
 
     std::unordered_map<VkSurfaceKHR, void*> constantsData;
+
+    std::unordered_map<VkSurfaceKHR, std::vector<Render::VertexDataType>> vertexDataLayout;
 
 
    public:
@@ -557,7 +524,7 @@ class Render::Vulkan {
         surface->pipelineData = RenderPassInfoToVK(graphicPipeLineInfo);
 
         // create the rendering procedure that the data passes to be rendered
-        CreateGraphicPipeline(windows[curWindow].get(), surface);  // need a CreatePipelineInfo later
+        CreateGraphicPipeline(windows[curWindow].get(), surface, curSurface);  // need a CreatePipelineInfo later
 
         // creates command buffer that can be used to submit commands to specific queues
         CreateCommandBuffers(surface->commandBuffers);
@@ -637,6 +604,13 @@ class Render::Vulkan {
         memcpy(constantsData[surfaceAccess[surface].surface], data, size);
     }
 
+    template <std::derived_from<Render::VertexDataType>... Args>
+    void SetVertexData(int surface, Args &...args) {
+        for (auto& arg : args)
+        {
+            vertexDataLayout[surfaceAccess[surface].surface].push_back(arg);
+        }
+    }
 
    private:
     void CleanupSwapChain(SurfaceVulkanData *surface) {
@@ -1904,7 +1878,7 @@ class Render::Vulkan {
     }
 
     // creates the pipeline
-    void CreateGraphicPipeline(WindowVulkanData *window, SurfaceVulkanData* surface) {
+    void CreateGraphicPipeline(WindowVulkanData *window, SurfaceVulkanData* surface, VkSurfaceKHR surfaceRef) {
 
         CreateDescriptorSetLayout(surface);
 
@@ -1940,8 +1914,8 @@ class Render::Vulkan {
         VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
         // vertex data specifications
-        auto bindingDescription = GetVertexBindingDescription();
-        auto attributeDescriptions = GetVertexAttributeDescriptions();
+        auto bindingDescription = GetVertexBindingDescription(surfaceRef);
+        auto attributeDescriptions = GetVertexAttributeDescriptions(surfaceRef);
 
         VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
         vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -2057,7 +2031,7 @@ class Render::Vulkan {
         VkPushConstantRange constRange{};
         constRange.offset = 0;
         constRange.size = surface->pipelineData.constantsSize;
-        constRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+        constRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT; //tmp checkpoint
 
         VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -2343,6 +2317,83 @@ class Render::Vulkan {
         return indices;
     }
 
+    //vertex data layout
+    uint32_t GetVertexDataSize(Render::VertexDataType type) {
+        switch (type) {
+        case FLOAT:
+            return sizeof(float);
+            break;
+        case UINT:
+            return sizeof(unsigned int);
+            break;
+        case VEC2:
+            return sizeof(float)*2;
+            break;
+        case VEC3:
+            return sizeof(float)*3;
+            break;
+        case VEC4:
+            return sizeof(float)*4;
+            break;
+        }
+    }
+
+    VkFormat GetVertexDataFormat(Render::VertexDataType type) {
+        switch (type) {
+        case FLOAT:
+            return VK_FORMAT_R32_SFLOAT;
+            break;
+        case UINT:
+            return VK_FORMAT_R16_UINT;
+            break;
+        case VEC2:
+            return VK_FORMAT_R32G32_SFLOAT;
+            break;
+        case VEC3:
+            return VK_FORMAT_R32G32B32_SFLOAT;
+            break;
+        case VEC4:
+            return VK_FORMAT_R32G32B32A32_SFLOAT;
+            break;
+        }
+    }
+
+    VkVertexInputBindingDescription GetVertexBindingDescription(VkSurfaceKHR surface) {
+        VkVertexInputBindingDescription bindingDescription{};
+
+        bindingDescription.binding = 0;
+
+        uint32_t stride = 0;
+        for (auto& item : vertexDataLayout[surface]) {
+            stride += GetVertexDataSize(item);
+        }
+
+        bindingDescription.stride = stride;
+        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+        return bindingDescription;
+    }
+
+    std::vector<VkVertexInputAttributeDescription> GetVertexAttributeDescriptions(VkSurfaceKHR surface) {
+        std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
+
+        uint32_t stride = 0;
+        int location = 0;
+        for (auto& item : vertexDataLayout[surface]) {
+
+            VkVertexInputAttributeDescription description{};
+
+            description.binding = 0;
+            description.location = location++;
+            description.format = GetVertexDataFormat(item);
+            description.offset = stride;
+
+            stride += GetVertexDataSize(item);
+        }
+
+        return attributeDescriptions;
+    }
+
     // debuging(black magic shit)
     bool checkValidationLayerSupport() {
         uint32_t layerCount;
@@ -2444,7 +2495,7 @@ int Render::CreateSampler(SamplerFilter filter, SamplerAddressing addressing, Sa
     return instance->CreateSampler(filter, addressing, mipmapMode);
 }
 
-Render::DescriptorInfo Render::CreateUniformDescriptor(int binding, int size, ShaderStage stage) {
+Render::DescriptorInfo Render::CreateUniformDescriptor(int binding, int size, int stage) {
     DescriptorInfo output;
 
     output.type = Render::DescriptorInfo::DescriptorType::UNIFORM;
@@ -2455,7 +2506,7 @@ Render::DescriptorInfo Render::CreateUniformDescriptor(int binding, int size, Sh
 
     return output;
 }
-Render::DescriptorInfo Render::CreateStorageDescriptor(int binding, int size, ShaderStage stage) {
+Render::DescriptorInfo Render::CreateStorageDescriptor(int binding, int size, int stage) {
     DescriptorInfo output;
 
     output.type = Render::DescriptorInfo::DescriptorType::STORAGE;
@@ -2466,7 +2517,7 @@ Render::DescriptorInfo Render::CreateStorageDescriptor(int binding, int size, Sh
 
     return output;
 }
-Render::DescriptorInfo Render::CreateImageDescriptor(int binding, int count, int sampler, ShaderStage stage) {
+Render::DescriptorInfo Render::CreateImageDescriptor(int binding, int count, int sampler, int stage) {
     DescriptorInfo output;
 
     output.type = Render::DescriptorInfo::DescriptorType::IMAGE;
@@ -2480,6 +2531,11 @@ Render::DescriptorInfo Render::CreateImageDescriptor(int binding, int count, int
 
 void Render::PushConstants(int surface, void* data, uint32_t size) {
     instance->PushConstants(surface, data, size);
+}
+
+template <std::derived_from<Render::VertexDataType>... Args>
+void Render::SetVertexData(int surface, Args &...args) {
+    instance->SetVertexData(surface, args);
 }
 
 Render::Vulkan *Render::instance = nullptr;

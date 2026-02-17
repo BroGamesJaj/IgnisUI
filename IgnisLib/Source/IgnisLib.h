@@ -106,6 +106,14 @@ using Vec2i = Vec2<int>;
 class Render {
    public:
     // Rendering structs
+    enum VertexDataType {
+        FLOAT,
+        UINT,
+        VEC2,
+        VEC3,
+        VEC4
+    };
+
     struct Vertex {
         glm::vec3 pos;
         glm::vec3 color;
@@ -147,7 +155,7 @@ class Render {
         MIRROR_CLAMP_TO_EDGE,
     };
 
-    enum ShaderStage {
+    enum ShaderStage: int {
         VERTEX = 1 << 0,
         FRAGMENT = 1 << 1,
         COMPUTE = 1 << 2
@@ -244,11 +252,14 @@ class Render {
     static int CreateSampler(SamplerFilter filter = SamplerFilter::LINEAR, 
         SamplerAddressing addressing = SamplerAddressing::REPEAT, SamplerMipmapMode mipmapMode = SamplerMipmapMode::LINEAR);
 
-    static DescriptorInfo CreateUniformDescriptor(int binding, int size, ShaderStage stage);
-    static DescriptorInfo CreateStorageDescriptor(int binding, int size, ShaderStage stage);
-    static DescriptorInfo CreateImageDescriptor(int binding, int count, int sampler, ShaderStage stage);
+    static DescriptorInfo CreateUniformDescriptor(int binding, int size, int stage);
+    static DescriptorInfo CreateStorageDescriptor(int binding, int size, int stage);
+    static DescriptorInfo CreateImageDescriptor(int binding, int count, int sampler, int stage);
 
     static void PushConstants(int surface, void* data, uint32_t size);
+
+    template <std::derived_from<Render::VertexDataType>... Args>
+    static void SetVertexData(int surface, Args &...args);
 
    private:
     class Vulkan;
