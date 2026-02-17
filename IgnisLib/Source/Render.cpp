@@ -2521,7 +2521,7 @@ int Render::CreateSampler(SamplerFilter filter, SamplerAddressing addressing, Sa
     return instance->CreateSampler(filter, addressing, mipmapMode);
 }
 
-Render::DescriptorInfo Render::CreateUniformDescriptor(int binding, int size, int stage) {
+Render::DescriptorInfo Render::CreateUniformDescriptor(int binding, int size, ShaderStage stage) {
     DescriptorInfo output;
 
     output.type = Render::DescriptorInfo::DescriptorType::UNIFORM;
@@ -2532,7 +2532,7 @@ Render::DescriptorInfo Render::CreateUniformDescriptor(int binding, int size, in
 
     return output;
 }
-Render::DescriptorInfo Render::CreateStorageDescriptor(int binding, int size, int stage) {
+Render::DescriptorInfo Render::CreateStorageDescriptor(int binding, int size, ShaderStage stage) {
     DescriptorInfo output;
 
     output.type = Render::DescriptorInfo::DescriptorType::STORAGE;
@@ -2543,7 +2543,7 @@ Render::DescriptorInfo Render::CreateStorageDescriptor(int binding, int size, in
 
     return output;
 }
-Render::DescriptorInfo Render::CreateImageDescriptor(int binding, int count, int sampler, int stage) {
+Render::DescriptorInfo Render::CreateImageDescriptor(int binding, int count, int sampler, ShaderStage stage) {
     DescriptorInfo output;
 
     output.type = Render::DescriptorInfo::DescriptorType::IMAGE;

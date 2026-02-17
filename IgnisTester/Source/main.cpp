@@ -31,8 +31,8 @@ int main() {
     gpInfo.descriptorSets = {  
 		{
 		   {
-				Render::CreateUniformDescriptor(0, sizeof(UniformData), Render::ShaderStage::VERTEX | Render::ShaderStage::FRAGMENT),
-				Render::CreateImageDescriptor(1, 1028, Render::CreateSampler(), Render::ShaderStage::FRAGMENT),
+				Render::CreateUniformDescriptor(0, sizeof(UniformData), Render::VERTEX | Render::FRAGMENT),
+				Render::CreateImageDescriptor(1, 1028, Render::CreateSampler(), Render::FRAGMENT),
 		   },
 		   0
 		}

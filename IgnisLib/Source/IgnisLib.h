@@ -179,6 +179,7 @@ class Render {
         FRAGMENT = 1 << 1,
         COMPUTE = 1 << 2
     };
+    typedef int ShaderStage;
 
     struct DescriptorInfo {
         DescriptorInfo() {};
@@ -271,9 +272,9 @@ class Render {
     static int CreateSampler(SamplerFilter filter = SamplerFilter::LINEAR, 
         SamplerAddressing addressing = SamplerAddressing::REPEAT, SamplerMipmapMode mipmapMode = SamplerMipmapMode::LINEAR);
 
-    static DescriptorInfo CreateUniformDescriptor(int binding, int size, int stage);
-    static DescriptorInfo CreateStorageDescriptor(int binding, int size, int stage);
-    static DescriptorInfo CreateImageDescriptor(int binding, int count, int sampler, int stage);
+    static DescriptorInfo CreateUniformDescriptor(int binding, int size, ShaderStage stage);
+    static DescriptorInfo CreateStorageDescriptor(int binding, int size, ShaderStage stage);
+    static DescriptorInfo CreateImageDescriptor(int binding, int count, int sampler, ShaderStage stage);
 
     static void PushConstants(int surface, void* data, uint32_t size);
 
