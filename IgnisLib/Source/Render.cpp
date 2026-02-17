@@ -7,13 +7,21 @@
 
 #include <filesystem>
 
-
-#include <chrono>
-
 #define GLFW_INCLUDE_VULKAN
 #include "GLFW/glfw3.h"
 
 namespace Ignis {
+
+// TODO: place it somewhere better
+template <typename T>
+concept hasPNext = requires(T obj) { obj.pNext; };
+
+template <hasPNext T, hasPNext U>
+void addPNext(T *addTo, const U *pNext) {
+    auto *node = reinterpret_cast<VkBaseOutStructure *>(addTo);
+    while (node->pNext) node = reinterpret_cast<VkBaseOutStructure *>(node->pNext);
+    node->pNext = const_cast<VkBaseOutStructure *>(reinterpret_cast<const VkBaseOutStructure *>(pNext));
+}
 
 struct WindowUserPointer {
     void *vulkanData;
@@ -424,7 +432,6 @@ class Render::Vulkan {
 
    public:
     Vulkan(bool debuging = false) {
-
 #ifndef IGNIS_INPUT
         glfwInit();
 #endif
@@ -451,7 +458,7 @@ class Render::Vulkan {
         windowOut = glfwCreateWindow(width, height, title, monitor, share);
         windows[windowOut] = std::make_unique<WindowVulkanData>();
 
-        WindowUserPointer* ptr = new WindowUserPointer();
+        WindowUserPointer *ptr = new WindowUserPointer();
         ptr->vulkanData = windows[windowOut].get();
         glfwSetWindowUserPointer(windowOut, ptr);
 
@@ -461,10 +468,9 @@ class Render::Vulkan {
 #ifdef IGNIS_INPUT
 
         Input::HookFramebufferSizeCallback(win, FramebufferResizeCallback);
-#else 
+#else
         glfwSetFramebufferSizeCallback(windowOut, FramebufferResizeCallback);
 #endif
-
 
         return win;
     }
@@ -521,6 +527,8 @@ class Render::Vulkan {
         // creates the views for the imagese in the swapchain
         CreateImageViews(surface->swapChainImageViews, surface->swapChainImages);
 
+        CreateDescriptorSetLayout(surface);
+
         surface->pipelineData = RenderPassInfoToVK(graphicPipeLineInfo);
 
         // create the rendering procedure that the data passes to be rendered
@@ -532,7 +540,7 @@ class Render::Vulkan {
         // creates the fences & semaphores to handle cpu-gpu syncronization
         CreateSyncObjects(surface->imageAvailableSemaphores, surface->renderFinishedSemaphores, surface->inFlightFences);
 
-        surfaceAccess[nextSurface] = {curWindow, curSurface};
+        surfaceAccess[nextSurface] = { curWindow, curSurface };
 
         return nextSurface++;
     }
@@ -550,12 +558,11 @@ class Render::Vulkan {
     }
 
     static void FramebufferResizeCallback(Window windowIn) {
-        auto window = reinterpret_cast<WindowUserPointer*>(glfwGetWindowUserPointer(windowIn.ptr));
+        auto window = reinterpret_cast<WindowUserPointer *>(glfwGetWindowUserPointer(windowIn.ptr));
         ((WindowVulkanData *)window->vulkanData)->framebufferResized = true;
     }
 
     void Update() {
-
 #ifndef IGNIS_INPUT
         glfwPollEvents();
 #endif
@@ -726,7 +733,7 @@ class Render::Vulkan {
         for (auto &[window, windowData] : windows) {
             void *exists = glfwGetWindowUserPointer(window);
             if (exists != nullptr) {
-                delete static_cast<WindowUserPointer*>(exists);
+                delete static_cast<WindowUserPointer *>(exists);
                 glfwSetWindowUserPointer(window, nullptr);
             }
             glfwDestroyWindow(window);
@@ -770,8 +777,8 @@ class Render::Vulkan {
         VkSubmitInfo submitInfo{};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         // what semaphore to wait for
-        VkSemaphore waitSemaphores[] = {data->imageAvailableSemaphores[data->currentFrame]};
-        VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+        VkSemaphore waitSemaphores[] = { data->imageAvailableSemaphores[data->currentFrame] };
+        VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
         submitInfo.waitSemaphoreCount = 1;
         submitInfo.pWaitSemaphores = waitSemaphores;
         submitInfo.pWaitDstStageMask = waitStages;
@@ -779,7 +786,7 @@ class Render::Vulkan {
         submitInfo.commandBufferCount = 1;
         submitInfo.pCommandBuffers = &data->commandBuffers[data->currentFrame];
         // what semaphore to signal when the command buffer finished execution
-        VkSemaphore signalSemaphores[] = {data->renderFinishedSemaphores[data->currentFrame]};
+        VkSemaphore signalSemaphores[] = { data->renderFinishedSemaphores[data->currentFrame] };
         submitInfo.signalSemaphoreCount = 1;
         submitInfo.pSignalSemaphores = signalSemaphores;
 
@@ -794,7 +801,7 @@ class Render::Vulkan {
         presentInfo.waitSemaphoreCount = 1;
         presentInfo.pWaitSemaphores = signalSemaphores;
 
-        VkSwapchainKHR swapChains[] = {data->swapChain};
+        VkSwapchainKHR swapChains[] = { data->swapChain };
         presentInfo.swapchainCount = 1;
         presentInfo.pSwapchains = swapChains;
         presentInfo.pImageIndices = &imageIndex;
@@ -896,7 +903,26 @@ class Render::Vulkan {
             createInfo.ppEnabledLayerNames = validationLayers.data();
 
             populateDebugMessengerCreateInfo(debugCreateInfo);
-            createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT *)&debugCreateInfo;
+            addPNext(&createInfo, &debugCreateInfo);
+
+            // if (gpuAssistedEnabledValidation) {
+            //     VkValidationFeatureEnableEXT enables[] = {
+            //         VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
+            //         VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
+            //         VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT
+            //     };
+            //
+            //     VkValidationFeaturesEXT validationFeatures{};
+            //     validationFeatures.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
+            //     validationFeatures.enabledValidationFeatureCount =
+            //         static_cast<uint32_t>(std::size(enables));
+            //     validationFeatures.pEnabledValidationFeatures = enables;
+            //     validationFeatures.pDisabledValidationFeatures = nullptr;
+            //     validationFeatures.disabledValidationFeatureCount = 0;
+            //
+            //     addPNext(&createInfo, &validationFeatures);
+            // }
+
         } else {
             createInfo.enabledLayerCount = 0;
 
@@ -1538,13 +1564,13 @@ class Render::Vulkan {
         vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
 
         VkRect2D scissor{};
-        scissor.offset = {0, 0};
+        scissor.offset = { 0, 0 };
         scissor.extent = extent;
         vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
         // binds the vertex buffers to the said bindings
-        VkBuffer vertexBuffers[] = {surface->vertexBuffer};
-        VkDeviceSize offsets[] = {0};  // set where to start reading vertex data from
+        VkBuffer vertexBuffers[] = { surface->vertexBuffer };
+        VkDeviceSize offsets[] = { 0 };  // set where to start reading vertex data from
         vkCmdBindVertexBuffers(cmdBuffer, 0, 1, vertexBuffers, offsets);
 
         // binds the index buffer to the said binding
@@ -1740,8 +1766,8 @@ class Render::Vulkan {
         region.imageSubresource.baseArrayLayer = 0;
         region.imageSubresource.layerCount = 1;
 
-        region.imageOffset = {0, 0, 0};
-        region.imageExtent = {width, height, 1};
+        region.imageOffset = { 0, 0, 0 };
+        region.imageExtent = { width, height, 1 };
 
         vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
@@ -1796,7 +1822,7 @@ class Render::Vulkan {
 
         return candidates[0];
     }
-    VkFormat findDepthFormat() { return findSupportedFormat({VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT}, VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT); }
+    VkFormat findDepthFormat() { return findSupportedFormat({ VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT }, VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT); }
     bool hasStencilComponent(VkFormat format) { return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT; }
 
     void GetSwapChainData() {
@@ -1831,7 +1857,7 @@ class Render::Vulkan {
 
         // set ownership/sharing of images between queues
         QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
-        uint32_t queueFamilyIndices[] = {indices.graphicsFamily.value(), indices.presentFamily.value()};
+        uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value(), indices.presentFamily.value() };
 
         if (indices.graphicsFamily != indices.presentFamily) {
             createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
@@ -1911,7 +1937,7 @@ class Render::Vulkan {
         fragShaderStageInfo.module = fragShaderModule;
         fragShaderStageInfo.pName = "main";
 
-        VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+        VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
         // vertex data specifications
         auto bindingDescription = GetVertexBindingDescription(surfaceRef);
@@ -1941,11 +1967,11 @@ class Render::Vulkan {
 
         // cuts off parts of the framebuffer from rendering
         VkRect2D scissor{};
-        scissor.offset = {0, 0};
+        scissor.offset = { 0, 0 };
         scissor.extent = window->swapChainExtent;
 
         // handles what should be dinamic during runtime
-        std::vector<VkDynamicState> dynamicStates = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+        std::vector<VkDynamicState> dynamicStates = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
 
         VkPipelineDynamicStateCreateInfo dynamicState{};
         dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
@@ -2143,7 +2169,7 @@ class Render::Vulkan {
             int width, height;
             glfwGetFramebufferSize(window, &width, &height);
 
-            VkExtent2D actualExtent = {static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+            VkExtent2D actualExtent = { static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
 
             actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
             actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
@@ -2158,7 +2184,7 @@ class Render::Vulkan {
         QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
 
         std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-        std::set<uint32_t> uniqueQueueFamilies = {indices.graphicsFamily.value(), indices.presentFamily.value()};
+        std::set<uint32_t> uniqueQueueFamilies = { indices.graphicsFamily.value(), indices.presentFamily.value() };
 
         float queuePriority = 1.0f;
         for (uint32_t queueFamily : uniqueQueueFamilies) {

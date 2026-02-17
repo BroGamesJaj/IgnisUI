@@ -1,20 +1,15 @@
 #pragma once
 
-#include <algorithm>
-#include <array>
-#include <concepts>
-#include <fstream>
 #include <iostream>
-#include <limits>
-#include <memory>
 #include <optional>
 #include <set>
 #include <string>
-#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 #include <functional>
+#include <fstream>
+#include <algorithm>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -32,10 +27,31 @@ struct GLFWmonitor;
 
 namespace Ignis {
 namespace Font {
-enum class TextDirection { LTR, RTL, BTT, TTB, GUESS };
-enum class TextAlign { LEFT, CENTER, RIGHT, GUESS };
-enum class Script { LATIN, CYRILLIC, ARABIC, DEVANAGARI, THAI, GREEK, HANGUL, HIRAGANA, KATAKANA, HAN, TAMIL, GUESS };
-enum class Style { REGULAR, BOLD, ITALIC, UNDERLINE };
+enum class TextDirection { LTR,
+                           RTL,
+                           BTT,
+                           TTB,
+                           GUESS };
+enum class TextAlign { LEFT,
+                       CENTER,
+                       RIGHT,
+                       GUESS };
+enum class Script { LATIN,
+                    CYRILLIC,
+                    ARABIC,
+                    DEVANAGARI,
+                    THAI,
+                    GREEK,
+                    HANGUL,
+                    HIRAGANA,
+                    KATAKANA,
+                    HAN,
+                    TAMIL,
+                    GUESS };
+enum class Style { REGULAR,
+                   BOLD,
+                   ITALIC,
+                   UNDERLINE };
 
 class Font;
 }  // namespace Font
@@ -51,53 +67,56 @@ struct Vec2 {
     T x;
     T y;
 
-    Vec2 operator+(const Vec2 &other) const { return Vec2{ x + other.x, y + other.y }; }
-    Vec2 operator-(const Vec2 &other) const { return Vec2{ x - other.x, y - other.y }; }
-    Vec2 &operator+=(const Vec2 &other) {
+    constexpr inline Vec2 operator+(const Vec2 &other) const noexcept { return Vec2{ x + other.x, y + other.y }; }
+    constexpr inline Vec2 operator-(const Vec2 &other) const noexcept { return Vec2{ x - other.x, y - other.y }; }
+    constexpr inline Vec2 &operator+=(const Vec2 &other) {
         x += other.x;
         y += other.y;
         return *this;
     }
-    Vec2 &operator-=(const Vec2 &other) {
+    constexpr inline Vec2 &operator-=(const Vec2 &other) {
         x -= other.x;
         y -= other.y;
         return *this;
     }
-    Vec2 operator*(const Vec2 &other) const { return Vec2{ x * other.x, y * other.y }; }
-    Vec2 operator*(const T &scalar) const { return { x * scalar, y * scalar }; }
+    constexpr inline Vec2 operator*(const Vec2 &other) const { return Vec2{ x * other.x, y * other.y }; }
+    constexpr inline Vec2 operator*(const T &scalar) const { return { x * scalar, y * scalar }; }
 
-    Vec2 operator/(const Vec2 &other) const { return Vec2{ x / other.x, y / other.y }; }
-    Vec2 operator/(const T &scalar) const { return { x / scalar, y / scalar }; }
+    constexpr inline Vec2 operator/(const Vec2 &other) const { return Vec2{ x / other.x, y / other.y }; }
+    constexpr inline Vec2 operator/(const T &scalar) const { return { x / scalar, y / scalar }; }
 
-    Vec2 &operator*=(const Vec2 &other) {
+    constexpr inline Vec2 &operator*=(const Vec2 &other) {
         x *= other.x;
         y *= other.y;
         return *this;
     }
-    Vec2 &operator/=(const Vec2 &other) {
+    constexpr inline Vec2 &operator/=(const Vec2 &other) {
         x /= other.x;
         y /= other.y;
         return *this;
     }
-    Vec2 &operator*=(const T &scalar) {
+    constexpr inline Vec2 &operator*=(const T &scalar) {
         x *= scalar;
         y *= scalar;
         return *this;
     }
-    Vec2 &operator/=(const T &scalar) {
+    constexpr inline Vec2 &operator/=(const T &scalar) {
         x /= scalar;
         y /= scalar;
         return *this;
     }
 
-    bool operator==(const Vec2 &other) { return x == other.x && y == other.y; }
-    bool operator!=(const Vec2 &other) { return x != other.x || y != other.y; }
+    constexpr inline bool operator==(const Vec2 &other) const noexcept { return x == other.x && y == other.y; }
+    constexpr inline bool operator!=(const Vec2 &other) const noexcept { return x != other.x || y != other.y; }
 
-    float distanceCmp(const Vec2& other) const { return (other.x - x) * (other.x - x) + (other.y - y) * (other.y - y); }
-    float distance(const Vec2 &other) const { return sqrt(pow(other.x - x, 2) + pow(other.y - y,2)); }
-    Vec2 normalize() { return Vec2(x, y) / sqrt(x * x + y * y); }
-    float crossProduct(const Vec2 &other) { return x * other.y - y * other.x; }
-    float dotProduct(const Vec2 &other) { return x * other.x + y * other.y; }
+    constexpr inline float distance(const Vec2 &other) const { return sqrt((other.x - x) * (other.x - x) + (other.y - y) * (other.y - y)); }
+    constexpr inline float distanceCmp(const Vec2 &other) const {
+        return (other.x - x) * (other.x - x) + (other.y - y) * (other.y - y);
+    }
+    constexpr inline Vec2 normalize() const { return Vec2(x, y) / sqrt(x * x + y * y); }
+    constexpr inline float crossProduct(const Vec2 &other) const { return x * other.y - y * other.x; }
+    constexpr inline float dotProduct(const Vec2 &other) const { return x * other.x + y * other.y; }
+    constexpr inline const std::string toString() const { return "(" + std::to_string(x) + "," + std::to_string(y) + ")";};
 };
 using Vec2f = Vec2<float>;
 using Vec2i = Vec2<int>;
@@ -129,9 +148,9 @@ class Render {
     };
 
     struct Window {
-    private:
+       private:
         GLFWwindow *ptr;
-        
+
         friend class Vulkan;
         friend class Render;
         friend class Input;
@@ -333,7 +352,10 @@ class UI {
     };
 
    private:
-    enum UIType { TEXT, BUTTON, IMAGE, VIEW };
+    enum UIType { TEXT,
+                  BUTTON,
+                  IMAGE,
+                  VIEW };
 
     struct UIData {
         UIData(void *ptr, UIType type);
@@ -484,7 +506,6 @@ class UI {
 
     private:
         std::vector<UIData*> &elements;
-
         friend class UI;
     };
 
@@ -605,7 +626,7 @@ using Button = UI::Button;
 #define IGNIS_INPUT
 #endif
 class Input {
-public:
+   public:
     typedef void (*HookFunction)(Window);
 
     struct Keydata {
@@ -626,18 +647,18 @@ public:
     };
     struct DropData {
         int count;
-        const char** paths;
+        const char **paths;
     };
 
-private:
+   private:
     enum class Callbacks : int;
 
-    using Action = std::pair<GLFWwindow*, Callbacks>;
+    using Action = std::pair<GLFWwindow *, Callbacks>;
     using Callback = HookFunction;
 
     struct KeyHash {
-        size_t operator()(const Action& k) const noexcept {
-            return std::hash<GLFWwindow*>()(k.first) ^ (std::hash<int>()(static_cast<int>(k.second)) << 1);
+        size_t operator()(const Action &k) const noexcept {
+            return std::hash<GLFWwindow *>()(k.first) ^ (std::hash<int>()(static_cast<int>(k.second)) << 1);
         }
     };
 
@@ -656,36 +677,36 @@ private:
     };
 
     static std::unordered_map<Action, Callback, KeyHash> customCallbacks;
-    static std::unordered_map <GLFWwindow*, WindowInputData> windowCallbackData;
+    static std::unordered_map<GLFWwindow *, WindowInputData> windowCallbackData;
 
-    static void WindowPosCallback(GLFWwindow* window, int xpos, int ypos);
-    static void WindowSizeCallback(GLFWwindow* window, int width, int height);
-    static void WindowCloseCallback(GLFWwindow* window);
-    static void WindowRefreshCallback(GLFWwindow* window);
-    static void WindowFocusCallback(GLFWwindow* window, int focused);
-    static void WindowIconifyCallback(GLFWwindow* window, int iconified);
-    static void WindowMaximizeCallback(GLFWwindow* window, int maximized);
-    static void FramebufferSizeCallback(GLFWwindow* window, int width, int height);
-    //static void WindowContentScaleCallback(GLFWwindow* window, float xscale, float yscale);
+    static void WindowPosCallback(GLFWwindow *window, int xpos, int ypos);
+    static void WindowSizeCallback(GLFWwindow *window, int width, int height);
+    static void WindowCloseCallback(GLFWwindow *window);
+    static void WindowRefreshCallback(GLFWwindow *window);
+    static void WindowFocusCallback(GLFWwindow *window, int focused);
+    static void WindowIconifyCallback(GLFWwindow *window, int iconified);
+    static void WindowMaximizeCallback(GLFWwindow *window, int maximized);
+    static void FramebufferSizeCallback(GLFWwindow *window, int width, int height);
+    // static void WindowContentScaleCallback(GLFWwindow* window, float xscale, float yscale);
 
-    static void InputKeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
-    static void InputCharCallback(GLFWwindow* window, unsigned int codepoint);
-    static void InputCharModsCallback(GLFWwindow* window, unsigned int codepoint, int mods);
-    static void InputMouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
-    static void InputCursorPositionCallback(GLFWwindow* window, double xpos, double ypos);
-    static void InputCursorEnterCallback(GLFWwindow* window, int entered);
-    static void InputScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
-    static void InputDropCallback(GLFWwindow* window, int count, const char** paths);
+    static void InputKeyCallback(GLFWwindow *window, int key, int scancode, int action, int mods);
+    static void InputCharCallback(GLFWwindow *window, unsigned int codepoint);
+    static void InputCharModsCallback(GLFWwindow *window, unsigned int codepoint, int mods);
+    static void InputMouseButtonCallback(GLFWwindow *window, int button, int action, int mods);
+    static void InputCursorPositionCallback(GLFWwindow *window, double xpos, double ypos);
+    static void InputCursorEnterCallback(GLFWwindow *window, int entered);
+    static void InputScrollCallback(GLFWwindow *window, double xoffset, double yoffset);
+    static void InputDropCallback(GLFWwindow *window, int count, const char **paths);
 
-    //static void MonitorCallback(Render::Window window, void* function);
+    // static void MonitorCallback(Render::Window window, void* function);
 
-    //static void ErrorCallback(Render::Window window, void* function);
+    // static void ErrorCallback(Render::Window window, void* function);
 
-    static void CallFunction(GLFWwindow* window, Callbacks type);
+    static void CallFunction(GLFWwindow *window, Callbacks type);
 
-public:
+   public:
     static void Init();
-    static void InitWindow(Window& window);
+    static void InitWindow(Window &window);
     static void Event();
 
     static void HookWindowPosCallback(Render::Window window, HookFunction function);
@@ -696,7 +717,7 @@ public:
     static void HookWindowIconifyCallback(Render::Window window, HookFunction function);
     static void HookWindowMaximizeCallback(Render::Window window, HookFunction function);
     static void HookFramebufferSizeCallback(Render::Window window, HookFunction function);
-    //static void HookWindowContentScaleCallback(Render::Window window, HookFunction function);
+    // static void HookWindowContentScaleCallback(Render::Window window, HookFunction function);
 
     static void HookInputKeyCallback(Render::Window window, HookFunction function);
     static void HookInputCharCallback(Render::Window window, HookFunction function);
@@ -707,9 +728,9 @@ public:
     static void HookInputScrollCallback(Render::Window window, HookFunction function);
     static void HookInputDropCallback(Render::Window window, HookFunction function);
 
-    //static void HookMonitorCallback(Render::Window window, void* function);
+    // static void HookMonitorCallback(Render::Window window, void* function);
 
-    //static void HookErrorCallback(Render::Window window, void* function);
+    // static void HookErrorCallback(Render::Window window, void* function);
 
     static Vec2i WindowPosition(Render::Window window);
     static Vec2i WindowSize(Render::Window window);
