@@ -613,7 +613,7 @@ class Render::Vulkan {
 
     template <std::derived_from<Render::VertexDataType>... Args>
     void SetVertexData(int surface, Args &...args) {
-        for (auto& arg : ...args)
+        for (auto& arg : args...)
         {
             vertexDataLayout[surfaceAccess[surface].surface].push_back(arg);
         }
@@ -2561,7 +2561,7 @@ void Render::PushConstants(int surface, void* data, uint32_t size) {
 
 template <std::derived_from<Render::VertexDataType>... Args>
 void Render::SetVertexData(int surface, Args &...args) {
-    instance->SetVertexData(surface, ...args);
+    instance->SetVertexData(surface, args...);
 }
 
 Render::Vulkan *Render::instance = nullptr;
