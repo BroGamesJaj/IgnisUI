@@ -245,6 +245,8 @@ class Render {
 
         int constantsSize = 0;
         std::vector<DescriptorSetInfo> descriptorSets;
+
+        std::vector<Render::VertexDataType> vertexDataLayout;
     };
 
     struct UIRenderData {
@@ -277,8 +279,11 @@ class Render {
 
     static void PushConstants(int surface, void* data, uint32_t size);
 
-    template <std::derived_from<Render::VertexDataType>... Args>
-    static void SetVertexData(int surface, Args &...args);
+    template<typename... Args>
+    requires (std::same_as<Args, Render::VertexDataType> && ...)
+    static std::vector<Render::VertexDataType> CreateVertexData(Args... args) {
+        return { args... };
+    }
 
    private:
     class Vulkan;

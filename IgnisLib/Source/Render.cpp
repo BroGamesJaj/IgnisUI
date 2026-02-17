@@ -6,9 +6,11 @@
 #define NOMINMAX
 
 #include <filesystem>
+#include <array>
 
 #define GLFW_INCLUDE_VULKAN
 #include "GLFW/glfw3.h"
+
 
 namespace Ignis {
 
@@ -75,6 +77,8 @@ struct CreateGraphicPipeLineInfoVKConvert {
 
     int constantsSize = 0;
     std::vector<Render::DescriptorSetInfo> descriptorSets;
+
+    std::vector<Render::VertexDataType> vertexDataLayout;
 };
 
 struct CreateSamplerVKConvert {
@@ -286,6 +290,8 @@ static CreateGraphicPipeLineInfoVKConvert RenderPassInfoToVK(CreateGraphicPipeLi
 
     output.constantsSize = info.constantsSize;
     output.descriptorSets = info.descriptorSets;
+
+    output.vertexDataLayout = std::move(info.vertexDataLayout);
 
     return output;
 }
@@ -527,9 +533,9 @@ class Render::Vulkan {
         // creates the views for the imagese in the swapchain
         CreateImageViews(surface->swapChainImageViews, surface->swapChainImages);
 
-        CreateDescriptorSetLayout(surface);
-
         surface->pipelineData = RenderPassInfoToVK(graphicPipeLineInfo);
+
+        CreateDescriptorSetLayout(surface);
 
         // create the rendering procedure that the data passes to be rendered
         CreateGraphicPipeline(windows[curWindow].get(), surface, curSurface);  // need a CreatePipelineInfo later
@@ -611,15 +617,8 @@ class Render::Vulkan {
         memcpy(constantsData[surfaceAccess[surface].surface], data, size);
     }
 
-    template <std::derived_from<Render::VertexDataType>... Args>
-    void SetVertexData(int surface, Args &...args) {
-        for (auto& arg : args...)
-        {
-            vertexDataLayout[surfaceAccess[surface].surface].push_back(arg);
-        }
-    }
-
    private:
+
     void CleanupSwapChain(SurfaceVulkanData *surface) {
         vkDestroyImageView(device, surface->depthImageView, nullptr);
         vkDestroyImage(device, surface->depthImage, nullptr);
@@ -1494,8 +1493,8 @@ class Render::Vulkan {
         if (vkBeginCommandBuffer(cmdBuffer, &beginInfo) != VK_SUCCESS) {
             throw std::runtime_error("failed to begin recording command buffer!");
         }
-
-        std::array<VkClearValue, 2> clearValues{};
+         
+        std::array<VkClearValue, 2> clearValues{}; // he???
         clearValues[0].color = { {0.388235f, 0.643137f, 0.839216f, 1.0f} };
         clearValues[1].depthStencil = { 1.0f, 0 };
 
@@ -1578,7 +1577,8 @@ class Render::Vulkan {
 
         vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, surface->layout, 0, 1, &surface->descriptorSets[0][frame], 0, nullptr);
 
-        vkCmdPushConstants(cmdBuffer, surface->layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, surface->pipelineData.constantsSize, constantsData[surfaceKey]);
+        if(surface->pipelineData.constantsSize > 0)
+            vkCmdPushConstants(cmdBuffer, surface->layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, surface->pipelineData.constantsSize, constantsData[surfaceKey]);
 
         // draw call
         vkCmdDrawIndexed(cmdBuffer, static_cast<uint32_t>(surface->indiceCount), 1, 0, 0, 0);
@@ -1907,6 +1907,7 @@ class Render::Vulkan {
     void CreateGraphicPipeline(WindowVulkanData *window, SurfaceVulkanData* surface, VkSurfaceKHR surfaceRef) {
 
         CreateDescriptorSetLayout(surface);
+        vertexDataLayout[surfaceRef] = surface->pipelineData.vertexDataLayout;
 
         if (surface->pipelineData.depthTestEnable || surface->pipelineData.depthWriteEnable)
             CreateDepthResources(surface, window->swapChainExtent);
@@ -2415,6 +2416,7 @@ class Render::Vulkan {
             description.offset = stride;
 
             stride += GetVertexDataSize(item);
+            attributeDescriptions.push_back(description);
         }
 
         return attributeDescriptions;
@@ -2557,11 +2559,6 @@ Render::DescriptorInfo Render::CreateImageDescriptor(int binding, int count, int
 
 void Render::PushConstants(int surface, void* data, uint32_t size) {
     instance->PushConstants(surface, data, size);
-}
-
-template <std::derived_from<Render::VertexDataType>... Args>
-void Render::SetVertexData(int surface, Args &...args) {
-    instance->SetVertexData(surface, args...);
 }
 
 Render::Vulkan *Render::instance = nullptr;

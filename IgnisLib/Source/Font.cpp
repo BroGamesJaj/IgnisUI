@@ -772,8 +772,8 @@ int quadraticSolver(std::vector<float> &roots, const float a, const float b, con
     float discriminant = b * b - 4 * a * c;
 
     if (discriminant >= 1e-8f) {
-        roots.push_back((-b + fsqrt(discriminant)) / (2 * a));
-        roots.push_back((-b - fsqrt(discriminant)) / (2 * a));
+        roots.push_back((-b + sqrtf(discriminant)) / (2 * a));
+        roots.push_back((-b - sqrtf(discriminant)) / (2 * a));
     } else if (discriminant < 1e-8f) {
         roots.push_back(-b / (2 * a));
     } else {
@@ -798,7 +798,7 @@ int cubicSolver(std::vector<float> &roots, const float a, const float b, const f
 
     // if discriminant is positive there is only one root
     if (discriminant > eps) {  // one real root
-        float sqrt_disc = fsqrt(discriminant);
+        float sqrt_disc = sqrtf(discriminant);
         float u = cbrtf(-q / 2.0f + sqrt_disc);
         float v = cbrtf(-q / 2.0f - sqrt_disc);
         roots.push_back(u + v - b / (3.0f * a));
@@ -807,7 +807,7 @@ int cubicSolver(std::vector<float> &roots, const float a, const float b, const f
         // and if its 0 it has two or 3, but
         // if thats the case we just get some duplicates
     } else {  // three real roots
-        float r = fsqrt(-p * p * p / 27.0f);
+        float r = sqrtf(-p * p * p / 27.0f);
         float phi = acosf(std::clamp(-q / (2.0f * r), -1.0f, 1.0f));
         float t = 2 * cbrtf(r);
         roots.push_back(t * cosf(phi / 3.0f) - b / (3.0f * a));

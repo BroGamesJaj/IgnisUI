@@ -9,9 +9,9 @@ layout(location = 1) in vec2 fragTexCoord;
 layout(location = 2) in flat uint fragTexId;
 
 
-layout(push_constant) uniform PushConstants {
-    float color;
-} pc;
+//layout(push_constant) uniform PushConstants {
+//    float color;
+//} pc;
 
 layout(binding = 1) uniform sampler2D textures[];
 
@@ -28,7 +28,7 @@ void main() {
     if (fragTexId < MAX_TEXTURES && fragTexId > 0) {
         vec4 texColor = texture(textures[nonuniformEXT(fragTexId)], fragTexCoord);
 
-        outColor = vec4(texColor, 1.0);
+        outColor = vec4(texColor);
     } else {
         outColor = vec4(fragColor, 1.0);
     }

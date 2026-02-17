@@ -37,7 +37,8 @@ int main() {
 		   0
 		}
     };
-	gpInfo.constantsSize = sizeof(float);
+	gpInfo.vertexDataLayout = Render::CreateVertexData(Render::VEC3, Render::VEC3, Render::VEC2, Render::UINT);
+	//gpInfo.constantsSize = sizeof(float);
 
 	Window window1 = Render::CreateAppWindow(1200, 800, "Gup 1");
 
@@ -80,7 +81,7 @@ int main() {
 
 		for (auto it = surfaces.begin(); it != surfaces.end(); ) {
 			if (Render::IsValidSurface(*it)) {
-				Render::PushConstants(*it, &color, sizeof(color));
+				//Render::PushConstants(*it, &color, sizeof(color));
 				Render::Draw(*it);
 				it++;
 			}
