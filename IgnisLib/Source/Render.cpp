@@ -613,7 +613,7 @@ class Render::Vulkan {
 
     template <std::derived_from<Render::VertexDataType>... Args>
     void SetVertexData(int surface, Args &...args) {
-        for (auto& arg : args)
+        for (auto& arg : ...args)
         {
             vertexDataLayout[surfaceAccess[surface].surface].push_back(arg);
         }
@@ -2527,7 +2527,7 @@ Render::DescriptorInfo Render::CreateUniformDescriptor(int binding, int size, in
     output.type = Render::DescriptorInfo::DescriptorType::UNIFORM;
     output.binding = binding;
     output.count = 1;
-    output.stage = stage;
+    output.stage = (Render::ShaderStage)stage;
     output.data = size;
 
     return output;
@@ -2538,7 +2538,7 @@ Render::DescriptorInfo Render::CreateStorageDescriptor(int binding, int size, in
     output.type = Render::DescriptorInfo::DescriptorType::STORAGE;
     output.binding = binding;
     output.count = 1;
-    output.stage = stage;
+    output.stage = (Render::ShaderStage)stage;
     output.data = size;
 
     return output;
@@ -2549,7 +2549,7 @@ Render::DescriptorInfo Render::CreateImageDescriptor(int binding, int count, int
     output.type = Render::DescriptorInfo::DescriptorType::IMAGE;
     output.binding = binding;
     output.count = count;
-    output.stage = stage;
+    output.stage = (Render::ShaderStage)stage;
     output.data = sampler;
 
     return output;
@@ -2561,7 +2561,7 @@ void Render::PushConstants(int surface, void* data, uint32_t size) {
 
 template <std::derived_from<Render::VertexDataType>... Args>
 void Render::SetVertexData(int surface, Args &...args) {
-    instance->SetVertexData(surface, args);
+    instance->SetVertexData(surface, ...args);
 }
 
 Render::Vulkan *Render::instance = nullptr;
