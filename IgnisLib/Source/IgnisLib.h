@@ -1,5 +1,10 @@
 #pragma once
 
+#include <numeric>
+#include <algorithm>
+#include <atomic>
+#include <fstream>
+#include <functional>
 #include <iostream>
 #include <optional>
 #include <set>
@@ -7,9 +12,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <functional>
-#include <fstream>
-#include <algorithm>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -26,6 +28,7 @@ struct GLFWmonitor;
 #define IGNIS_INPUT
 
 namespace Ignis {
+
 namespace Font {
 enum class TextDirection { LTR,
                            RTL,
@@ -113,10 +116,28 @@ struct Vec2 {
     constexpr inline float distanceCmp(const Vec2 &other) const {
         return (other.x - x) * (other.x - x) + (other.y - y) * (other.y - y);
     }
-    constexpr inline Vec2 normalize() const { return Vec2(x, y) / sqrt(x * x + y * y); }
+
+    constexpr inline Vec2 normalize() const { return Vec2(x, y) * isqrt(x * x + y * y); }
     constexpr inline float crossProduct(const Vec2 &other) const { return x * other.y - y * other.x; }
     constexpr inline float dotProduct(const Vec2 &other) const { return x * other.x + y * other.y; }
-    constexpr inline const std::string toString() const { return "(" + std::to_string(x) + "," + std::to_string(y) + ")";};
+    constexpr inline const std::string toString() const { return "(" + std::to_string(x) + "," + std::to_string(y) + ")"; };
+
+    // fast inverse sqrt
+    static float isqrt(float number) {
+        union {
+            float f;
+            uint32_t i;
+        } conv;
+
+        float x2;
+        const float threehalfs = 1.5F;
+
+        x2 = number * 0.5F;
+        conv.f = number;
+        conv.i = 0x5f3759df - (conv.i >> 1);
+        conv.f = conv.f * (threehalfs - (x2 * conv.f * conv.f));
+        return conv.f;
+    }
 };
 using Vec2f = Vec2<float>;
 using Vec2i = Vec2<int>;
@@ -174,7 +195,7 @@ class Render {
         MIRROR_CLAMP_TO_EDGE,
     };
 
-    enum ShaderStage: int {
+    enum ShaderStage : int {
         VERTEX = 1 << 0,
         FRAGMENT = 1 << 1,
         COMPUTE = 1 << 2
@@ -183,7 +204,9 @@ class Render {
     struct DescriptorInfo {
         DescriptorInfo() {};
 
-        enum class DescriptorType { UNIFORM, STORAGE, IMAGE};
+        enum class DescriptorType { UNIFORM,
+                                    STORAGE,
+                                    IMAGE };
 
         DescriptorType type;
         int binding;
@@ -192,28 +215,53 @@ class Render {
         int data;
     };
 
+    struct DescriptorSetId {
+        DescriptorSetId(uint32_t set, uint32_t idx) : set(set), idx(idx) {}
+        uint32_t set;
+        uint32_t idx;
+    };
+
     struct DescriptorSetInfo {
         DescriptorSetInfo() {};
 
         DescriptorSetInfo(std::vector<DescriptorInfo> descriptorInfo, int setIndex)
             : descriptorInfo(std::move(descriptorInfo)), setIndex(setIndex) {}
 
+        // uid must be a previously created DescriptorSetInfo uid
+        // A DescriptorSetInfo should never try to reuse a DescriptorSetInfo that is also a reuse
         std::vector<DescriptorInfo> descriptorInfo;
-        int setIndex; //must be larger then the previous for now
+        uint32_t setIndex;  // must be larger then the previous for now
     };
 
     struct CreateGraphicPipeLineInfo {
         CreateGraphicPipeLineInfo() {};
 
-        enum class Samples { x1, x2, x4, x8 };
-        enum class Topology { Point, Line, Triangle };
-        enum class Culling { Front, Back, None };
-        enum class FrontFace { Clockwise, CounterClockwise };
-        enum class BlendFactor { 
-            SrcAlpha, DstAlpha, OneMinusSrcAlpha, OneMinusDstAlpha,
-            SrcColor, DstColor, OneMinusSrcColor, OneMinusDstColor
+        enum class Samples { x1,
+                             x2,
+                             x4,
+                             x8 };
+        enum class Topology { Point,
+                              Line,
+                              Triangle };
+        enum class Culling { Front,
+                             Back,
+                             None };
+        enum class FrontFace { Clockwise,
+                               CounterClockwise };
+        enum class BlendFactor {
+            SrcAlpha,
+            DstAlpha,
+            OneMinusSrcAlpha,
+            OneMinusDstAlpha,
+            SrcColor,
+            DstColor,
+            OneMinusSrcColor,
+            OneMinusDstColor
         };
-        enum class BlendMode { Add, Sub, Max, Min };
+        enum class BlendMode { Add,
+                               Sub,
+                               Max,
+                               Min };
 
         std::string vertexShader;
         std::string fragmentShader;
@@ -222,7 +270,7 @@ class Render {
         float stencilBit[2] = { 1.0, 0.0f };
 
         Topology topology = Topology::Triangle;
-        Culling culling = Culling::Back;
+        Culling culling = Culling::None;
         FrontFace frontFace = FrontFace::CounterClockwise;
 
         float lineWidth = 1.0f;
@@ -244,7 +292,7 @@ class Render {
         bool depthWriting = false;
 
         int constantsSize = 0;
-        std::vector<DescriptorSetInfo> descriptorSets;
+        std::vector<DescriptorSetId> descriptorSetIds;
 
         std::vector<Render::VertexDataType> vertexDataLayout;
     };
@@ -261,26 +309,28 @@ class Render {
     static void Clean();
 
     static Window CreateAppWindow(int width, int height, const char *title, GLFWmonitor *screen = nullptr, GLFWwindow *share = nullptr);
-    static int CreateSurface(Window window, CreateGraphicPipeLineInfo graphicPipeLineInfo);
+    static int CreateSurface(Window window);
     static int CreateTexture(std::string path);
 
+    static void CreateDescriptorSets(std::vector<DescriptorSetId> &outIds, std::vector<DescriptorSetInfo> &descriptorSetInfos);
+    static void CreatePipeline(int surfaceIndex, CreateGraphicPipeLineInfo gpInfo);
     static int CreateFontPage(const std::vector<uint8_t> &rgbaData, uint32_t width, uint32_t height);
 
     static void Draw(int surface);
     static void Update();
     static bool IsValidSurface(int surfaceIndex);
 
-    static int CreateSampler(SamplerFilter filter = SamplerFilter::LINEAR, 
-        SamplerAddressing addressing = SamplerAddressing::REPEAT, SamplerMipmapMode mipmapMode = SamplerMipmapMode::LINEAR);
+    static int CreateSampler(SamplerFilter filter = SamplerFilter::LINEAR,
+                             SamplerAddressing addressing = SamplerAddressing::REPEAT, SamplerMipmapMode mipmapMode = SamplerMipmapMode::LINEAR);
 
     static DescriptorInfo CreateUniformDescriptor(int binding, int size, int stage);
     static DescriptorInfo CreateStorageDescriptor(int binding, int size, int stage);
     static DescriptorInfo CreateImageDescriptor(int binding, int count, int sampler, int stage);
 
-    static void PushConstants(int surface, void* data, uint32_t size);
+    static void PushConstants(int surface, void *data, uint32_t size);
 
-    template<typename... Args>
-    requires (std::same_as<Args, Render::VertexDataType> && ...)
+    template <typename... Args>
+        requires(std::same_as<Args, Render::VertexDataType> && ...)
     static std::vector<Render::VertexDataType> CreateVertexData(Args... args) {
         return { args... };
     }
@@ -294,7 +344,7 @@ class Render {
 
     static int AddUIElementData(UIRenderData &data);
 
-    static void* GetWindowOfSurface(int surface);
+    static void *GetWindowOfSurface(int surface);
 };
 
 #ifdef IGNIS_RENDER_NAMES
@@ -314,7 +364,6 @@ class UI {
     template <typename T>
         requires std::is_arithmetic_v<T>
     struct Area2 {
-
         Area2() = default;
 
         Area2(Vec2<T> x, Vec2<T> y) {
@@ -333,8 +382,8 @@ class UI {
             TR = Vec2<T>(BR.x, TL.y);
             BL = Vec2<T>(TL.x, BR.y);
         }
-        inline bool Contains(Vec2<T>& position) const { 
-            return (position.x > TL.x && position.x < BR.x && position.y > TL.y && position.y < BR.y); 
+        inline bool Contains(Vec2<T> &position) const {
+            return (position.x > TL.x && position.x < BR.x && position.y > TL.y && position.y < BR.y);
         };
     };
 
@@ -400,7 +449,7 @@ class UI {
 
     struct ViewData {
         ElementData base;
-        std::vector<UIData*> elements;
+        std::vector<UIData *> elements;
     };
 
     class Element {
@@ -408,21 +457,19 @@ class UI {
         UIData *data;
 
        public:
-        Element(UIType type) : data(CreateData(type)), position(GetPosition(data)), size(GetSize(data)), id(nextId++), 
-            textureId(GetTexture(data)), color(GetColor(data)), area(GetArea(data)), onClick(GetOnClick(data)), onHoverEnter(GetOnHoverEnter(data)),
-            onHoverExit(GetOnHoverExit(data)), isHovered(GetIsHovered(data)) {
+        Element(UIType type) : data(CreateData(type)), position(GetPosition(data)), size(GetSize(data)), id(nextId++), textureId(GetTexture(data)), color(GetColor(data)), area(GetArea(data)), onClick(GetOnClick(data)), onHoverEnter(GetOnHoverEnter(data)), onHoverExit(GetOnHoverExit(data)), isHovered(GetIsHovered(data)) {
             if (!dataPtrs.contains(data)) dataPtrs.insert(data);
         }
 
         Vec2f &position;
         Vec2f &size;
-        int& textureId;
-        Color& color;
-        std::function<void()>& onClick;
-        std::function<void()>& onHoverEnter;
-        bool& isHovered;
-        std::function<void()>& onHoverExit;
-        Area2<float>& area;
+        int &textureId;
+        Color &color;
+        std::function<void()> &onClick;
+        std::function<void()> &onHoverEnter;
+        bool &isHovered;
+        std::function<void()> &onHoverExit;
+        Area2<float> &area;
 
         bool Valid() { return data; }
 
@@ -491,8 +538,8 @@ class UI {
     };
 
     class View : public Element {
-    public:
-        View(Vec2f position, Vec2f size, int textureId, Color color, bool dummy) : Element(VIEW), elements(GetChildrens(data)) { 
+       public:
+        View(Vec2f position, Vec2f size, int textureId, Color color, bool dummy) : Element(VIEW), elements(GetChildrens(data)) {
             this->position = position;
             this->size = size;
             this->textureId = textureId;
@@ -505,12 +552,12 @@ class UI {
 
         View(Vec2f position, Vec2f size, int textureId) : View(position, size, textureId, Color(), true) {}
 
-        void Add(Element& element) { elements.push_back(element.data); }
+        void Add(Element &element) { elements.push_back(element.data); }
 
-        void Pop(Element& element) {}
+        void Pop(Element &element) {}
 
-    private:
-        std::vector<UIData*> &elements;
+       private:
+        std::vector<UIData *> &elements;
         friend class UI;
     };
 
@@ -559,7 +606,7 @@ class UI {
 
    private:
     static int mainSurface;
-    static std::unordered_map<int, std::vector<UIData*>> elements;
+    static std::unordered_map<int, std::vector<UIData *>> elements;
     static int nextId;
     static std::unordered_set<UIData *> dataPtrs;
     static std::unordered_map<int, Font::Font *> fonts;
@@ -575,7 +622,7 @@ class UI {
         std::vector<uint32_t> indicies;
     };
 
-    static Render::UIRenderData ProcessVertecies(ProcessData data, std::vector<UIData*> &elements);
+    static Render::UIRenderData ProcessVertecies(ProcessData data, std::vector<UIData *> &elements);
     static UIVertexData GenerateVertecies(UI::ProcessData procData, int textureId, Color color);
 
     // Data Handling
@@ -585,13 +632,13 @@ class UI {
     // Element
     static Vec2f &GetPosition(UIData *data);
     static Vec2f &GetSize(UIData *data);
-    static int& GetTexture(UIData* data);
-    static Color& GetColor(UIData* data);
-    static Area2<float>& GetArea(UIData* data);
-    static std::function<void()>& GetOnClick(UIData* data);
-    static std::function<void()>& GetOnHoverEnter(UIData* data);
-    static std::function<void()>& GetOnHoverExit(UIData* data);
-    static bool& GetIsHovered(UIData* data);
+    static int &GetTexture(UIData *data);
+    static Color &GetColor(UIData *data);
+    static Area2<float> &GetArea(UIData *data);
+    static std::function<void()> &GetOnClick(UIData *data);
+    static std::function<void()> &GetOnHoverEnter(UIData *data);
+    static std::function<void()> &GetOnHoverExit(UIData *data);
+    static bool &GetIsHovered(UIData *data);
 
     // Text
     static std::string &GetText(UIData *data);
@@ -601,17 +648,17 @@ class UI {
     static UIVertexData GenerateTextVertecies(UI::ProcessData procData, UIData *data, UI::Color color);
 
     // View
-    static std::vector<UIData*> &GetChildrens(UIData *data);
+    static std::vector<UIData *> &GetChildrens(UIData *data);
 
     // Button
     static void *&GetFunction(UIData *data);
     static Text &GetTextElement(UIData *data);
 
     static void HandleClick(Window window);
-    static UIData* FindFirstClicked(std::vector<UIData*>& elements, Vec2<float>& position);
+    static UIData *FindFirstClicked(std::vector<UIData *> &elements, Vec2<float> &position);
 
     static void HandleCursorMove(Window window);
-    static void ProcHoveredElements(std::vector<UIData*>& elements, Vec2<float>& position);
+    static void ProcHoveredElements(std::vector<UIData *> &elements, Vec2<float> &position);
 
     friend class Input;
 };

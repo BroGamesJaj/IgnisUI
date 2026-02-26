@@ -1,4 +1,11 @@
+// TODO: make this work for sdf
 #version 450
+
+// layout(location = 0) in vec2 inposition;
+// layout(location = 1) in vec2 insize;
+// layout(location = 2) in vec4 intexcoord; // uv
+// layout(location = 3) in uint intexid;
+// layout(location = 4) in vec3 incolor;
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inColor;
