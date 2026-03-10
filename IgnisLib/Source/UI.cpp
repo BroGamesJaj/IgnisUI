@@ -7,6 +7,13 @@ using Color = Ignis::UI::Color;
 #include "GLFW/glfw3.h"
 
 namespace Ignis {
+
+struct UniformData {
+    alignas(16) glm::mat4 model;
+    alignas(16) glm::mat4 view;
+    alignas(16) glm::mat4 proj;
+};
+
 // Color
 
 auto hexToFloat = [](const std::string &s) -> float { return static_cast<float>(std::stoi(s, nullptr, 16)) / 255.0f; };
@@ -22,6 +29,63 @@ Color::Color(std::string hex) {
 Color Color::operator+(const Color &other) const { return Color(std::clamp(this->r + other.r, 0.0f, 1.0f), std::clamp(this->g + other.g, 0.0f, 1.0f), std::clamp(this->b + other.b, 0.0f, 1.0f)); }
 Color Color::operator-(const Color &other) const { return Color(std::clamp(this->r - other.r, 0.0f, 1.0f), std::clamp(this->g - other.g, 0.0f, 1.0f), std::clamp(this->b - other.b, 0.0f, 1.0f)); }
 Color Color::Inverted() { return Color(1.0f - this->r, 1.0f - this->g, 1.0f - this->b); }
+
+// UI Handling
+
+bool firstInit = true;
+int mainDescriptor = -1;
+
+void UI::Init(Window window) {
+    if (firstInit) {
+        Render::DescriptorSetInfo descriptorSet = {
+        {
+                Render::CreateUniformDescriptor(0, sizeof(UniformData), Render::ShaderStage::VERTEX),
+                Render::CreateImageDescriptor(1, 1028, Render::CreateSampler(), Render::ShaderStage::FRAGMENT),
+        },
+        0x0,
+        };
+
+        mainDescriptor = Render::CreateDescriptorSet(descriptorSet);
+
+        CreateGraphicPipeLineInfo gpInfo{};
+        gpInfo.vertexShader = "../Resources/Shaders/shader.vert";
+        gpInfo.fragmentShader = "../Resources/Shaders/shader.frag";
+        gpInfo.blendEnable = true;
+        gpInfo.descriptorSetIds = {
+            mainDescriptor
+        };
+        gpInfo.constantsSize = sizeof(float);
+        gpInfo.vertexDataLayout = Render::CreateVertexData(Render::VEC3, Render::VEC3, Render::VEC2, Render::UINT);
+
+        pipeline = Render::CreatePipeline(gpInfo);
+    }
+    
+    surfaces[window.ptr] = Render::CreateSurface(window, { pipeline });
+}
+
+int UI::CreateTexture(std::string path) {
+    return Render::CreateTexture(mainDescriptor, path);
+}
+
+bool UI::CanDraw() {
+    if (surfaces.size() == 0) return true;
+
+    bool haveValid = false;
+    for (auto& [window, surface] : surfaces) {
+        haveValid |= Render::IsValidSurface(surface);
+    }
+
+    return haveValid;
+}
+
+void UI::Draw() {
+    float tmp = 0;
+    Render::PushConstants(pipeline, &tmp, sizeof(float));
+    for (auto& [window, surface] : surfaces) {
+        if (Render::IsValidSurface(surface))
+            Render::Draw(surface);
+    }
+}
 
 // Data Handling
 
@@ -136,10 +200,9 @@ void UI::Bind(Element &dst, Element &src) {
     }
 }
 
-void UI::SubmitSurface(int surface) {
+void UI::Submit(Window window) {
+    int surface = surfaces[window.ptr];
     if (!elements.contains(surface)) return;
-
-    GLFWwindow* window = static_cast<GLFWwindow*>(Render::GetWindowOfSurface(surface));
 
     UI::ProcessData data{ .ofst{ 0, 0 }, .size{ 2, 2 } };
 
@@ -593,10 +656,12 @@ UI::Text &UI::GetTextElement(UIData *data) {
 
 // Variables
 
-int UI::mainSurface = -1;
+Window UI::mainWindow;
 std::unordered_map<int, Font::Font *> UI::fonts;
 int UI::nextId = 0;
 int UI::nextFontId = 1;
 std::unordered_map<int, std::vector<UI::UIData*>> UI::elements;
 std::unordered_set<UI::UIData *> UI::dataPtrs;
+int UI::pipeline = true;
+std::unordered_map<GLFWwindow*, int> UI::surfaces;
 }  // namespace Ignis

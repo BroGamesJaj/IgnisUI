@@ -292,7 +292,7 @@ class Render {
         bool depthWriting = false;
 
         int constantsSize = 0;
-        std::vector<DescriptorSetId> descriptorSetIds;
+        std::vector<int> descriptorSetIds;
 
         std::vector<Render::VertexDataType> vertexDataLayout;
     };
@@ -309,11 +309,12 @@ class Render {
     static void Clean();
 
     static Window CreateAppWindow(int width, int height, const char *title, GLFWmonitor *screen = nullptr, GLFWwindow *share = nullptr);
-    static int CreateSurface(Window window);
-    static int CreateTexture(std::string path);
+    static int CreateSurface(Window window, std::vector<int> pipelines);
+    static int CreateTexture(int descriptorId, std::string path);
 
-    static void CreateDescriptorSets(std::vector<DescriptorSetId> &outIds, std::vector<DescriptorSetInfo> &descriptorSetInfos);
-    static void CreatePipeline(int surfaceIndex, CreateGraphicPipeLineInfo gpInfo);
+    static int CreateDescriptorSet(DescriptorSetInfo &descriptorSetInfos);
+    static std::vector<int> CreateDescriptorSet(std::vector<Render::DescriptorSetInfo>& descriptorSetInfo);
+    static int CreatePipeline(CreateGraphicPipeLineInfo &gpInfo);
     static int CreateFontPage(const std::vector<uint8_t> &rgbaData, uint32_t width, uint32_t height);
 
     static void Draw(int surface);
@@ -585,18 +586,23 @@ class UI {
         friend class UI;
     };
 
-    static inline void SetMainSurface(int surface) { mainSurface = surface; }
+    static inline void SetMainWindow(Window window) { mainWindow = window; }
+
+    static void Init(Window window);
+
+    static int CreateTexture(std::string path);
 
     static int LoadFont(const std::string &fontPath, uint32_t size = 16);
 
     template <std::derived_from<UI::Element>... Args>
-    static void AddToSurface(int surface, Args &...args) {
+    static void PushOn(Window window, Args &...args) {
+        int surface = surfaces[window.ptr];
         if (!Render::IsValidSurface(surface)) return;
 
         (elements[surface].push_back(args.data), ...);
     }
 
-    static void SubmitSurface(int surface = mainSurface);
+    static void Submit(Window window = mainWindow);
 
     static void Bind(Element &dst, Element &src);
 
@@ -604,13 +610,19 @@ class UI {
 
     static void Clean();
 
+    static bool CanDraw();
+
+    static void Draw();
+
    private:
-    static int mainSurface;
+    static Window mainWindow;
     static std::unordered_map<int, std::vector<UIData *>> elements;
     static int nextId;
     static std::unordered_set<UIData *> dataPtrs;
     static std::unordered_map<int, Font::Font *> fonts;
     static int nextFontId;
+    static int pipeline;
+    static std::unordered_map<GLFWwindow*, int> surfaces;
 
     struct ProcessData {
         Vec2f ofst;

@@ -13,7 +13,7 @@ layout(location = 2) in flat uint fragTexId;
 //    float color;
 //} pc;
 
-layout(binding = 0) uniform sampler2D textures[];
+layout(set = 0, binding = 1) uniform sampler2D textures[];
 
 layout(location = 0) out vec4 outColor;
 
