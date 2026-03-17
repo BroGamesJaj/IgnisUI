@@ -1,4 +1,3 @@
-
 #include "IgnisLib.h"
 #include "vulkan/vulkan_core.h"
 
@@ -9,7 +8,6 @@
 
 #include <array>
 #include <filesystem>
-#include <tuple>
 
 #define GLFW_INCLUDE_VULKAN
 #include "GLFW/glfw3.h"
@@ -397,7 +395,7 @@ struct DescriptorSet {
 
     std::array<std::unique_ptr<BufferData>, MAX_FRAMES_IN_FLIGHT> uniformBuffer{ nullptr };
     std::array<std::unique_ptr<BufferData>, MAX_FRAMES_IN_FLIGHT> storageBuffer{ nullptr };
-    
+
     int textureBinding = -1;
     int samplerId = -1;
 
@@ -436,6 +434,8 @@ class Render::Vulkan {
     VkDevice device;
     VkQueue graphicsQueue;
     VkQueue presentQueue;
+    VkQueue computeQueue;
+    VkQueue transferQueue;
 
     VkSurfaceKHR surface;
 
@@ -477,17 +477,16 @@ class Render::Vulkan {
 
     std::unordered_map<VkSurfaceKHR, std::vector<Render::VertexDataType>> vertexDataLayout;
 
-    GLFWwindow* CreateTmpSurface() {
-        
+    GLFWwindow *CreateTmpSurface() {
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-        
-        GLFWwindow* windowOut = glfwCreateWindow(1, 1, "tmp", nullptr, nullptr);
+
+        GLFWwindow *windowOut = glfwCreateWindow(1, 1, "tmp", nullptr, nullptr);
         if (!windowOut) {
-            const char* desc = nullptr;
+            const char *desc = nullptr;
             int code = glfwGetError(&desc);
             std::cerr << "GLFW window creation failed. Code: " << code
-                << " Message: " << (desc ? desc : "unknown") << std::endl;
+                      << " Message: " << (desc ? desc : "unknown") << std::endl;
             return nullptr;
         }
 
@@ -518,7 +517,7 @@ class Render::Vulkan {
         // creating the messennger if the debug layer is enabled
         SetupDebugMessenger();
 
-        GLFWwindow* window = CreateTmpSurface();
+        GLFWwindow *window = CreateTmpSurface();
 
         // basicly selects the "GPU"
         PickPhysicalDevice();
@@ -591,7 +590,6 @@ class Render::Vulkan {
 
         for (size_t i = 0; i < pipeline.size(); i++)
             if (!pipelines.contains(pipeline[i])) throw std::runtime_error("used invalid pipeline for the surface");
-
 
         if (windows.find(curWindow) == windows.end()) throw std::runtime_error("failed to get the specified window");
 
@@ -770,7 +768,7 @@ class Render::Vulkan {
             if (data != nullptr) free(data);
         }
 
-        for (auto& [id, pipeline] : pipelines) {
+        for (auto &[id, pipeline] : pipelines) {
             vkDestroyPipeline(device, pipeline.pipeline, nullptr);
             vkDestroyPipelineLayout(device, pipeline.layout, nullptr);
         }
@@ -859,7 +857,7 @@ class Render::Vulkan {
         // TODO: somehow unhardcode the pipeline idx
         // updating the uniform buffer for the frame
         UpdateUniformBufferSpin(descriptorSets[pipelines[0].descriptorIds[0]].uniformBuffer[data->currentFrame].get(), windows[window].get(), glm::vec3(0.0f, 1.0f, 0.0f));
-        //UpdateUniformBufferSpin(DescriptorSetFromId(data->pipelineDatas[1].descriptorSetIds[1]).uniformBuffer[data->currentFrame].get(), windows[window].get(), 1, glm::vec3(1.0f, 0.0f, 0.0f));
+        // UpdateUniformBufferSpin(DescriptorSetFromId(data->pipelineDatas[1].descriptorSetIds[1]).uniformBuffer[data->currentFrame].get(), windows[window].get(), 1, glm::vec3(1.0f, 0.0f, 0.0f));
 
         // resets and records the command buffer
         vkResetCommandBuffer(data->commandBuffers[data->currentFrame], 0);
@@ -1061,39 +1059,39 @@ class Render::Vulkan {
     }
 
     int CreateSamplerFromData(CreateSamplerVKConvert &samplerVK) {
-            VkSamplerCreateInfo samplerInfo{};
+        VkSamplerCreateInfo samplerInfo{};
 
-            samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
 
-            samplerInfo.magFilter = samplerVK.filter;
-            samplerInfo.minFilter = samplerVK.filter;
+        samplerInfo.magFilter = samplerVK.filter;
+        samplerInfo.minFilter = samplerVK.filter;
 
-            samplerInfo.addressModeU = samplerVK.addressMode;
-            samplerInfo.addressModeV = samplerVK.addressMode;
-            samplerInfo.addressModeW = samplerVK.addressMode;
+        samplerInfo.addressModeU = samplerVK.addressMode;
+        samplerInfo.addressModeV = samplerVK.addressMode;
+        samplerInfo.addressModeW = samplerVK.addressMode;
 
-            VkPhysicalDeviceProperties properties{};
-            vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+        VkPhysicalDeviceProperties properties{};
+        vkGetPhysicalDeviceProperties(physicalDevice, &properties);
 
-            samplerInfo.anisotropyEnable = VK_TRUE;
-            samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+        samplerInfo.anisotropyEnable = VK_TRUE;
+        samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
 
-            samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-            samplerInfo.unnormalizedCoordinates = VK_FALSE;
+        samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+        samplerInfo.unnormalizedCoordinates = VK_FALSE;
 
-            samplerInfo.compareEnable = VK_FALSE;
-            samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+        samplerInfo.compareEnable = VK_FALSE;
+        samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
 
-            samplerInfo.mipmapMode = samplerVK.mipmapMode;
-            samplerInfo.mipLodBias = 0.0f;
-            samplerInfo.minLod = 0.0f;
-            samplerInfo.maxLod = 0.0f;
+        samplerInfo.mipmapMode = samplerVK.mipmapMode;
+        samplerInfo.mipLodBias = 0.0f;
+        samplerInfo.minLod = 0.0f;
+        samplerInfo.maxLod = 0.0f;
 
-            if (vkCreateSampler(device, &samplerInfo, nullptr, &samplerAccess[nextSampler]) != VK_SUCCESS) {
-                throw std::runtime_error("failed to create texture sampler!");
-            }
+        if (vkCreateSampler(device, &samplerInfo, nullptr, &samplerAccess[nextSampler]) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create texture sampler!");
+        }
 
-            return nextSampler++;
+        return nextSampler++;
     }
 
     // creates a buffer
@@ -1343,16 +1341,15 @@ class Render::Vulkan {
     }
 
     void UpdateTextureDescriptor(DescriptorSet &descriptorSet, int index, VkImageView textureView) {
-        if(descriptorSet.samplerId == -1 || descriptorSet.textureBinding == -1)
+        if (descriptorSet.samplerId == -1 || descriptorSet.textureBinding == -1)
             throw std::runtime_error("can't update texture descriptor, sampler or texture binding is -1");
 
         VkDescriptorImageInfo imageInfo{};
         imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfo.imageView = textureView;            
+        imageInfo.imageView = textureView;
         imageInfo.sampler = samplerAccess[descriptorSet.samplerId];
 
         for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-
             VkWriteDescriptorSet write{};
             write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             write.dstSet = descriptorSet.descriptorSet[i];
@@ -1420,7 +1417,7 @@ class Render::Vulkan {
         VkCommandPoolCreateInfo poolInfo{};
         poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-        poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+        poolInfo.queueFamilyIndex = queueFamilyIndices.graphics.family;
 
         if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
             throw std::runtime_error("failed to create command pool!");
@@ -1508,8 +1505,6 @@ class Render::Vulkan {
         colorAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         colorAttachmentInfo.clearValue = clearValues[0];
 
-
-
         VkRect2D renderArea{};
         renderArea.offset = { 0, 0 };
         renderArea.extent = extent;
@@ -1520,10 +1515,9 @@ class Render::Vulkan {
         renderInfo.layerCount = 1;
         renderInfo.colorAttachmentCount = 1;
         renderInfo.pColorAttachments = &colorAttachmentInfo;
-   
 
         bool needDepth = false;
-        for (auto& id : surface->pipelines) {
+        for (auto &id : surface->pipelines) {
             needDepth |= pipelines[id].needDepth;
         }
         if (needDepth) {
@@ -1582,7 +1576,7 @@ class Render::Vulkan {
         // binds the index buffer to the said binding
         vkCmdBindIndexBuffer(cmdBuffer, surface->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-        //if (!surface->isOrderingValid) CalculateBestOrdering(surface);
+        // if (!surface->isOrderingValid) CalculateBestOrdering(surface);
         /*maytodo
         // NOTE: this is only for graphics pipelines
         for (const auto &[pipelineIdx, descriptorSetsToBind] : surface->pipelineBindOrdering) {
@@ -1597,9 +1591,8 @@ class Render::Vulkan {
             // draw call
         }*/
 
-        //only one pipeline can be used at once
-        for (size_t i = 0; i < surface->pipelines.size(); i++)
-        {
+        // only one pipeline can be used at once
+        for (size_t i = 0; i < surface->pipelines.size(); i++) {
             int ppIndex = surface->pipelines[i];
             vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[ppIndex].pipeline);
             for (const auto &id : pipelines[ppIndex].descriptorIds) {
@@ -1885,9 +1878,9 @@ class Render::Vulkan {
 
         // set ownership/sharing of images between queues
         QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
-        uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value(), indices.presentFamily.value() };
+        uint32_t queueFamilyIndices[] = { indices.graphics.family, indices.present.family };
 
-        if (indices.graphicsFamily != indices.presentFamily) {
+        if (indices.graphics.family != indices.present.family) {
             createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
             createInfo.queueFamilyIndexCount = 2;
             createInfo.pQueueFamilyIndices = queueFamilyIndices;
@@ -1960,7 +1953,7 @@ class Render::Vulkan {
             if (!descriptorSets.contains(id)) throw new std::runtime_error("there are no descriptorSetLayouts with set number");
             outLayouts.push_back(descriptorSets.at(id).descriptorSetLayout);
         };
-        if (outLayouts.size() != descriptorSetIds.size()) throw new std::runtime_error("somehow not all layout present in outLayouts"); // it will indeed be somehow
+        if (outLayouts.size() != descriptorSetIds.size()) throw new std::runtime_error("somehow not all layout present in outLayouts");  // it will indeed be somehow
     }
 
     std::vector<int> CreateDescriptorSets(std::vector<DescriptorSetInfo> &descriptorSetInfos) {
@@ -2032,7 +2025,7 @@ class Render::Vulkan {
         // TODO: this should happen separately
         for (size_t i = 0; i < descriptorSetInfos.size(); i++) {
             auto &setInfo = descriptorSetInfos[i];
-            auto& descriptorSet = descriptorSets[descriptorIds[i]];
+            auto &descriptorSet = descriptorSets[descriptorIds[i]];
             descriptorSet.setIdx = setInfo.setIndex;
             std::vector<VkWriteDescriptorSet> writes;
             std::vector<VkDescriptorImageInfo> imageInfos;
@@ -2107,7 +2100,7 @@ class Render::Vulkan {
         pipeline.descriptorIds = pipelineData.descriptorSetIds;
 
         std::unordered_set<int> seen;
-        for (auto& id : pipeline.descriptorIds) {
+        for (auto &id : pipeline.descriptorIds) {
             if (!seen.insert(descriptorSets[id].setIdx).second) {
                 throw std::runtime_error("two or more descriptors uses the same set index");
             }
@@ -2115,7 +2108,6 @@ class Render::Vulkan {
 
         if (pipelineData.depthTestEnable || pipelineData.depthWriteEnable)
             pipeline.needDepth = true;
-        
 
         // reads in the binary shader data
         CompileShader(pipelineData.vertexShader, "vert");
@@ -2232,7 +2224,7 @@ class Render::Vulkan {
         depthStencil.back = {};   // Optional
 
         VkFormat depthFormat = findDepthFormat();  // e.g., VK_FORMAT_D32_SFLOAT
-        
+
         VkPipelineRenderingCreateInfo renderCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
             .colorAttachmentCount = 1,
@@ -2240,9 +2232,9 @@ class Render::Vulkan {
             .depthAttachmentFormat = depthFormat
         };
 
-        //TODO: maybe we should split the const into separate ones :P
-        //i thought only one can be at the same time
-        //with best regards, józsef
+        // TODO: maybe we should split the const into separate ones :P
+        // i thought only one can be at the same time
+        // with best regards, józsef
         VkPushConstantRange constRange{};
         constRange.offset = 0;
         constRange.size = pipelineData.constantsSize;
@@ -2286,7 +2278,6 @@ class Render::Vulkan {
         // can derive render passes from one-another so it can have a parent-child hierarchy, faster, easier
         pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
         pipelineInfo.basePipelineIndex = -1;
-
 
         if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline.pipeline) != VK_SUCCESS) {
             throw std::runtime_error("failed to create graphics pipeline!");
@@ -2376,16 +2367,30 @@ class Render::Vulkan {
     void CreateLogicalDevice() {
         // get requested queues
         QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+        std::vector<QueueFamilyIndices::QueueInfo *> queueInfos = {
+            &indices.graphics,
+            &indices.present,
+            &indices.compute,
+            &indices.transfer
+        };
 
         std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-        std::set<uint32_t> uniqueQueueFamilies = { indices.graphicsFamily.value(), indices.presentFamily.value() };
+
+        std::unordered_map<uint32_t, uint32_t> queueFamilies{};
+        for (auto &qI : queueInfos) {
+            auto [it, inserted] = queueFamilies.insert({ qI->family, qI->index + 1 });
+            if (!inserted) {
+                it->second = std::max(it->second, qI->index + 1);
+            }
+        }
 
         float queuePriority = 1.0f;
-        for (uint32_t queueFamily : uniqueQueueFamilies) {
+        for (auto [queueFamily, queueCount] : queueFamilies) {
+            // std::cout << "qf: " << queueFamily << " qC: " << queueCount << "\n";
             VkDeviceQueueCreateInfo queueCreateInfo{};
             queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
             queueCreateInfo.queueFamilyIndex = queueFamily;
-            queueCreateInfo.queueCount = 1;
+            queueCreateInfo.queueCount = queueCount;
             queueCreateInfo.pQueuePriorities = &queuePriority;
             queueCreateInfos.push_back(queueCreateInfo);
         }
@@ -2439,8 +2444,21 @@ class Render::Vulkan {
             throw std::runtime_error("failed to create logical device!");
         }
 
-        vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
-        vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
+        std::vector<VkDeviceQueueInfo2> queueGetInfos;
+        queueGetInfos.reserve(queueInfos.size());
+
+        for (auto &qI : queueInfos) {
+            queueGetInfos.push_back({ VK_STRUCTURE_TYPE_DEVICE_QUEUE_INFO_2,
+                                      nullptr,
+                                      0,
+                                      qI->family,
+                                      qI->index });
+        }
+
+        vkGetDeviceQueue2(device, &queueGetInfos[0], &graphicsQueue);
+        vkGetDeviceQueue2(device, &queueGetInfos[1], &presentQueue);
+        vkGetDeviceQueue2(device, &queueGetInfos[2], &computeQueue);
+        vkGetDeviceQueue2(device, &queueGetInfos[3], &transferQueue);
     }
     // device picking
     void PickPhysicalDevice() {
@@ -2479,7 +2497,7 @@ class Render::Vulkan {
         VkPhysicalDeviceFeatures supportedFeatures;
         vkGetPhysicalDeviceFeatures(device, &supportedFeatures);
 
-        return indices.isComplete() && extensionsSupported && swapChainAdequate && supportedFeatures.samplerAnisotropy;
+        return indices.isMinimumComplete() && extensionsSupported && swapChainAdequate && supportedFeatures.samplerAnisotropy;
     }
     // check for UPGRADES BROTHER, i mean physical device stuff we need
     bool CheckDeviceExtensionSupport(VkPhysicalDevice device) {
@@ -2497,13 +2515,27 @@ class Render::Vulkan {
 
         return requiredExtensions.empty();
     }
+
     // struct for the "features"
     struct QueueFamilyIndices {
-        std::optional<uint32_t> graphicsFamily;
-        std::optional<uint32_t> presentFamily;
+        struct QueueInfo {
+            uint32_t family = UINT32_MAX;
+            uint32_t index = UINT32_MAX;
+            bool isFamilySet() { return family != UINT32_MAX; }
+            bool isIndexSet() { return index != UINT32_MAX; }
+        };
 
-        bool isComplete() { return graphicsFamily.has_value(); }
+        QueueInfo graphics{};
+        QueueInfo present{};
+        QueueInfo compute{};
+        QueueInfo transfer{};
+
+        bool isComplete() { return graphics.isFamilySet() && present.isFamilySet() && compute.isFamilySet() && transfer.isFamilySet(); }
+        bool isMinimumComplete() { return graphics.isFamilySet() && present.isFamilySet(); }
+        bool isComputeUnique() { return graphics.family != compute.family || (graphics.family == compute.family && graphics.index != compute.index); }
+        bool isTransferUnique() { return graphics.family != transfer.family || (graphics.family == transfer.family && graphics.index != transfer.index); }
     };
+
     // searching through the features if it has what we need to have to work on the stuff that we need to work on for the lib to work for the app to work for us
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
         QueueFamilyIndices indices;
@@ -2511,20 +2543,35 @@ class Render::Vulkan {
         uint32_t queueFamilyCount = 0;
         vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
 
-        std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+        std::vector<VkQueueFamilyProperties2> queueFamilies(queueFamilyCount);
+        std::for_each(queueFamilies.begin(), queueFamilies.end(), [](VkQueueFamilyProperties2 &p) { p.sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2; });
+        vkGetPhysicalDeviceQueueFamilyProperties2(device, &queueFamilyCount, queueFamilies.data());
 
         int i = 0;
         for (const auto &queueFamily : queueFamilies) {
-            if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-                indices.graphicsFamily = i;
+            if (!indices.isMinimumComplete()) {
+                if (queueFamily.queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+                    indices.graphics.family = i;
+                    indices.graphics.index = 0;
+                }
+
+                VkBool32 presentSupport = false;
+                vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+
+                if (presentSupport) {
+                    indices.present.family = i;
+                    indices.present.index = 0;
+                }
             }
 
-            VkBool32 presentSupport = false;
-            vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+            if (!(queueFamily.queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) && (queueFamily.queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT)) {
+                indices.compute.family = i;
+                indices.compute.index = 0;
+            }
 
-            if (presentSupport) {
-                indices.presentFamily = i;
+            if (!(queueFamily.queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) && !(queueFamily.queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT) && (queueFamily.queueFamilyProperties.queueFlags & VK_QUEUE_TRANSFER_BIT)) {
+                indices.transfer.family = i;
+                indices.transfer.index = 0;
             }
 
             if (indices.isComplete()) {
@@ -2532,6 +2579,27 @@ class Render::Vulkan {
             }
 
             i++;
+        }
+        // if there is no transfer q yet, then see if compute's family has additional q that can be transfer
+        if (!indices.transfer.isFamilySet() && indices.compute.isFamilySet() && queueFamilies[indices.compute.family].queueFamilyProperties.queueFlags & VK_QUEUE_TRANSFER_BIT && queueFamilies[indices.compute.family].queueFamilyProperties.queueCount >= 2) {
+            indices.transfer.family = indices.compute.family;
+            indices.transfer.index = 1;
+        }
+
+        // if no unique compute or transfer,
+        // set compute and transfer to graphics q's family
+        if (!indices.isComplete() && indices.isMinimumComplete()) {
+            if (queueFamilies[indices.graphics.family].queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT) {
+                indices.compute.family = indices.graphics.family;
+                indices.compute.index = indices.graphics.index;
+            }
+            if (queueFamilies[indices.graphics.family].queueFamilyProperties.queueFlags & VK_QUEUE_TRANSFER_BIT) {
+                indices.transfer.family = indices.graphics.family;
+                indices.transfer.index = indices.graphics.index;
+            }
+        }
+        if (!indices.isMinimumComplete()) {
+            throw std::runtime_error("Couldn't find valid queues!");
         }
 
         return indices;
@@ -2700,7 +2768,7 @@ void Render::Init(bool debugging) { instance = new Render::Vulkan(debugging); }
 
 void Render::Clean() { delete instance; }
 
-int Render::CreateDescriptorSet(Render::DescriptorSetInfo& descriptorSetInfo) {
+int Render::CreateDescriptorSet(Render::DescriptorSetInfo &descriptorSetInfo) {
     std::vector<Render::DescriptorSetInfo> tmp = { descriptorSetInfo };
     return instance->CreateDescSets(tmp)[0];
 }
