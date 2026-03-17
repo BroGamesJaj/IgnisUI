@@ -1,0 +1,13 @@
+BasedOnStyle: Google
+IndentWidth: 4
+ColumnLimit: 500
+
+
+---
+Language: Cpp
+DerivePointerAlignment: false
+PointerAlignment: Right
+CompactNamespaces: false
+Cpp11BracedListStyle: false
+BinPackArguments: true
+ColumnLimit: 0
