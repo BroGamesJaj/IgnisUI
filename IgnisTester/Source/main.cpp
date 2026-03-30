@@ -34,7 +34,7 @@ int main() {
 
     Image image = Image(Vec2f(0,0), Vec2f(100,100), Color(1.0f,1.0f,1.0f));
     Image image3 = Image(Vec2f(0, 0), Vec2f(100, 100), monika);
-    UI::PushOn(window1, image)
+    UI::PushOn(window1, image);
     UI::Submit();
 
     while (UI::CanDraw()) {
