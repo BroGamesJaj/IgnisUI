@@ -178,6 +178,16 @@ class Render {
         friend class UI;
     };
 
+    struct Texture {
+    private:
+        int id;
+
+        friend class Vulkan;
+        friend class Render;
+        friend class Input;
+        friend class UI;
+    };
+
     enum class SamplerFilter {
         NEAREST,
         LINEAR
@@ -310,7 +320,7 @@ class Render {
 
     static Window CreateAppWindow(int width, int height, const char *title, GLFWmonitor *screen = nullptr, GLFWwindow *share = nullptr);
     static int CreateSurface(Window window, std::vector<int> pipelines);
-    static int CreateTexture(int descriptorId, std::string path);
+    static Texture CreateTexture(int descriptorId, std::string path);
 
     static int CreateDescriptorSet(DescriptorSetInfo &descriptorSetInfos);
     static std::vector<int> CreateDescriptorSet(std::vector<Render::DescriptorSetInfo>& descriptorSetInfo);
@@ -354,6 +364,7 @@ using CreateGraphicPipeLineInfo = Render::CreateGraphicPipeLineInfo;
 using SamplerFilter = Render::SamplerFilter;
 using SamplerAddressing = Render::SamplerAddressing;
 using SamplerMipmapMode = Render::SamplerMipmapMode;
+using Texture = Render::Texture;
 #endif
 
 #endif
@@ -520,20 +531,20 @@ class UI {
    public:
     class Image : public Element {
        private:
-        Image(Vec2f position, Vec2f size, int textureId, Color color, bool dummy) : Element(IMAGE) {
+        Image(Vec2f position, Vec2f size, Texture texture, Color color, bool dummy) : Element(IMAGE) {
             this->position = position;
             this->size = size;
 
-            this->textureId = textureId;
+            this->textureId = texture.id;
             this->color = color;
         }
 
        public:
-        Image(Vec2f position, Vec2f size, int textureId, Color color) : Image(position, size, textureId, color, true) {}
+        Image(Vec2f position, Vec2f size, Texture texture, Color color) : Image(position, size, texture, color, true) {}
 
-        Image(Vec2f position, Vec2f size, Color color) : Image(position, size, 0, color, true) {}
+        Image(Vec2f position, Vec2f size, Color color) : Image(position, size, Texture{}, color, true) {}
 
-        Image(Vec2f position, Vec2f size, int textureId) : Image(position, size, textureId, Color(), true) {}
+        Image(Vec2f position, Vec2f size, Texture texture) : Image(position, size, texture, Color(), true) {}
 
         friend class UI;
     };
@@ -590,7 +601,7 @@ class UI {
 
     static void Init(Window window);
 
-    static int CreateTexture(std::string path);
+    static Texture CreateTexture(std::string path);
 
     static int LoadFont(const std::string &fontPath, uint32_t size = 16);
 

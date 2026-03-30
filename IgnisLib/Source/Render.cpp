@@ -633,7 +633,7 @@ class Render::Vulkan {
         return CreateGraphicPipelines(RenderPassInfoToVK(graphicPipeLineInfo));
     }
 
-    int CreateTexture(int descriptorSet, std::string path) {
+    Render::Texture CreateTexture(int descriptorSet, std::string path) {
         if (!descriptorSets.contains(descriptorSet))
             throw std::runtime_error("can't add texture to descriptor, descriptor id is invalid");
 
@@ -645,7 +645,9 @@ class Render::Vulkan {
 
         UpdateTextureDescriptor(descriptorSets[descriptorSet], nextTexture, data.textureImageView);
 
-        return nextTexture++;
+        Render::Texture texture{};
+        texture.id = nextTexture++;
+        return texture;
     }
 
     static void FramebufferResizeCallback(Window windowIn) {
@@ -2762,7 +2764,7 @@ bool Render::IsValidSurface(int surfaceIndex) { return instance->IsValidSurface(
 
 int Render::AddUIElementData(UIRenderData &data) { return instance->AddUIElementData(data); }
 
-int Render::CreateTexture(int descriptorId, std::string path) { return instance->CreateTexture(descriptorId, path); }
+Render::Texture Render::CreateTexture(int descriptorId, std::string path) { return instance->CreateTexture(descriptorId, path); }
 
 void Render::Init(bool debugging) { instance = new Render::Vulkan(debugging); }
 

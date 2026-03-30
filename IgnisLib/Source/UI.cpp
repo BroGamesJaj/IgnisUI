@@ -63,13 +63,13 @@ void UI::Init(Window window) {
     surfaces[window.ptr] = Render::CreateSurface(window, { pipeline });
 }
 
-int UI::CreateTexture(std::string path) {
+Render::Texture UI::CreateTexture(std::string path) {
     return Render::CreateTexture(mainDescriptor, path);
 }
 
 bool UI::CanDraw() {
-    if (surfaces.size() == 0) return true;
-
+    if (elements.size() == 0) return false;
+    
     bool haveValid = false;
     for (auto& [window, surface] : surfaces) {
         haveValid |= Render::IsValidSurface(surface);

@@ -28,11 +28,13 @@ int main() {
     UI::Init(window1);
     UI::SetMainWindow(window1);
 
-    int monika = UI::CreateTexture("../Resources/Textures/monika2.png");
-    int sus = UI::CreateTexture("../Resources/Textures/goated0.bmp");
+    Texture monika = UI::CreateTexture("../Resources/Textures/monika2.png");
+    Texture sus = UI::CreateTexture("../Resources/Textures/goated0.bmp");
+    
 
+    Image image = Image(Vec2f(0,0), Vec2f(100,100), Color(1.0f,1.0f,1.0f));
     Image image3 = Image(Vec2f(0, 0), Vec2f(100, 100), monika);
-    UI::PushOn(window1, image3);
+    UI::PushOn(window1, image)
     UI::Submit();
 
     while (UI::CanDraw()) {
