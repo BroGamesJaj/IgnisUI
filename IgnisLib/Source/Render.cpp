@@ -1,3 +1,7 @@
+#include <cstdint>
+#include <cstdlib>
+#include <stdexcept>
+#include <vector>
 #include "IgnisLib.h"
 #include "vulkan/vulkan_core.h"
 
@@ -51,7 +55,7 @@ struct TextureData {
 struct PipeLine {
     VkPipeline pipeline;
     VkPipelineLayout layout;
-    uint16_t constSize;
+    std::vector<std::string> constants;
     std::vector<int> descriptorIds;
     bool needDepth;
 };
@@ -83,7 +87,7 @@ struct CreateGraphicPipeLineInfoVKConvert {
     float clearBit[3];
     float stencilBit[2];
 
-    int constantsSize = 0;
+    std::vector<std::string> constants;
     std::vector<int> descriptorSetIds;
 
     std::vector<Render::VertexDataType> vertexDataLayout;
@@ -125,7 +129,6 @@ struct SurfaceVulkanData {
     VkDeviceMemory indexBufferMemory;
     uint32_t indiceCount;
 
-    void *constantsData;
 
     VkImage depthImage;
     VkDeviceMemory depthImageMemory;
@@ -145,6 +148,11 @@ struct WindowVulkanData {
 struct VertexData {
     std::vector<Vertex> vertecies;
     std::vector<uint32_t> indicies;
+};
+
+struct VulkanConstData {
+  void* data;
+  uint32_t size;
 };
 
 static std::vector<char> readFile(const std::string &filename) {
@@ -191,125 +199,6 @@ static void CompileShader(const std::string filename, const std::string name) {
     }
     system(cmd.c_str());
 #endif
-}
-
-static CreateGraphicPipeLineInfoVKConvert RenderPassInfoToVK(CreateGraphicPipeLineInfo info) {
-    CreateGraphicPipeLineInfoVKConvert output;
-
-    output.vertexShader = info.vertexShader;
-    output.fragmentShader = info.fragmentShader;
-
-    switch (info.topology) {
-        case CreateGraphicPipeLineInfo::Topology::Triangle:
-            output.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-            break;
-        case CreateGraphicPipeLineInfo::Topology::Line:
-            output.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
-            break;
-        case CreateGraphicPipeLineInfo::Topology::Point:
-            output.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
-            break;
-    }
-
-    switch (info.culling) {
-        case CreateGraphicPipeLineInfo::Culling::Back:
-            output.cullMode = VK_CULL_MODE_BACK_BIT;
-            break;
-        case CreateGraphicPipeLineInfo::Culling::Front:
-            output.cullMode = VK_CULL_MODE_FRONT_BIT;
-            break;
-        case CreateGraphicPipeLineInfo::Culling::None:
-            output.cullMode = VK_CULL_MODE_NONE;
-            break;
-    }
-
-    switch (info.frontFace) {
-        case CreateGraphicPipeLineInfo::FrontFace::CounterClockwise:
-            output.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-            break;
-        case CreateGraphicPipeLineInfo::FrontFace::Clockwise:
-            output.frontFace = VK_FRONT_FACE_CLOCKWISE;
-            break;
-    }
-
-    output.lineWidth = info.lineWidth;
-
-    switch (info.samples) {
-        case CreateGraphicPipeLineInfo::Samples::x1:
-            output.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-            break;
-        case CreateGraphicPipeLineInfo::Samples::x2:
-            output.rasterizationSamples = VK_SAMPLE_COUNT_2_BIT;
-            break;
-        case CreateGraphicPipeLineInfo::Samples::x4:
-            output.rasterizationSamples = VK_SAMPLE_COUNT_4_BIT;
-            break;
-        case CreateGraphicPipeLineInfo::Samples::x8:
-            output.rasterizationSamples = VK_SAMPLE_COUNT_8_BIT;
-            break;
-    }
-
-    output.sampleShadingEnable = info.sampleShading ? VK_TRUE : VK_FALSE;
-    output.minSampleShading = info.minSampleShading;
-
-    output.blendEnable = info.blendEnable ? VK_TRUE : VK_FALSE;
-
-    auto ConvertBlendFactor = [](CreateGraphicPipeLineInfo::BlendFactor factor) -> VkBlendFactor {
-        switch (factor) {
-            case CreateGraphicPipeLineInfo::BlendFactor::SrcAlpha:
-                return VK_BLEND_FACTOR_SRC_ALPHA;
-            case CreateGraphicPipeLineInfo::BlendFactor::DstAlpha:
-                return VK_BLEND_FACTOR_DST_ALPHA;
-            case CreateGraphicPipeLineInfo::BlendFactor::OneMinusSrcAlpha:
-                return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-            case CreateGraphicPipeLineInfo::BlendFactor::OneMinusDstAlpha:
-                return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
-            case CreateGraphicPipeLineInfo::BlendFactor::SrcColor:
-                return VK_BLEND_FACTOR_SRC_COLOR;
-            case CreateGraphicPipeLineInfo::BlendFactor::DstColor:
-                return VK_BLEND_FACTOR_DST_COLOR;
-            case CreateGraphicPipeLineInfo::BlendFactor::OneMinusSrcColor:
-                return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
-            case CreateGraphicPipeLineInfo::BlendFactor::OneMinusDstColor:
-                return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
-        }
-        return VK_BLEND_FACTOR_ONE;  // fallback
-    };
-
-    auto ConvertBlendOp = [](CreateGraphicPipeLineInfo::BlendMode mode) -> VkBlendOp {
-        switch (mode) {
-            case CreateGraphicPipeLineInfo::BlendMode::Add:
-                return VK_BLEND_OP_ADD;
-            case CreateGraphicPipeLineInfo::BlendMode::Sub:
-                return VK_BLEND_OP_SUBTRACT;
-            case CreateGraphicPipeLineInfo::BlendMode::Max:
-                return VK_BLEND_OP_MAX;
-            case CreateGraphicPipeLineInfo::BlendMode::Min:
-                return VK_BLEND_OP_MIN;
-        }
-        return VK_BLEND_OP_ADD;  // fallback
-    };
-
-    output.srcColorBlendFactor = ConvertBlendFactor(info.scrColorBlend);
-    output.dstColorBlendFactor = ConvertBlendFactor(info.dstColorBlend);
-    output.colorBlendOp = ConvertBlendOp(info.colorBlendOp);
-
-    output.srcAlphaBlendFactor = ConvertBlendFactor(info.scrAlphaBlend);
-    output.dstAlphaBlendFactor = ConvertBlendFactor(info.dstAlphaBlend);
-    output.alphaBlendOp = ConvertBlendOp(info.alphaBlendOp);
-
-    output.depthTestEnable = info.depthTesting ? VK_TRUE : VK_FALSE;
-    output.depthWriteEnable = info.depthWriting ? VK_TRUE : VK_FALSE;
-
-    for (int i = 0; i < 3; i++) output.clearBit[i] = info.clearBit[i];
-    for (int i = 0; i < 2; i++) output.stencilBit[i] = info.stencilBit[i];
-
-    output.constantsSize = info.constantsSize;
-    output.descriptorSetIds = info.descriptorSetIds;
-
-    output.vertexDataLayout = std::move(info.vertexDataLayout);
-
-    return output;
 }
 
 static CreateSamplerVKConvert SamplerInfoToVK(SamplerFilter filter, SamplerAddressing addressing, SamplerMipmapMode mipmapMode) {
@@ -453,9 +342,7 @@ class Render::Vulkan {
     std::unordered_map<int, TextureData> textureData;
     VkSampler textureSampler;
     unsigned int nextTexture = 1;
-    uint32_t MAX_TEXTURES;
 
-    VkImageView dummyImageView;
     VkImage dummyImage;
     VkDeviceMemory dummyImageMemory;
 
@@ -473,9 +360,11 @@ class Render::Vulkan {
     std::unordered_map<int, PipeLine> pipelines;
     int nextPipeline = 0;
 
-    std::unordered_map<int, void *> constantsData;
+    std::unordered_map<std::string, VulkanConstData> constantsData;
 
     std::unordered_map<VkSurfaceKHR, std::vector<Render::VertexDataType>> vertexDataLayout;
+
+    
 
     GLFWwindow *CreateTmpSurface() {
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -694,17 +583,150 @@ class Render::Vulkan {
         CreateSamplerVKConvert samplerVK = SamplerInfoToVK(filter, addressing, mipmapMode);
         return CreateSamplerFromData(samplerVK);
     }
+  
+    void PushConstants(std::string& name, void* data, uint32_t size) {
+        if(constantsData.contains(name) && constantsData[name].size == size) {
+          memcpy(constantsData[name].data, data, size);
+        }
+    }
 
-    void PushConstants(int pipeline, void *data, uint32_t size) {
-        if (constantsData[pipeline] != nullptr)
-            free(constantsData[pipeline]);
+    void PublishConstants(std::vector<Render::ConstData> data){
+      for (size_t i = 0; i < data.size(); i++) {
+        std::string name = data[i].name;
+        uint32_t size = data[i].size;
+        if(constantsData.contains(name)) {
+          free(constantsData[name].data);
+        }
 
-        constantsData[pipeline] = malloc(size);
-        memcpy(constantsData[pipeline], data, size);
+        constantsData[name].size = data[i].size;
+        constantsData[name].data = calloc(1, size);
+      }
     }
 
    private:
+  CreateGraphicPipeLineInfoVKConvert RenderPassInfoToVK(CreateGraphicPipeLineInfo info) {
+      CreateGraphicPipeLineInfoVKConvert output;
+
+      output.vertexShader = info.vertexShader;
+      output.fragmentShader = info.fragmentShader;
+
+      switch (info.topology) {
+          case CreateGraphicPipeLineInfo::Topology::Triangle:
+              output.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+              break;
+          case CreateGraphicPipeLineInfo::Topology::Line:
+              output.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+              break;
+          case CreateGraphicPipeLineInfo::Topology::Point:
+              output.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+              break;
+      }
+
+      switch (info.culling) {
+          case CreateGraphicPipeLineInfo::Culling::Back:
+              output.cullMode = VK_CULL_MODE_BACK_BIT;
+              break;
+          case CreateGraphicPipeLineInfo::Culling::Front:
+              output.cullMode = VK_CULL_MODE_FRONT_BIT;
+              break;
+          case CreateGraphicPipeLineInfo::Culling::None:
+              output.cullMode = VK_CULL_MODE_NONE;
+              break;
+      }
+
+      switch (info.frontFace) {
+          case CreateGraphicPipeLineInfo::FrontFace::CounterClockwise:
+              output.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+              break;
+          case CreateGraphicPipeLineInfo::FrontFace::Clockwise:
+              output.frontFace = VK_FRONT_FACE_CLOCKWISE;
+              break;
+      }
+
+      output.lineWidth = info.lineWidth;
+
+      switch (info.samples) {
+          case CreateGraphicPipeLineInfo::Samples::x1:
+              output.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+              break;
+          case CreateGraphicPipeLineInfo::Samples::x2:
+              output.rasterizationSamples = VK_SAMPLE_COUNT_2_BIT;
+              break;
+          case CreateGraphicPipeLineInfo::Samples::x4:
+              output.rasterizationSamples = VK_SAMPLE_COUNT_4_BIT;
+              break;
+          case CreateGraphicPipeLineInfo::Samples::x8:
+              output.rasterizationSamples = VK_SAMPLE_COUNT_8_BIT;
+              break;
+      }
+
+      output.sampleShadingEnable = info.sampleShading ? VK_TRUE : VK_FALSE;
+      output.minSampleShading = info.minSampleShading;
+
+      output.blendEnable = info.blendEnable ? VK_TRUE : VK_FALSE;
+
+      auto ConvertBlendFactor = [](CreateGraphicPipeLineInfo::BlendFactor factor) -> VkBlendFactor {
+          switch (factor) {
+              case CreateGraphicPipeLineInfo::BlendFactor::SrcAlpha:
+                  return VK_BLEND_FACTOR_SRC_ALPHA;
+              case CreateGraphicPipeLineInfo::BlendFactor::DstAlpha:
+                  return VK_BLEND_FACTOR_DST_ALPHA;
+              case CreateGraphicPipeLineInfo::BlendFactor::OneMinusSrcAlpha:
+                  return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+              case CreateGraphicPipeLineInfo::BlendFactor::OneMinusDstAlpha:
+                  return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+              case CreateGraphicPipeLineInfo::BlendFactor::SrcColor:
+                  return VK_BLEND_FACTOR_SRC_COLOR;
+              case CreateGraphicPipeLineInfo::BlendFactor::DstColor:
+                  return VK_BLEND_FACTOR_DST_COLOR;
+              case CreateGraphicPipeLineInfo::BlendFactor::OneMinusSrcColor:
+                  return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+              case CreateGraphicPipeLineInfo::BlendFactor::OneMinusDstColor:
+                  return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+          }
+          return VK_BLEND_FACTOR_ONE;  // fallback
+      };
+
+      auto ConvertBlendOp = [](CreateGraphicPipeLineInfo::BlendMode mode) -> VkBlendOp {
+          switch (mode) {
+              case CreateGraphicPipeLineInfo::BlendMode::Add:
+                  return VK_BLEND_OP_ADD;
+              case CreateGraphicPipeLineInfo::BlendMode::Sub:
+                  return VK_BLEND_OP_SUBTRACT;
+              case CreateGraphicPipeLineInfo::BlendMode::Max:
+                  return VK_BLEND_OP_MAX;
+              case CreateGraphicPipeLineInfo::BlendMode::Min:
+                  return VK_BLEND_OP_MIN;
+          }
+          return VK_BLEND_OP_ADD;  // fallback
+      };
+
+      output.srcColorBlendFactor = ConvertBlendFactor(info.scrColorBlend);
+      output.dstColorBlendFactor = ConvertBlendFactor(info.dstColorBlend);
+      output.colorBlendOp = ConvertBlendOp(info.colorBlendOp);
+
+      output.srcAlphaBlendFactor = ConvertBlendFactor(info.scrAlphaBlend);
+      output.dstAlphaBlendFactor = ConvertBlendFactor(info.dstAlphaBlend);
+      output.alphaBlendOp = ConvertBlendOp(info.alphaBlendOp);
+
+      output.depthTestEnable = info.depthTesting ? VK_TRUE : VK_FALSE;
+      output.depthWriteEnable = info.depthWriting ? VK_TRUE : VK_FALSE;
+
+      for (int i = 0; i < 3; i++) output.clearBit[i] = info.clearBit[i];
+      for (int i = 0; i < 2; i++) output.stencilBit[i] = info.stencilBit[i];
+      
+      output.constants = std::move(info.constants);
+
+      output.descriptorSetIds = info.descriptorSetIds;
+
+      output.vertexDataLayout = std::move(info.vertexDataLayout);
+
+      return output;
+  }
+
+
     void CleanupSwapChain(SurfaceVulkanData *surface) {
+
         vkDestroyImageView(device, surface->depthImageView, nullptr);
         vkDestroyImage(device, surface->depthImage, nullptr);
         vkFreeMemory(device, surface->depthImageMemory, nullptr);
@@ -766,8 +788,8 @@ class Render::Vulkan {
 
     // Cleans up upon closing all the windows
     void CleanUp() {
-        for (auto &[surface, data] : constantsData) {
-            if (data != nullptr) free(data);
+        for (auto &[surface, consta] : constantsData) {
+            if (consta.data != nullptr) free(consta.data);
         }
 
         for (auto &[id, pipeline] : pipelines) {
@@ -807,8 +829,6 @@ class Render::Vulkan {
             vkDestroyImage(device, texture.textureImage, nullptr);
             vkFreeMemory(device, texture.textureImageMemory, nullptr);
         }
-
-        vkDestroyImageView(device, dummyImageView, nullptr);
         vkDestroyImage(device, dummyImage, nullptr);
         vkFreeMemory(device, dummyImageMemory, nullptr);
 
@@ -920,7 +940,7 @@ class Render::Vulkan {
 
         UniformBufferObject ubo{};
         ubo.model = glm::rotate(glm::mat4(1.0f),
-                                time * glm::radians(20.0f),
+                                time * 2 * glm::radians(20.0f),
                                 dir);  // Y-axis
 
         ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
@@ -1271,7 +1291,7 @@ class Render::Vulkan {
                 else
                     hasImage = true;
 
-                uint32_t maxTextures = props.limits.maxPerStageDescriptorSamplers;
+                int maxTextures = props.limits.maxPerStageDescriptorSamplers;
                 if (maxTextures < descriptor.count) throw std::runtime_error("asked texture amount not available on the GPU");
 
                 bindingFlags[j] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT;
@@ -1600,9 +1620,16 @@ class Render::Vulkan {
             for (const auto &id : pipelines[ppIndex].descriptorIds) {
                 vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[ppIndex].layout, descriptorSets[id].setIdx, 1, &descriptorSets[id].descriptorSet.at(frame), 0, nullptr);
             }
-            if (pipelines[ppIndex].constSize > 0)
-                vkCmdPushConstants(cmdBuffer, pipelines[ppIndex].layout, VK_SHADER_STAGE_ALL, 0, pipelines[ppIndex].constSize, constantsData[ppIndex]);
-
+            if (pipelines[ppIndex].constants.size() > 0)
+            {
+              uint32_t offset = 0;
+              for (size_t c = 0; c < pipelines[ppIndex].constants.size(); c++) {
+                std::string constName = pipelines[ppIndex].constants[c];
+                vkCmdPushConstants(cmdBuffer, pipelines[ppIndex].layout, VK_SHADER_STAGE_ALL, offset, constantsData[constName].size, constantsData[constName].data);
+                
+                offset += constantsData[constName].size;
+              }
+            }
             vkCmdDrawIndexed(cmdBuffer, static_cast<uint32_t>(surface->indiceCount), 1, 0, 0, 0);
         }
 
@@ -2098,7 +2125,7 @@ class Render::Vulkan {
     // Create every pipeline for a surface
     int CreateGraphicPipelines(CreateGraphicPipeLineInfoVKConvert pipelineData) {
         PipeLine pipeline{};
-        pipeline.constSize = pipelineData.constantsSize;
+        pipeline.constants = std::move(pipelineData.constants);
         pipeline.descriptorIds = pipelineData.descriptorSetIds;
 
         std::unordered_set<int> seen;
@@ -2227,20 +2254,24 @@ class Render::Vulkan {
 
         VkFormat depthFormat = findDepthFormat();  // e.g., VK_FORMAT_D32_SFLOAT
 
-        VkPipelineRenderingCreateInfo renderCreateInfo = {
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-            .colorAttachmentCount = 1,
-            .pColorAttachmentFormats = &swapChainImageFormat.format,
-            .depthAttachmentFormat = depthFormat
-        };
+        VkPipelineRenderingCreateInfo renderCreateInfo {};
+        renderCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+        renderCreateInfo.colorAttachmentCount = 1;
+        renderCreateInfo.pColorAttachmentFormats = &swapChainImageFormat.format;
+        renderCreateInfo.depthAttachmentFormat = depthFormat;
 
         // TODO: maybe we should split the const into separate ones :P
         // i thought only one can be at the same time
         // with best regards, józsef
+
         VkPushConstantRange constRange{};
+        constRange.size = 0;
         constRange.offset = 0;
-        constRange.size = pipelineData.constantsSize;
-        constRange.stageFlags = VK_SHADER_STAGE_ALL;
+        for (size_t i = 0; i < pipeline.constants.size(); i++) {
+          constRange.size += constantsData[pipeline.constants[i]].size;
+          constRange.stageFlags = VK_SHADER_STAGE_ALL;
+        }
+
 
         std::vector<VkDescriptorSetLayout> neededLayouts;
         getNeededDescriptorSetLayouts(neededLayouts, pipelineData.descriptorSetIds);
@@ -2249,10 +2280,8 @@ class Render::Vulkan {
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutInfo.setLayoutCount = neededLayouts.size();
         pipelineLayoutInfo.pSetLayouts = neededLayouts.data();
-        if (constRange.size > 0) {
-            pipelineLayoutInfo.pushConstantRangeCount = 1;
-            pipelineLayoutInfo.pPushConstantRanges = &constRange;
-        }
+        pipelineLayoutInfo.pushConstantRangeCount = 1;
+        pipelineLayoutInfo.pPushConstantRanges = &constRange;
 
         if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipeline.layout) != VK_SUCCESS) {
             throw std::runtime_error("failed to create pipeline layout!");
@@ -2285,13 +2314,12 @@ class Render::Vulkan {
             throw std::runtime_error("failed to create graphics pipeline!");
         }
 
-        pipelines[nextPipeline] = pipeline;
-        constantsData[nextPipeline] = nullptr;
-        return nextPipeline++;
-
         vkDestroyShaderModule(device, vertShaderStageInfo.module, nullptr);
         vkDestroyShaderModule(device, fragShaderStageInfo.module, nullptr);
-    }
+ 
+        pipelines[nextPipeline] = pipeline;
+        return nextPipeline++;
+   }
 
     // creates the structs for the vk shaders
     VkShaderModule createShaderModule(const std::vector<char> &code) {
@@ -2625,6 +2653,9 @@ class Render::Vulkan {
             case VEC4:
                 return sizeof(float) * 4;
                 break;
+            default:
+                throw std::runtime_error("Invalid vertex type");
+                break;
         }
     }
 
@@ -2644,6 +2675,9 @@ class Render::Vulkan {
                 break;
             case VEC4:
                 return VK_FORMAT_R32G32B32A32_SFLOAT;
+                break;
+            default:
+                throw std::runtime_error("Invalid vertex type");
                 break;
         }
     }
@@ -2825,8 +2859,12 @@ Render::DescriptorInfo Render::CreateImageDescriptor(int binding, int count, int
     return output;
 }
 
-void Render::PushConstants(int surface, void *data, uint32_t size) {
-    instance->PushConstants(surface, data, size);
+void Render::PublishConstantsToVulkan(std::vector<Render::ConstData>& data){
+    instance->PublishConstants(data);
+}
+
+void Render::PushConstantsToVulkan(std::string& name, void* data, uint32_t size) {
+    instance->PushConstants(name, data, size);
 }
 
 Render::Vulkan *Render::instance = nullptr;

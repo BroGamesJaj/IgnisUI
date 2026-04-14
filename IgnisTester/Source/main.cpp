@@ -1,7 +1,6 @@
 #define IGNIS_UI
 #define IGNIS_UI_NAMES
 #define IGNIS_RENDER_NAMES
-#include "../../IgnisLib/Source/Font.h"
 #include "../../IgnisLib/Source/IgnisLib.h"
 
 using namespace Ignis;
@@ -17,6 +16,10 @@ void CursorMoved(Window window) {
     Vec2<double> curPos = Input::CursorPosition(window);
     std::cout << "Curent cursor position: " << curPos.x << "; " << curPos.y << std::endl;
 }
+
+struct Test {
+  int a;
+};
 
 int main() {
     Input::Init();
@@ -36,6 +39,8 @@ int main() {
     Image image3 = Image(Vec2f(0, 0), Vec2f(100, 100), monika);
     UI::PushOn(window1, image);
     UI::Submit();
+    
+    float time = 0.0f;
 
     while (UI::CanDraw()) {
         Input::Event();

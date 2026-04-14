@@ -1,5 +1,7 @@
 #pragma once
 
+#include <any>
+#include <cstdint>
 #include <numeric>
 #include <algorithm>
 #include <atomic>
@@ -9,6 +11,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <typeindex>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -145,7 +148,7 @@ using Vec2i = Vec2<int>;
 #if defined(IGNIS_RENDER) || defined(IGNIS_UI)
 class Render {
    public:
-    // Rendering structs
+  // Rendering structs
     enum VertexDataType {
         FLOAT,
         UINT,
@@ -243,6 +246,11 @@ class Render {
         uint32_t setIndex;  // must be larger then the previous for now
     };
 
+    struct ConstData {
+      std::string name;
+      uint32_t size;
+    };
+
     struct CreateGraphicPipeLineInfo {
         CreateGraphicPipeLineInfo() {};
 
@@ -301,7 +309,7 @@ class Render {
         bool depthTesting = false;
         bool depthWriting = false;
 
-        int constantsSize = 0;
+        std::vector<std::string> constants;
         std::vector<int> descriptorSetIds;
 
         std::vector<Render::VertexDataType> vertexDataLayout;
@@ -315,6 +323,7 @@ class Render {
         bool changed = true;
     };
 
+    
     static void Init(bool debugging);
     static void Clean();
 
@@ -334,11 +343,25 @@ class Render {
     static int CreateSampler(SamplerFilter filter = SamplerFilter::LINEAR,
                              SamplerAddressing addressing = SamplerAddressing::REPEAT, SamplerMipmapMode mipmapMode = SamplerMipmapMode::LINEAR);
 
+    template <typename... Args>
+    static void PublishConstants(std::vector<std::string> names)
+    {
+      std::vector<ConstData> result;
+      int i = 0;
+      (result.push_back({names[i++], sizeof(Args)}),...);
+      PublishConstantsToVulkan(result);
+    }
+
+    template <typename T>
+    static void PushConstant(std::string name, T data){
+      PushConstantsToVulkan(name, &data, sizeof(T));
+    }
+
     static DescriptorInfo CreateUniformDescriptor(int binding, int size, int stage);
     static DescriptorInfo CreateStorageDescriptor(int binding, int size, int stage);
     static DescriptorInfo CreateImageDescriptor(int binding, int count, int sampler, int stage);
-
-    static void PushConstants(int surface, void *data, uint32_t size);
+    
+    static void PushVertexData(int surface, void* vertexData, uint32_t size);
 
     template <typename... Args>
         requires(std::same_as<Args, Render::VertexDataType> && ...)
@@ -356,6 +379,9 @@ class Render {
     static int AddUIElementData(UIRenderData &data);
 
     static void *GetWindowOfSurface(int surface);
+
+    static void PublishConstantsToVulkan(std::vector<ConstData>& data);
+    static void PushConstantsToVulkan(std::string& name, void* data, uint32_t size);
 };
 
 #ifdef IGNIS_RENDER_NAMES

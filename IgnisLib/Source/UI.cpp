@@ -1,3 +1,4 @@
+#include <cmath>
 #include "Font.h"
 #include "IgnisLib.h"
 
@@ -47,6 +48,8 @@ void UI::Init(Window window) {
 
         mainDescriptor = Render::CreateDescriptorSet(descriptorSet);
 
+        Render::PublishConstants<float, float>({"off", "color"});
+
         CreateGraphicPipeLineInfo gpInfo{};
         gpInfo.vertexShader = "../Resources/Shaders/shader.vert";
         gpInfo.fragmentShader = "../Resources/Shaders/shader.frag";
@@ -54,7 +57,7 @@ void UI::Init(Window window) {
         gpInfo.descriptorSetIds = {
             mainDescriptor
         };
-        gpInfo.constantsSize = sizeof(float);
+        gpInfo.constants = {"off", "color"};
         gpInfo.vertexDataLayout = Render::CreateVertexData(Render::VEC3, Render::VEC3, Render::VEC2, Render::UINT);
 
         pipeline = Render::CreatePipeline(gpInfo);
@@ -78,9 +81,12 @@ bool UI::CanDraw() {
     return haveValid;
 }
 
+float time = 0.0f;
+
 void UI::Draw() {
-    float tmp = 0;
-    Render::PushConstants(pipeline, &tmp, sizeof(float));
+    time += 0.001f;
+    Render::PushConstant<float>("off", sin(time));
+    Render::PushConstant<float>("color", fmod(time*0.1, 1.0f));
     for (auto& [window, surface] : surfaces) {
         if (Render::IsValidSurface(surface))
             Render::Draw(surface);
