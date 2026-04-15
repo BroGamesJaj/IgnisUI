@@ -340,11 +340,7 @@ class Render::Vulkan {
     std::vector<VkDescriptorPool> descriptorPools;
 
     std::unordered_map<int, TextureData> textureData;
-    VkSampler textureSampler;
     unsigned int nextTexture = 1;
-
-    VkImage dummyImage;
-    VkDeviceMemory dummyImageMemory;
 
     std::unordered_map<int, UIRenderData> renderData;
     int nextElement = 0;
@@ -821,16 +817,17 @@ class Render::Vulkan {
                 vkDestroySurfaceKHR(instance, surface, nullptr);
             }
         }
+        
+        for (auto& [samplerId, sampler] : samplerAccess){
+            vkDestroySampler(device, sampler, nullptr);
+        }
 
-        vkDestroySampler(device, textureSampler, nullptr);
 
         for (auto &[textureId, texture] : textureData) {
             vkDestroyImageView(device, texture.textureImageView, nullptr);
             vkDestroyImage(device, texture.textureImage, nullptr);
             vkFreeMemory(device, texture.textureImageMemory, nullptr);
         }
-        vkDestroyImage(device, dummyImage, nullptr);
-        vkFreeMemory(device, dummyImageMemory, nullptr);
 
         vkDestroyCommandPool(device, commandPool, nullptr);
 

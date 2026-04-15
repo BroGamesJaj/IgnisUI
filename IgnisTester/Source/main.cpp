@@ -50,4 +50,5 @@ int main() {
     }
 
     UI::Clean();
+    Render::Clean();
 }
