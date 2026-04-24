@@ -164,6 +164,11 @@ class Render {
         glm::uint texId;
     };
 
+    struct VertexData {
+        std::vector<Render::Vertex> vertecies;
+        std::vector<uint32_t> indicies;
+    };
+
     struct GlyphInstance {
         glm::vec2 pos;
         glm::vec2 size;
@@ -323,9 +328,21 @@ class Render {
         bool changed = true;
     };
 
+    struct Surface {
+      private:
+        int surface;
+
+        friend class Render;
+        friend class UI;
+        friend class Input;
+    };
+
     
     static void Init(bool debugging);
     static void Clean();
+
+    static void PushOn(VertexData& data, Surface& surface);
+    static void Submit(Surface& surface);
 
     static Window CreateAppWindow(int width, int height, const char *title, GLFWmonitor *screen = nullptr, GLFWwindow *share = nullptr);
     static int CreateSurface(Window window, std::vector<int> pipelines);
@@ -376,7 +393,7 @@ class Render {
 
     friend class UI;
 
-    static int AddUIElementData(UIRenderData &data);
+    static void AddUIElementData(UIRenderData &data);
 
     static void *GetWindowOfSurface(int surface);
 
@@ -549,6 +566,8 @@ class UI {
 
    private:
     struct ButtonData {
+        ButtonData() : text(Text()){}
+
         ElementData base;
         void *function;
         Text text;
@@ -666,13 +685,8 @@ class UI {
         Vec2f size;
     };
 
-    struct UIVertexData {
-        std::vector<Render::Vertex> vertecies;
-        std::vector<uint32_t> indicies;
-    };
-
     static Render::UIRenderData ProcessVertecies(ProcessData data, std::vector<UIData *> &elements);
-    static UIVertexData GenerateVertecies(UI::ProcessData procData, int textureId, Color color);
+    static Render::VertexData GenerateVertecies(UI::ProcessData procData, int textureId, Color color);
 
     // Data Handling
     static UIData *CreateData(UIType type);
@@ -694,7 +708,7 @@ class UI {
     static Font::Font *&GetFont(UIData *data);
     static std::vector<uint32_t> &GetClusters(UIData *data);
 
-    static UIVertexData GenerateTextVertecies(UI::ProcessData procData, UIData *data, UI::Color color);
+    static Render::VertexData GenerateTextVertecies(UI::ProcessData procData, UIData *data, UI::Color color);
 
     // View
     static std::vector<UIData *> &GetChildrens(UIData *data);

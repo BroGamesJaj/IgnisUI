@@ -548,7 +548,7 @@ class Render::Vulkan {
         for (auto &window : windows) {
             if (glfwWindowShouldClose(window.first) || window.second->surfaces.size() == 0) {
                 CloseWindow(window.first);
-                break;
+                break; // Idk why, but we CANT remove this break, the world will fall into ruin...
             }
         }
 
@@ -559,16 +559,15 @@ class Render::Vulkan {
     bool IsValidSurface(int surfaceIndex) { return surfaceAccess.find(surfaceIndex) != surfaceAccess.end(); }
 
     void Draw(int surfaceIndex) {
-        if (surfaceAccess.count(surfaceIndex) > 0) {
+        if (surfaceAccess.contains(surfaceIndex)) {
             DrawFrame(surfaceAccess[surfaceIndex].window, &surfaceAccess[surfaceIndex].surface);
             vkDeviceWaitIdle(device);
         } else
             throw std::runtime_error("invalid surface!");
     }
 
-    int AddUIElementData(UIRenderData &data) {
-        renderData[nextElement] = data;
-        return nextElement++;
+    void AddUIElementData(UIRenderData &data) {
+        renderData[data.surface] = data;
     }
 
     void *GetWindowOfSurface(int surface) {
@@ -973,10 +972,10 @@ class Render::Vulkan {
             if (element.changed) {
                 SurfaceAccess acces = surfaceAccess[surfaceId];
                 SurfaceVulkanData *surfaceData = &windows[acces.window]->surfaces[acces.surface];
-                VertexData data = GetVertexData(surfaceId, surfaceData);
-                CreateVertexBuffer(surfaceData, data.vertecies);
-                CreateIndexBuffer(surfaceData, data.indicies);
-                surfaceData->indiceCount = data.indicies.size();
+                CreateVertexBuffer(surfaceData, element.vertecies);
+                CreateIndexBuffer(surfaceData, element.indicies);
+                surfaceData->indiceCount = element.indicies.size();
+                element.changed = false;
             }
         }
     }
@@ -1153,26 +1152,6 @@ class Render::Vulkan {
         vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
 
         EndSingleTimeCommands(commandBuffer);
-    }
-
-    // gets the verticies and indexes for the said surface so we can create the vertex buffer
-    VertexData GetVertexData(int surfaceId, SurfaceVulkanData *surfaceData) {
-        VertexData data;
-        uint32_t index = 0;
-
-        UIRenderData &element = renderData[surfaceId];
-
-        data.vertecies.insert(data.vertecies.end(), element.vertecies.begin(), element.vertecies.end());
-
-        for (auto i : element.indicies) {
-            data.indicies.push_back(i + index);
-        }
-
-        index += static_cast<uint32_t>(element.vertecies.size());
-
-        element.changed = false;
-
-        return data;
     }
 
     // vertex buffer creation
@@ -2793,7 +2772,7 @@ void Render::Update() { instance->Update(); }
 
 bool Render::IsValidSurface(int surfaceIndex) { return instance->IsValidSurface(surfaceIndex); }
 
-int Render::AddUIElementData(UIRenderData &data) { return instance->AddUIElementData(data); }
+void Render::AddUIElementData(UIRenderData &data) { instance->AddUIElementData(data); }
 
 Render::Texture Render::CreateTexture(int descriptorId, std::string path) { return instance->CreateTexture(descriptorId, path); }
 
@@ -2866,3 +2845,4 @@ void Render::PushConstantsToVulkan(std::string& name, void* data, uint32_t size)
 
 Render::Vulkan *Render::instance = nullptr;
 }  // namespace Ignis
+

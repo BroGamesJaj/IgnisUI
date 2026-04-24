@@ -123,7 +123,7 @@ UI::UIData *UI::CreateData(UIType type) {
             data = new UIData(new TextData, TEXT);
             break;
         case Ignis::UI::BUTTON:
-            data = new UIData(new ButtonData{ .text = Text() }, BUTTON);
+            data = new UIData(new ButtonData, BUTTON);
             break;
         case Ignis::UI::IMAGE:
             data = new UIData(new ImageData, IMAGE);
@@ -237,7 +237,7 @@ Render::UIRenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<UIDa
             Vec2<float>((calcData.ofst.x + calcData.size.x) / 2, (calcData.ofst.y + calcData.size.y) / 2));
 
         if (element->type == TEXT) {
-            UIVertexData textVertexData = GenerateTextVertecies(calcData, element, GetColor(element));
+          Render::VertexData textVertexData = GenerateTextVertecies(calcData, element, GetColor(element));
 
             returnData.vertecies.insert(returnData.vertecies.end(), textVertexData.vertecies.begin(), textVertexData.vertecies.end());
             
@@ -247,7 +247,7 @@ Render::UIRenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<UIDa
             }
             additionIndex += textVertexData.vertecies.size();
         } else {
-            UI::UIVertexData vertexData = GenerateVertecies(calcData, GetTexture(element), GetColor(element));
+          Render::VertexData vertexData = GenerateVertecies(calcData, GetTexture(element), GetColor(element));
 
             returnData.vertecies.insert(returnData.vertecies.end(), vertexData.vertecies.begin(), vertexData.vertecies.end());
 
@@ -283,7 +283,7 @@ Render::UIRenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<UIDa
     return returnData;
 }
 
-UI::UIVertexData UI::GenerateVertecies(UI::ProcessData procDt, int textureId, Color color) {
+Render::VertexData UI::GenerateVertecies(UI::ProcessData procDt, int textureId, Color color) {
     glm::vec3 vertexColor = glm::vec3(color.r, color.g, color.b);
     glm::uint texture = glm::uint(textureId);
     Vertex topLeft = { glm::vec3(-1 + procDt.ofst.x, -1 + procDt.ofst.y, 0.0f), vertexColor, glm::vec2(0.0f, 0.0f), texture };
@@ -291,7 +291,7 @@ UI::UIVertexData UI::GenerateVertecies(UI::ProcessData procDt, int textureId, Co
     Vertex bottomRight = { glm::vec3(-1 + procDt.ofst.x + procDt.size.x, -1 + procDt.ofst.y + procDt.size.y, 0.0f), vertexColor, glm::vec2(1.0f, 1.0f), texture };
     Vertex bottomLeft = { glm::vec3(-1 + procDt.ofst.x, -1 + procDt.ofst.y + procDt.size.y, 0.0f), vertexColor, glm::vec2(0.0f, 1.0f), texture };
 
-    UIVertexData returnData{ .vertecies = { topLeft, topRight, bottomRight, bottomLeft },
+    Render::VertexData returnData{ .vertecies = { topLeft, topRight, bottomRight, bottomLeft },
                              .indicies = { 0, 2, 1, 0, 3, 2 } };
     return returnData;
 }
@@ -389,13 +389,13 @@ void UI::HandleCursorMove(Window window) {
 }
 
 // TODO: change the whole position and sizing shit
-UI::UIVertexData UI::GenerateTextVertecies(UI::ProcessData procDt, UIData *data, UI::Color color) {
+Render::VertexData UI::GenerateTextVertecies(UI::ProcessData procDt, UIData *data, UI::Color color) {
     // if (data->type != TEXT) return;
     // TextData* textData = static_cast<TextData*>(data->ptr);
 
     // TODO: unhardcode it IMPORTANT
     float hardcode = 2.0f;
-    UIVertexData returnData;
+    Render::VertexData returnData;
     glm::vec3 vertexColor = glm::vec3((float)color.r, (float)color.g, (float)color.b);
     glm::vec2 norm(100);
 
