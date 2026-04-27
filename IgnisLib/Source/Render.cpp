@@ -37,7 +37,7 @@ struct WindowUserPointer {
 
 using Vertex = Render::Vertex;
 using CreateGraphicPipeLineInfo = Render::CreateGraphicPipeLineInfo;
-using UIRenderData = Render::UIRenderData;
+using RenderData = Render::RenderData;
 using Window = Render::Window;
 
 // need to align to the 16bit grid if it will go into a shader
@@ -143,11 +143,6 @@ struct WindowVulkanData {
     VkExtent2D swapChainExtent;
     VkSurfaceCapabilitiesKHR capabilities;
     bool framebufferResized = false;
-};
-
-struct VertexData {
-    std::vector<Vertex> vertecies;
-    std::vector<uint32_t> indicies;
 };
 
 struct VulkanConstData {
@@ -342,8 +337,7 @@ class Render::Vulkan {
     std::unordered_map<int, TextureData> textureData;
     unsigned int nextTexture = 1;
 
-    std::unordered_map<int, UIRenderData> renderData;
-    int nextElement = 0;
+    std::unordered_map<int, RenderData> renderData;
 
     std::unordered_map<int, SurfaceAccess> surfaceAccess;
     int nextSurface = 0;
@@ -547,18 +541,20 @@ class Render::Vulkan {
 
         for (auto &window : windows) {
             if (glfwWindowShouldClose(window.first) || window.second->surfaces.size() == 0) {
+              std::cout << window.second->surfaces.size() << std::endl;
                 CloseWindow(window.first);
                 break; // Idk why, but we CANT remove this break, the world will fall into ruin...
             }
         }
 
-        // if a ui element changed update the vertex & index buffer for that window
+        // if a ui element changed update the vertex & index buffer for that surface
         UpdateElementBuffers();
     }
 
     bool IsValidSurface(int surfaceIndex) { return surfaceAccess.find(surfaceIndex) != surfaceAccess.end(); }
 
     void Draw(int surfaceIndex) {
+      std::cout << "id: " << surfaceIndex << std::endl;
         if (surfaceAccess.contains(surfaceIndex)) {
             DrawFrame(surfaceAccess[surfaceIndex].window, &surfaceAccess[surfaceIndex].surface);
             vkDeviceWaitIdle(device);
@@ -566,7 +562,7 @@ class Render::Vulkan {
             throw std::runtime_error("invalid surface!");
     }
 
-    void AddUIElementData(UIRenderData &data) {
+    void AddElementData(RenderData &data) {
         renderData[data.surface] = data;
     }
 
@@ -874,7 +870,7 @@ class Render::Vulkan {
 
         // TODO: somehow unhardcode the pipeline idx
         // updating the uniform buffer for the frame
-        UpdateUniformBufferSpin(descriptorSets[pipelines[0].descriptorIds[0]].uniformBuffer[data->currentFrame].get(), windows[window].get(), glm::vec3(0.0f, 1.0f, 0.0f));
+        //UpdateUniformBufferSpin(descriptorSets[pipelines[0].descriptorIds[0]].uniformBuffer[data->currentFrame].get(), windows[window].get(), glm::vec3(0.0f, 1.0f, 0.0f));
         // UpdateUniformBufferSpin(DescriptorSetFromId(data->pipelineDatas[1].descriptorSetIds[1]).uniformBuffer[data->currentFrame].get(), windows[window].get(), 1, glm::vec3(1.0f, 0.0f, 0.0f));
 
         // resets and records the command buffer
@@ -2256,8 +2252,10 @@ class Render::Vulkan {
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutInfo.setLayoutCount = neededLayouts.size();
         pipelineLayoutInfo.pSetLayouts = neededLayouts.data();
-        pipelineLayoutInfo.pushConstantRangeCount = 1;
-        pipelineLayoutInfo.pPushConstantRanges = &constRange;
+        if(pipeline.constants.size() > 0){
+            pipelineLayoutInfo.pushConstantRangeCount = 1;
+            pipelineLayoutInfo.pPushConstantRanges = &constRange;
+        }
 
         if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipeline.layout) != VK_SUCCESS) {
             throw std::runtime_error("failed to create pipeline layout!");
@@ -2764,15 +2762,19 @@ class Render::Vulkan {
 
 Window Render::CreateAppWindow(int width, int height, const char *title, GLFWmonitor *screen, GLFWwindow *share) { return instance->CreateVulkanWindow(width, height, title, screen, share); }
 
-int Render::CreateSurface(Window window, std::vector<int> pipelines) { return instance->CreateSurface(window, pipelines); }
+Surface Render::CreateSurface(Window window, std::vector<int> pipelines) { 
+  Surface surface;
+  surface.surface = instance->CreateSurface(window, pipelines); 
+  return surface;
+}
 
-void Render::Draw(int surface) { instance->Draw(surface); }
+void Render::Draw(Surface surface) { instance->Draw(surface.surface); }
 
 void Render::Update() { instance->Update(); }
 
-bool Render::IsValidSurface(int surfaceIndex) { return instance->IsValidSurface(surfaceIndex); }
+bool Render::IsValidSurface(Surface surface) { return instance->IsValidSurface(surface.surface); }
 
-void Render::AddUIElementData(UIRenderData &data) { instance->AddUIElementData(data); }
+void Render::AddElementData(RenderData &data) { instance->AddElementData(data); }
 
 Render::Texture Render::CreateTexture(int descriptorId, std::string path) { return instance->CreateTexture(descriptorId, path); }
 
@@ -2843,6 +2845,40 @@ void Render::PushConstantsToVulkan(std::string& name, void* data, uint32_t size)
     instance->PushConstants(name, data, size);
 }
 
+void Render::PushOn(VertexData &data, Surface &surface){
+    if(!IsValidSurface(surface)) 
+      throw new std::runtime_error("can't push onto invalid surface");
+    
+    int id = surface.surface;
+
+    if(!surfaceData.contains(id)){
+      surfaceData[id] = data;
+    } else {
+      VertexData& current = surfaceData[id];
+      uint32_t indicieShift = current.vertecies.size();
+      current.vertecies.insert(current.vertecies.end(), data.vertecies.begin(), data.vertecies.end());
+      for (size_t i = 0; i < data.indicies.size(); i++) {
+        current.indicies.push_back(indicieShift + data.indicies[i]);
+      }
+    }
+}
+
+void Render::Submit(Surface &surface){
+  if(!surfaceData.contains(surface.surface))
+    throw new std::runtime_error("Cant submit the given surface");
+
+  int id = surface.surface;
+      RenderData output {
+      .vertecies = surfaceData[id].vertecies,
+      .indicies = surfaceData[id].indicies,
+      .surface = id,
+      .changed = true
+  };
+
+  instance->AddElementData(output);
+}
+
 Render::Vulkan *Render::instance = nullptr;
+std::unordered_map<int, Render::VertexData> Render::surfaceData;
 }  // namespace Ignis
 

@@ -320,7 +320,7 @@ class Render {
         std::vector<Render::VertexDataType> vertexDataLayout;
     };
 
-    struct UIRenderData {
+    struct RenderData {
         std::vector<Vertex> vertecies;
         std::vector<uint32_t> indicies;
 
@@ -329,8 +329,11 @@ class Render {
     };
 
     struct Surface {
-      private:
+        Surface() = default;
+        ~Surface() = default;
         int surface;
+      private:
+        
 
         friend class Render;
         friend class UI;
@@ -345,7 +348,7 @@ class Render {
     static void Submit(Surface& surface);
 
     static Window CreateAppWindow(int width, int height, const char *title, GLFWmonitor *screen = nullptr, GLFWwindow *share = nullptr);
-    static int CreateSurface(Window window, std::vector<int> pipelines);
+    static Surface CreateSurface(Window window, std::vector<int> pipelines);
     static Texture CreateTexture(int descriptorId, std::string path);
 
     static int CreateDescriptorSet(DescriptorSetInfo &descriptorSetInfos);
@@ -353,9 +356,9 @@ class Render {
     static int CreatePipeline(CreateGraphicPipeLineInfo &gpInfo);
     static int CreateFontPage(const std::vector<uint8_t> &rgbaData, uint32_t width, uint32_t height);
 
-    static void Draw(int surface);
+    static void Draw(Surface surface);
     static void Update();
-    static bool IsValidSurface(int surfaceIndex);
+    static bool IsValidSurface(Surface surface);
 
     static int CreateSampler(SamplerFilter filter = SamplerFilter::LINEAR,
                              SamplerAddressing addressing = SamplerAddressing::REPEAT, SamplerMipmapMode mipmapMode = SamplerMipmapMode::LINEAR);
@@ -391,9 +394,11 @@ class Render {
 
     static Vulkan *instance;
 
+    static std::unordered_map<int, VertexData> surfaceData;
+
     friend class UI;
 
-    static void AddUIElementData(UIRenderData &data);
+    static void AddElementData(RenderData &data);
 
     static void *GetWindowOfSurface(int surface);
 
@@ -408,6 +413,9 @@ using SamplerFilter = Render::SamplerFilter;
 using SamplerAddressing = Render::SamplerAddressing;
 using SamplerMipmapMode = Render::SamplerMipmapMode;
 using Texture = Render::Texture;
+using Vertex = Render::Vertex;
+using VertexData = Render::VertexData;
+using Surface = Render::Surface;
 #endif
 
 #endif
@@ -652,10 +660,10 @@ class UI {
 
     template <std::derived_from<UI::Element>... Args>
     static void PushOn(Window window, Args &...args) {
-        int surface = surfaces[window.ptr];
+      Render::Surface surface = surfaces[window.ptr];
         if (!Render::IsValidSurface(surface)) return;
 
-        (elements[surface].push_back(args.data), ...);
+        (elements[surface.surface].push_back(args.data), ...);
     }
 
     static void Submit(Window window = mainWindow);
@@ -678,14 +686,14 @@ class UI {
     static std::unordered_map<int, Font::Font *> fonts;
     static int nextFontId;
     static int pipeline;
-    static std::unordered_map<GLFWwindow*, int> surfaces;
+    static std::unordered_map<GLFWwindow*, Render::Surface> surfaces;
 
     struct ProcessData {
         Vec2f ofst;
         Vec2f size;
     };
 
-    static Render::UIRenderData ProcessVertecies(ProcessData data, std::vector<UIData *> &elements);
+    static Render::RenderData ProcessVertecies(ProcessData data, std::vector<UIData *> &elements);
     static Render::VertexData GenerateVertecies(UI::ProcessData procData, int textureId, Color color);
 
     // Data Handling

@@ -62,10 +62,9 @@ void UI::Init(Window window) {
 
         pipeline = Render::CreatePipeline(gpInfo);
     }
-    
-    surfaces[window.ptr] = Render::CreateSurface(window, { pipeline });
+    Render::Surface surface = Render::CreateSurface(window, { pipeline });
+    surfaces[window.ptr] = surface;
 }
-
 Render::Texture UI::CreateTexture(std::string path) {
     return Render::CreateTexture(mainDescriptor, path);
 }
@@ -207,19 +206,20 @@ void UI::Bind(Element &dst, Element &src) {
 }
 
 void UI::Submit(Window window) {
-    int surface = surfaces[window.ptr];
-    if (!elements.contains(surface)) return;
+    Render::Surface surface = surfaces[window.ptr];
+    int id = surface.surface;
+    if (!elements.contains(id)) return;
 
     UI::ProcessData data{ .ofst{ 0, 0 }, .size{ 2, 2 } };
 
-    Render::UIRenderData outputData = ProcessVertecies(data, elements[surface]);
-    outputData.surface = surface;
+    Render::RenderData outputData = ProcessVertecies(data, elements[id]);
+    outputData.surface = id;
     outputData.changed = true;
-    Render::AddUIElementData(outputData);
+    Render::AddElementData(outputData);
 }
 
-Render::UIRenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<UIData*> &elements) {
-    Render::UIRenderData returnData;
+Render::RenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<UIData*> &elements) {
+    Render::RenderData returnData;
 
     int additionIndex = 0;
 
@@ -258,7 +258,7 @@ Render::UIRenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<UIDa
             additionIndex += 4;
         }
 
-        Render::UIRenderData childData;
+        Render::RenderData childData;
 
         if (element->type == VIEW) {
             auto view = static_cast<ViewData*>(element->ptr);
@@ -669,5 +669,5 @@ int UI::nextFontId = 1;
 std::unordered_map<int, std::vector<UI::UIData*>> UI::elements;
 std::unordered_set<UI::UIData *> UI::dataPtrs;
 int UI::pipeline = true;
-std::unordered_map<GLFWwindow*, int> UI::surfaces;
+std::unordered_map<GLFWwindow*, Render::Surface> UI::surfaces;
 }  // namespace Ignis
