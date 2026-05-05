@@ -539,7 +539,6 @@ class Render::Vulkan {
 
         for (auto &window : windows) {
             if (glfwWindowShouldClose(window.first) || window.second->surfaces.size() == 0) {
-                std::cout << window.second->surfaces.size() << std::endl;
                 CloseWindow(window.first);
                 break;  // Idk why, but we CANT remove this break, the world will fall into ruin...
             }
@@ -1258,7 +1257,7 @@ class Render::Vulkan {
                     hasImage = true;
 
                 uint32_t maxTextures = props.limits.maxPerStageDescriptorSamplers;
-                if (maxTextures < descriptor.count) throw std::runtime_error("asked texture amount not available on the GPU");
+                if (maxTextures < static_cast<uint32_t>(descriptor.count)) throw std::runtime_error("asked texture amount not available on the GPU");
 
                 bindingFlags[j] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT;
             } else if (descriptor.type == Render::DescriptorInfo::DescriptorType::UNIFORM) {

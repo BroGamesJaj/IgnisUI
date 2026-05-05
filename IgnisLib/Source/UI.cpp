@@ -86,7 +86,7 @@ float time = 0.0f;
 void UI::Draw() {
     time += 0.001f;
     Render::PushConstant<float>("off", sin(time));
-    Render::PushConstant<float>("color", fmod(time * 0.1, 1.0f));
+    Render::PushConstant<float>("color", fmod(time * 0.2, 1.0f));
     for (auto &[window, surface] : surfaces) {
         if (Render::IsValidSurface(surface))
             Render::Draw(surface);

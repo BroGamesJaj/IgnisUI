@@ -58,8 +58,6 @@ int main() {
 
     Render::Surface surface = Render::CreateSurface(window1, { pipeline });
 
-    // std::cout << Render::IsValidSurface(surface) << std::endl;
-
     std::vector<Vertex> vertecies = {
         { .pos = glm::vec3(0.5, 0.5, 1) },
         { .pos = glm::vec3(0.5, -0.5, 1) },
@@ -86,13 +84,13 @@ int main() {
 
     float time = 0.0f;
     while (UI::CanDraw()) {
+        UI::Draw();
         Input::Event();
         Render::Update();
-        UI::Draw();
-        Render::Draw(surface);
     }
 
-    // Render::Draw(surface);
-    // UI::Clean();
-    // Render::Clean();
+    UI::Clean();
+    Render::Clean();
+    std::string somethign;
+    std::cin >> somethign;
 }
