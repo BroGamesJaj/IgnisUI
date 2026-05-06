@@ -5,7 +5,6 @@
 #define IGNIS_UI_NAMES
 #define IGNIS_RENDER_NAMES
 #include "../../IgnisLib/Source/IgnisLib.h"
-
 using namespace Ignis;
 
 // need to initialize the input before using
@@ -27,6 +26,7 @@ struct Test {
 int main() {
     Input::Init();
     Render::Init(true);
+    Input::Event();
 
     Window window1 = Render::CreateAppWindow(1200, 800, "Gup 1");
 
@@ -82,7 +82,7 @@ int main() {
     Render::PushOn(data, surface);
     Render::Submit(surface);
 
-    float time = 0.0f;
+
     while (UI::CanDraw()) {
         UI::Draw();
         Input::Event();
@@ -91,6 +91,4 @@ int main() {
 
     UI::Clean();
     Render::Clean();
-    std::string somethign;
-    std::cin >> somethign;
 }
