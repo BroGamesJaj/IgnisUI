@@ -5,6 +5,7 @@
 #define IGNIS_UI_NAMES
 #define IGNIS_RENDER_NAMES
 #include "../../IgnisLib/Source/IgnisLib.h"
+
 using namespace Ignis;
 
 // need to initialize the input before using
@@ -26,8 +27,7 @@ struct Test {
 int main() {
     Input::Init();
     Render::Init(true);
-    Input::Event();
-
+    /*
     Window window1 = Render::CreateAppWindow(1200, 800, "Gup 1");
 
     // int fontId = UI::LoadFont("../DejaVuSans.ttf");
@@ -74,21 +74,26 @@ int main() {
         .indicies = indicies
     };
 
-    Image image = Image(Vec2f(0, 0), Vec2f(100, 100), Color(1.0f, 1.0f, 1.0f));
-    Image image3 = Image(Vec2f(0, 0), Vec2f(100, 100), monika);
-    UI::PushOn(window1, image);
+    Image image = Image(Vec2f(45, 45), Vec2f(10, 10), Color(1.0f, 1.0f, 1.0f));
+    Image image3 = Image(Vec2f(40, 35), Vec2f(20, 30), monika);
+    UI::PushOn(window1, image3);
     UI::Submit();
 
     Render::PushOn(data, surface);
     Render::Submit(surface);
 
-
+    float time = 0.0f;
     while (UI::CanDraw()) {
+        // Render::Clear(window1);
         UI::Draw();
+        Render::Draw(surface);
         Input::Event();
         Render::Update();
     }
 
     UI::Clean();
     Render::Clean();
+    */
+    std::string somethign;
+    std::cin >> somethign;
 }

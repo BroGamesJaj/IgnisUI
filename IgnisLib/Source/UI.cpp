@@ -49,7 +49,7 @@ void UI::Init(Window window) {
 
         mainDescriptor = Render::CreateDescriptorSet(descriptorSet);
 
-        Render::PublishConstants<float, float>({ "off", "color" });
+        Render::PublishConstants<float, float, glm::mat4>({ "off", "color", "rot" });
 
         CreateGraphicPipeLineInfo gpInfo{};
         gpInfo.vertexShader = "../Resources/Shaders/shader.vert";
@@ -58,7 +58,7 @@ void UI::Init(Window window) {
         gpInfo.descriptorSetIds = {
             mainDescriptor
         };
-        gpInfo.constants = { "off", "color" };
+        gpInfo.constants = { "rot", "off", "color" };
         gpInfo.vertexDataLayout = Render::CreateVertexData(Render::VEC3, Render::VEC3, Render::VEC2, Render::UINT);
 
         pipeline = Render::CreatePipeline(gpInfo);
@@ -84,9 +84,10 @@ bool UI::CanDraw() {
 float time = 0.0f;
 
 void UI::Draw() {
-    time += 0.001f;
-    Render::PushConstant<float>("off", sin(time));
+    time += 0.01f;
+    Render::PushConstant<float>("off", 0.5 * sin(time));
     Render::PushConstant<float>("color", fmod(time * 0.2, 1.0f));
+    Render::PushConstant<glm::mat4>("rot", glm::rotate(glm::identity<glm::mat4>(), 3 * time, glm::vec3(0, 0, 1)));
     for (auto &[window, surface] : surfaces) {
         if (Render::IsValidSurface(surface))
             Render::Draw(surface);

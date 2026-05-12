@@ -8,9 +8,8 @@ layout(location = 0) in vec3 fragColor;
 layout(location = 1) in vec2 fragTexCoord;
 layout(location = 2) in flat uint fragTexId;
 
-
-layout(push_constant) uniform PushConstants {
-    layout(offset = 4) float color;
+layout(push_constant) uniform PushConstants{
+    layout(offset = 68) float color;
 } pc;
 
 layout(set = 0, binding = 1) uniform sampler2D textures[];

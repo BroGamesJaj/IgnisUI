@@ -3,7 +3,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include "IgnisLib.h"
+#include "../IgnisLib.h"
 #include "vulkan/vulkan_core.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -148,6 +148,12 @@ struct WindowVulkanData {
 struct VulkanConstData {
     void *data;
     uint32_t size;
+};
+
+struct DrawData {
+    SurfaceVulkanData *data;
+    GLFWwindow *window;
+    VkSurfaceKHR surface;
 };
 
 static std::vector<char> readFile(const std::string &filename) {
@@ -354,6 +360,8 @@ class Render::Vulkan {
 
     std::unordered_map<VkSurfaceKHR, std::vector<Render::VertexDataType>> vertexDataLayout;
 
+    std::vector<int> drawQueue;
+
     GLFWwindow *CreateTmpSurface() {
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
@@ -381,39 +389,6 @@ class Render::Vulkan {
     }
 
    public:
-    Vulkan(bool debuging = false) {
-#ifndef IGNIS_INPUT
-        glfwInit();
-#endif
-
-        if (debuging) enableValidationLayers = true;
-
-        // basicly the whole system, the connection between the app and the vulkan api
-        CreateInstance();
-
-        // creating the messennger if the debug layer is enabled
-        SetupDebugMessenger();
-
-        GLFWwindow *window = CreateTmpSurface();
-
-        // basicly selects the "GPU"
-        PickPhysicalDevice();
-
-        // creates the "computing" part of the instance, stuff get done with this
-        CreateLogicalDevice();
-
-        // gets imageformat and supported stuff, so we dont need to get that on every surface
-        GetSwapChainData();
-
-        // command pool is managing the memory used for the command buffers
-        CreateCommandPool();
-
-        vkDestroySurfaceKHR(instance, surface, nullptr);
-        surface = NULL;
-        glfwDestroyWindow(window);
-        glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
-    }
-
     ~Vulkan() {
         CleanUp();
         std::cout << "vulkan instance cleaned up" << std::endl;
@@ -536,6 +511,7 @@ class Render::Vulkan {
 #ifndef IGNIS_INPUT
         glfwPollEvents();
 #endif
+        vkDeviceWaitIdle(device);
 
         for (auto &window : windows) {
             if (glfwWindowShouldClose(window.first) || window.second->surfaces.size() == 0) {
@@ -544,22 +520,32 @@ class Render::Vulkan {
             }
         }
 
-        // if a ui element changed update the vertex & index buffer for that surface
+        // if element changed update the vertex & index buffer for that surface
         UpdateElementBuffers();
+
+        DrawFrame();
+        drawQueue.clear();
     }
 
     bool IsValidSurface(int surfaceIndex) { return surfaceAccess.find(surfaceIndex) != surfaceAccess.end(); }
 
     void Draw(int surfaceIndex) {
         if (surfaceAccess.contains(surfaceIndex)) {
-            DrawFrame(surfaceAccess[surfaceIndex].window, &surfaceAccess[surfaceIndex].surface);
-            vkDeviceWaitIdle(device);
+            drawQueue.push_back(surfaceIndex);
         } else
             throw std::runtime_error("invalid surface!");
     }
 
+    void Clear(Window &window) {
+        if (windows.contains(window.ptr)) {
+            ClearBuffersForWindow(window.ptr);
+        } else
+            throw std::runtime_error("invalid window!");
+    }
+
     void AddElementData(RenderData &data) {
         renderData[data.surface] = data;
+        UpdateElementBuffers();
     }
 
     void *GetWindowOfSurface(int surface) {
@@ -839,82 +825,146 @@ class Render::Vulkan {
         glfwTerminate();
     }
 
-    // update
-    void DrawFrame(GLFWwindow *window, VkSurfaceKHR *surface) {
-        SurfaceVulkanData *data = &windows[window]->surfaces[*surface];
-        if (!data->haveVertexData) return;
-        // waits for last frame to complete (for the fence), then resets it
-        vkWaitForFences(device, 1, &data->inFlightFences[data->currentFrame], VK_TRUE, UINT64_MAX);
+    void ClearBuffersForWindow(GLFWwindow *window) {
+        std::vector<DrawData> surfaces;
 
-        // aquires the next available image, when it did, it signals the semaphore
-        uint32_t imageIndex;
-        VkResult result = vkAcquireNextImageKHR(device, data->swapChain, UINT64_MAX, data->imageAvailableSemaphores[data->currentFrame], VK_NULL_HANDLE, &imageIndex);
+        for (auto &[surface, surfaceData] : windows[window]->surfaces) {
+            DrawData data;
+            data.window = window;
+            data.surface = surface;
+            data.data = &surfaceData;
 
-        // check if swapchain recreation is necessary
-        if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-            RecreateSwapChain(window, *surface);
-            return;
-        } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-            throw std::runtime_error("failed to acquire swap chain image!");
+            surfaces.push_back(data);
         }
 
-        // still part of the last frame wait
-        vkResetFences(device, 1, &data->inFlightFences[data->currentFrame]);
+        if (surfaces.empty()) return;
 
-        // TODO: somehow unhardcode the pipeline idx
-        // updating the uniform buffer for the frame
-        UpdateUniformBufferSpin(descriptorSets[pipelines[0].descriptorIds[0]].uniformBuffer[data->currentFrame].get(), windows[window].get(), glm::vec3(0.0f, 1.0f, 0.0f));
-        // UpdateUniformBufferSpin(DescriptorSetFromId(data->pipelineDatas[1].descriptorSetIds[1]).uniformBuffer[data->currentFrame].get(), windows[window].get(), 1, glm::vec3(1.0f, 0.0f, 0.0f));
+        for (size_t i = 0; i < surfaces.size(); i++) {
+            uint32_t imageIndex;
 
-        // resets and records the command buffer
-        vkResetCommandBuffer(data->commandBuffers[data->currentFrame], 0);
-        RecordCommandBuffer(data, windows[window]->swapChainExtent, imageIndex, *surface);
+            vkWaitForFences(device, 1, &surfaces[i].data->inFlightFences[surfaces[i].data->currentFrame], VK_TRUE, UINT64_MAX);
 
-        // submiting it to the graphics family queue
-        VkSubmitInfo submitInfo{};
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        // what semaphore to wait for
-        VkSemaphore waitSemaphores[] = { data->imageAvailableSemaphores[data->currentFrame] };
-        VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-        submitInfo.waitSemaphoreCount = 1;
-        submitInfo.pWaitSemaphores = waitSemaphores;
-        submitInfo.pWaitDstStageMask = waitStages;
-        // assigning the command buffer
-        submitInfo.commandBufferCount = 1;
-        submitInfo.pCommandBuffers = &data->commandBuffers[data->currentFrame];
-        // what semaphore to signal when the command buffer finished execution
-        VkSemaphore signalSemaphores[] = { data->renderFinishedSemaphores[data->currentFrame] };
-        submitInfo.signalSemaphoreCount = 1;
-        submitInfo.pSignalSemaphores = signalSemaphores;
+            VkResult result = vkAcquireNextImageKHR(device, surfaces[i].data->swapChain, UINT64_MAX, surfaces[i].data->imageAvailableSemaphores[surfaces[i].data->currentFrame], VK_NULL_HANDLE, &imageIndex);
 
-        if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, data->inFlightFences[data->currentFrame]) != VK_SUCCESS) {
-            throw std::runtime_error("failed to submit draw command buffer!");
+            // check if swapchain recreation is necessary
+            if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+                RecreateSwapChain(surfaces[i].window, surfaces[i].surface);
+                return;
+            } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+                throw std::runtime_error("failed to acquire swap chain image!");
+            }
+
+            vkResetFences(device, 1, &surfaces[i].data->inFlightFences[surfaces[i].data->currentFrame]);
+
+            vkResetCommandBuffer(surfaces[i].data->commandBuffers[surfaces[i].data->currentFrame], 0);
+            RecordClearCommand(surfaces[i].data, imageIndex);
+
+            VkSubmitInfo submitInfo{};
+            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers = &surfaces[i].data->commandBuffers[surfaces[i].data->currentFrame];
+
+            if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, surfaces[i].data->inFlightFences[surfaces[i].data->currentFrame]) != VK_SUCCESS) {
+                throw std::runtime_error("failed to submit draw command buffer!");
+            }
+        }
+    }
+
+    // update
+    void DrawFrame() {
+        // surfaceAccess[surfaceIndex].window, &surfaceAccess[surfaceIndex].surface
+
+        std::vector<DrawData> surfaces;
+
+        std::vector<VkFence> fences;
+        std::vector<VkSemaphore> finishSemaphores;
+        std::vector<uint32_t> images;
+        std::vector<VkSwapchainKHR> swapChains;
+
+        for (size_t i = 0; i < drawQueue.size(); i++) {
+            int &index = drawQueue[i];
+            if (!IsValidSurface(index)) continue;
+
+            DrawData data;
+            data.window = surfaceAccess[index].window;
+            data.surface = surfaceAccess[index].surface;
+            data.data = &windows[data.window]->surfaces[data.surface];
+            if (data.data->haveVertexData) {
+                surfaces.push_back(data);
+                fences.push_back(data.data->inFlightFences[data.data->currentFrame]);
+                finishSemaphores.push_back(data.data->renderFinishedSemaphores[data.data->currentFrame]);
+                swapChains.push_back(data.data->swapChain);
+            }
+        }
+
+        if (surfaces.empty()) return;
+
+        images.resize(surfaces.size());
+        // waits for last frame to complete (for the fence), then resets it
+        vkWaitForFences(device, fences.size(), fences.data(), VK_TRUE, UINT64_MAX);
+
+        for (size_t i = 0; i < surfaces.size(); i++) {
+            // aquires the next available image, when it did, it signals the semaphore
+            VkResult result = vkAcquireNextImageKHR(device, surfaces[i].data->swapChain, UINT64_MAX, surfaces[i].data->imageAvailableSemaphores[surfaces[i].data->currentFrame], VK_NULL_HANDLE, &images[i]);
+
+            // check if swapchain recreation is necessary
+            if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+                RecreateSwapChain(surfaces[i].window, surfaces[i].surface);
+                return;
+            } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+                throw std::runtime_error("failed to acquire swap chain image!");
+            }
+            vkResetFences(device, 1, &surfaces[i].data->inFlightFences[surfaces[i].data->currentFrame]);
+
+            // resets and records the command buffer
+            vkResetCommandBuffer(surfaces[i].data->commandBuffers[surfaces[i].data->currentFrame], 0);
+            RecordCommandBuffer(surfaces[i].data, windows[surfaces[i].window]->swapChainExtent, images[i], surfaces[i].surface);
+
+            // submiting it to the graphics family queue
+            VkSubmitInfo submitInfo{};
+            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            // what semaphore to wait for
+            VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+            submitInfo.waitSemaphoreCount = 1;
+            submitInfo.pWaitSemaphores = &surfaces[i].data->imageAvailableSemaphores[surfaces[i].data->currentFrame];
+            submitInfo.pWaitDstStageMask = waitStages;
+            // assigning the command buffer
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers = &surfaces[i].data->commandBuffers[surfaces[i].data->currentFrame];
+            // what semaphore to signal when the command buffer finished execution
+            submitInfo.signalSemaphoreCount = 1;
+            submitInfo.pSignalSemaphores = &surfaces[i].data->renderFinishedSemaphores[surfaces[i].data->currentFrame];
+
+            if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, surfaces[i].data->inFlightFences[surfaces[i].data->currentFrame]) != VK_SUCCESS) {
+                throw std::runtime_error("failed to submit draw command buffer!");
+            }
+
+            surfaces[i].data->currentFrame = (surfaces[i].data->currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
         }
 
         // presents the drawn image to the swapchain/queue? idk
         VkPresentInfoKHR presentInfo{};
         presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 
-        presentInfo.waitSemaphoreCount = 1;
-        presentInfo.pWaitSemaphores = signalSemaphores;
+        presentInfo.waitSemaphoreCount = finishSemaphores.size();
+        presentInfo.pWaitSemaphores = finishSemaphores.data();
 
-        VkSwapchainKHR swapChains[] = { data->swapChain };
-        presentInfo.swapchainCount = 1;
-        presentInfo.pSwapchains = swapChains;
-        presentInfo.pImageIndices = &imageIndex;
+        presentInfo.swapchainCount = swapChains.size();
+        presentInfo.pSwapchains = swapChains.data();
+        presentInfo.pImageIndices = images.data();
         presentInfo.pResults = nullptr;
 
-        result = vkQueuePresentKHR(presentQueue, &presentInfo);
+        VkResult result = vkQueuePresentKHR(presentQueue, &presentInfo);
 
-        // check if swapchain recreation is necessary
-        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || windows[window]->framebufferResized) {
-            windows[window]->framebufferResized = false;
-            RecreateSwapChain(window, *surface);
-        } else if (result != VK_SUCCESS) {
-            throw std::runtime_error("failed to present swap chain image!");
+        for (size_t i = 0; i < surfaces.size(); i++) {
+            // check if swapchain recreation is necessary
+            if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || windows[surfaces[i].window]->framebufferResized) {
+                windows[surfaces[i].window]->framebufferResized = false;
+                RecreateSwapChain(surfaces[i].window, surfaces[i].surface);
+            } else if (result != VK_SUCCESS) {
+                throw std::runtime_error("failed to present swap chain image!");
+            }
         }
-
-        data->currentFrame = (data->currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
     void UpdateUniformBufferSpin(BufferData *bufferData, WindowVulkanData *window, glm::vec3 dir) {
@@ -967,82 +1017,6 @@ class Render::Vulkan {
                 element.changed = false;
             }
         }
-    }
-
-    // Basic info, nothing
-    void CreateInstance() {
-        // check if debugging is possible if needed
-        if (enableValidationLayers && !checkValidationLayerSupport()) {
-            throw std::runtime_error("validation layers requested, but not available!");
-        }
-
-        VkApplicationInfo appInfo{};
-        appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-        appInfo.pApplicationName = "Ignis Rendering";
-        appInfo.applicationVersion = VK_MAKE_VERSION(1, 4, 0);
-        appInfo.pEngineName = "No Engine";
-        appInfo.engineVersion = VK_MAKE_VERSION(1, 4, 0);
-        appInfo.apiVersion = VK_API_VERSION_1_4;
-
-        VkInstanceCreateInfo createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-        createInfo.pApplicationInfo = &appInfo;
-
-        // getting extensions
-        auto extensions = getRequiredExtensions();
-        createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
-        createInfo.ppEnabledExtensionNames = extensions.data();
-
-        // enabling debugging
-        VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
-        if (enableValidationLayers) {
-            createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
-            createInfo.ppEnabledLayerNames = validationLayers.data();
-
-            populateDebugMessengerCreateInfo(debugCreateInfo);
-            addPNext(&createInfo, &debugCreateInfo);
-
-            // if (gpuAssistedEnabledValidation) {
-            //     VkValidationFeatureEnableEXT enables[] = {
-            //         VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
-            //         VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
-            //         VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT
-            //     };
-            //
-            //     VkValidationFeaturesEXT validationFeatures{};
-            //     validationFeatures.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
-            //     validationFeatures.enabledValidationFeatureCount =
-            //         static_cast<uint32_t>(std::size(enables));
-            //     validationFeatures.pEnabledValidationFeatures = enables;
-            //     validationFeatures.pDisabledValidationFeatures = nullptr;
-            //     validationFeatures.disabledValidationFeatureCount = 0;
-            //
-            //     addPNext(&createInfo, &validationFeatures);
-            // }
-
-        } else {
-            createInfo.enabledLayerCount = 0;
-
-            createInfo.pNext = nullptr;
-        }
-
-        if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create instance!");
-        }
-    }
-    // getting the needed extensions
-    std::vector<const char *> getRequiredExtensions() {
-        uint32_t glfwExtensionCount = 0;
-        const char **glfwExtensions;
-        glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-
-        std::vector<const char *> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
-
-        if (enableValidationLayers) {
-            extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-        }
-
-        return extensions;
     }
 
     // semaphore and fence creation
@@ -1397,19 +1371,6 @@ class Render::Vulkan {
         vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
     }
 
-    // command pool creation
-    void CreateCommandPool() {
-        QueueFamilyIndices queueFamilyIndices = findQueueFamilies(physicalDevice);
-
-        VkCommandPoolCreateInfo poolInfo{};
-        poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-        poolInfo.queueFamilyIndex = queueFamilyIndices.graphics.family;
-
-        if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create command pool!");
-        }
-    }
     // command buffer creation
     void CreateCommandBuffers(std::vector<VkCommandBuffer> &commandBuffers) {
         commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
@@ -1463,6 +1424,45 @@ class Render::Vulkan {
 
         surface->isOrderingValid = true;
         */
+    }
+
+    void RecordClearCommand(SurfaceVulkanData *surface, uint32_t imageIndex) {
+        int i = surface->currentFrame;
+        VkCommandBuffer &cmdBuffer = surface->commandBuffers[i];
+
+        // start the recording to a buffer with some specifications (if called on a buffer, it will reset it)
+        VkCommandBufferBeginInfo beginInfo{};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.flags = 0;                   // Optional
+        beginInfo.pInheritanceInfo = nullptr;  // Optional
+
+        if (vkBeginCommandBuffer(cmdBuffer, &beginInfo) != VK_SUCCESS) {
+            throw std::runtime_error("failed to begin recording command buffer!");
+        }
+
+        VkClearColorValue clearColor{};
+        clearColor.float32[0] = 0.2f;
+        clearColor.float32[1] = 0.3f;
+        clearColor.float32[2] = 0.4f;
+        clearColor.float32[3] = 0.0f;
+
+        VkImageSubresourceRange range{};
+        range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        range.levelCount = 1;
+        range.layerCount = 1;
+
+        vkCmdClearColorImage(
+            cmdBuffer,
+            surface->swapChainImages[imageIndex],
+            VK_IMAGE_LAYOUT_GENERAL,
+            &clearColor,
+            1,
+            &range);
+
+        // ending the command recording
+        if (vkEndCommandBuffer(cmdBuffer) != VK_SUCCESS) {
+            throw std::runtime_error("failed to record command buffer!");
+        }
     }
 
     // records command to commandbuffer, also need the image's index that you want to write to
@@ -1867,7 +1867,7 @@ class Render::Vulkan {
         createInfo.imageColorSpace = swapChainImageFormat.colorSpace;
         createInfo.imageExtent = windowData->swapChainExtent;
         createInfo.imageArrayLayers = 1;
-        createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
         // set ownership/sharing of images between queues
         QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
@@ -2358,248 +2358,6 @@ class Render::Vulkan {
         }
     }
 
-    // logic device creating
-    void CreateLogicalDevice() {
-        // get requested queues
-        QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
-        std::vector<QueueFamilyIndices::QueueInfo *> queueInfos = {
-            &indices.graphics,
-            &indices.present,
-            &indices.compute,
-            &indices.transfer
-        };
-
-        std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-
-        std::unordered_map<uint32_t, uint32_t> queueFamilies{};
-        for (auto &qI : queueInfos) {
-            auto [it, inserted] = queueFamilies.insert({ qI->family, qI->index + 1 });
-            if (!inserted) {
-                it->second = std::max(it->second, qI->index + 1);
-            }
-        }
-
-        float queuePriority = 1.0f;
-        for (auto [queueFamily, queueCount] : queueFamilies) {
-            // std::cout << "qf: " << queueFamily << " qC: " << queueCount << "\n";
-            VkDeviceQueueCreateInfo queueCreateInfo{};
-            queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-            queueCreateInfo.queueFamilyIndex = queueFamily;
-            queueCreateInfo.queueCount = queueCount;
-            queueCreateInfo.pQueuePriorities = &queuePriority;
-            queueCreateInfos.push_back(queueCreateInfo);
-        }
-
-        // features like what we requested from the physical device
-        VkPhysicalDeviceFeatures deviceFeatures{};
-        deviceFeatures.samplerAnisotropy = VK_TRUE;
-
-        VkPhysicalDeviceRobustness2FeaturesEXT robustness2Features{};
-        robustness2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT;
-        robustness2Features.nullDescriptor = VK_TRUE;
-
-        VkPhysicalDeviceVulkan12Features features12{};
-        features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-        features12.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
-        features12.descriptorIndexing = VK_TRUE;
-        features12.runtimeDescriptorArray = VK_TRUE;
-        features12.descriptorBindingPartiallyBound = VK_TRUE;
-        features12.descriptorBindingVariableDescriptorCount = VK_TRUE;
-        features12.pNext = &robustness2Features;
-
-        VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeature{};
-        dynamicRenderingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
-        dynamicRenderingFeature.dynamicRendering = VK_TRUE;
-        dynamicRenderingFeature.pNext = &features12;
-
-        // main device creation struct
-        VkDeviceCreateInfo createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-
-        createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
-        createInfo.pQueueCreateInfos = queueCreateInfos.data();
-
-        createInfo.pEnabledFeatures = &deviceFeatures;
-
-        createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
-        createInfo.ppEnabledExtensionNames = deviceExtensions.data();
-
-        createInfo.pNext = &dynamicRenderingFeature;
-
-        // not needed in newer vulkan versions, but can be set for compatibility
-        if (enableValidationLayers) {
-            createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
-            createInfo.ppEnabledLayerNames = validationLayers.data();
-        } else {
-            createInfo.enabledLayerCount = 0;
-        }
-
-        // creating the device and getting a handle for the queue
-        if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create logical device!");
-        }
-
-        std::vector<VkDeviceQueueInfo2> queueGetInfos;
-        queueGetInfos.reserve(queueInfos.size());
-
-        for (auto &qI : queueInfos) {
-            queueGetInfos.push_back({ VK_STRUCTURE_TYPE_DEVICE_QUEUE_INFO_2,
-                                      nullptr,
-                                      0,
-                                      qI->family,
-                                      qI->index });
-        }
-
-        vkGetDeviceQueue2(device, &queueGetInfos[0], &graphicsQueue);
-        vkGetDeviceQueue2(device, &queueGetInfos[1], &presentQueue);
-        vkGetDeviceQueue2(device, &queueGetInfos[2], &computeQueue);
-        vkGetDeviceQueue2(device, &queueGetInfos[3], &transferQueue);
-    }
-    // device picking
-    void PickPhysicalDevice() {
-        uint32_t deviceCount = 0;
-        vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
-        if (deviceCount == 0) {
-            throw std::runtime_error("failed to find GPUs with Vulkan support!");
-        }
-
-        std::vector<VkPhysicalDevice> devices(deviceCount);
-        vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
-
-        for (const auto &device : devices) {
-            if (isDeviceSuitable(device)) {
-                physicalDevice = device;
-                break;
-            }
-        }
-
-        if (physicalDevice == VK_NULL_HANDLE) {
-            throw std::runtime_error("failed to find a suitable GPU!");
-        }
-    }
-    // checking if device have the features that we need
-    bool isDeviceSuitable(VkPhysicalDevice device) {
-        QueueFamilyIndices indices = findQueueFamilies(device);
-
-        bool extensionsSupported = CheckDeviceExtensionSupport(device);
-
-        bool swapChainAdequate = false;
-        if (extensionsSupported) {
-            SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(device);
-            swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
-        }
-
-        VkPhysicalDeviceFeatures supportedFeatures;
-        vkGetPhysicalDeviceFeatures(device, &supportedFeatures);
-
-        return indices.isMinimumComplete() && extensionsSupported && swapChainAdequate && supportedFeatures.samplerAnisotropy;
-    }
-    // check for UPGRADES BROTHER, i mean physical device stuff we need
-    bool CheckDeviceExtensionSupport(VkPhysicalDevice device) {
-        uint32_t extensionCount;
-        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
-
-        std::vector<VkExtensionProperties> availableExtensions(extensionCount);
-        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
-
-        std::set<std::string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
-
-        for (const auto &extension : availableExtensions) {
-            requiredExtensions.erase(extension.extensionName);
-        }
-
-        return requiredExtensions.empty();
-    }
-
-    // struct for the "features"
-    struct QueueFamilyIndices {
-        struct QueueInfo {
-            uint32_t family = UINT32_MAX;
-            uint32_t index = UINT32_MAX;
-            bool isFamilySet() { return family != UINT32_MAX; }
-            bool isIndexSet() { return index != UINT32_MAX; }
-        };
-
-        QueueInfo graphics{};
-        QueueInfo present{};
-        QueueInfo compute{};
-        QueueInfo transfer{};
-
-        bool isComplete() { return graphics.isFamilySet() && present.isFamilySet() && compute.isFamilySet() && transfer.isFamilySet(); }
-        bool isMinimumComplete() { return graphics.isFamilySet() && present.isFamilySet(); }
-        bool isComputeUnique() { return graphics.family != compute.family || (graphics.family == compute.family && graphics.index != compute.index); }
-        bool isTransferUnique() { return graphics.family != transfer.family || (graphics.family == transfer.family && graphics.index != transfer.index); }
-    };
-
-    // searching through the features if it has what we need to have to work on the stuff that we need to work on for the lib to work for the app to work for us
-    QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
-        QueueFamilyIndices indices;
-
-        uint32_t queueFamilyCount = 0;
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
-
-        std::vector<VkQueueFamilyProperties2> queueFamilies(queueFamilyCount);
-        std::for_each(queueFamilies.begin(), queueFamilies.end(), [](VkQueueFamilyProperties2 &p) { p.sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2; });
-        vkGetPhysicalDeviceQueueFamilyProperties2(device, &queueFamilyCount, queueFamilies.data());
-
-        int i = 0;
-        for (const auto &queueFamily : queueFamilies) {
-            if (!indices.isMinimumComplete()) {
-                if (queueFamily.queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-                    indices.graphics.family = i;
-                    indices.graphics.index = 0;
-                }
-
-                VkBool32 presentSupport = false;
-                vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
-
-                if (presentSupport) {
-                    indices.present.family = i;
-                    indices.present.index = 0;
-                }
-            }
-
-            if (!(queueFamily.queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) && (queueFamily.queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT)) {
-                indices.compute.family = i;
-                indices.compute.index = 0;
-            }
-
-            if (!(queueFamily.queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) && !(queueFamily.queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT) && (queueFamily.queueFamilyProperties.queueFlags & VK_QUEUE_TRANSFER_BIT)) {
-                indices.transfer.family = i;
-                indices.transfer.index = 0;
-            }
-
-            if (indices.isComplete()) {
-                break;
-            }
-
-            i++;
-        }
-        // if there is no transfer q yet, then see if compute's family has additional q that can be transfer
-        if (!indices.transfer.isFamilySet() && indices.compute.isFamilySet() && queueFamilies[indices.compute.family].queueFamilyProperties.queueFlags & VK_QUEUE_TRANSFER_BIT && queueFamilies[indices.compute.family].queueFamilyProperties.queueCount >= 2) {
-            indices.transfer.family = indices.compute.family;
-            indices.transfer.index = 1;
-        }
-
-        // if no unique compute or transfer,
-        // set compute and transfer to graphics q's family
-        if (!indices.isComplete() && indices.isMinimumComplete()) {
-            if (queueFamilies[indices.graphics.family].queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT) {
-                indices.compute.family = indices.graphics.family;
-                indices.compute.index = indices.graphics.index;
-            }
-            if (queueFamilies[indices.graphics.family].queueFamilyProperties.queueFlags & VK_QUEUE_TRANSFER_BIT) {
-                indices.transfer.family = indices.graphics.family;
-                indices.transfer.index = indices.graphics.index;
-            }
-        }
-        if (!indices.isMinimumComplete()) {
-            throw std::runtime_error("Couldn't find valid queues!");
-        }
-
-        return indices;
-    }
-
     // vertex data layout
     uint32_t GetVertexDataSize(Render::VertexDataType type) {
         switch (type) {
@@ -2682,73 +2440,6 @@ class Render::Vulkan {
 
         return attributeDescriptions;
     }
-
-    // debuging(black magic shit)
-    bool checkValidationLayerSupport() {
-        uint32_t layerCount;
-        vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-
-        std::vector<VkLayerProperties> availableLayers(layerCount);
-        vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
-
-        for (const char *layerName : validationLayers) {
-            bool layerFound = false;
-
-            for (const auto &layerProperties : availableLayers) {
-                if (strcmp(layerName, layerProperties.layerName) == 0) {
-                    layerFound = true;
-                    break;
-                }
-            }
-
-            if (!layerFound) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-    static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData) {
-        std::string msg = pCallbackData->pMessage;
-
-        // we dont talk about the api version around here
-        if (msg.find("is older than the application specified API version") != std::string::npos) return VK_FALSE;
-
-        std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
-
-        return VK_FALSE;
-    }
-    void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT &createInfo) {
-        createInfo = {};
-        createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-        createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-        createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-        createInfo.pfnUserCallback = debugCallback;
-    }
-    void SetupDebugMessenger() {
-        if (!enableValidationLayers) return;
-
-        VkDebugUtilsMessengerCreateInfoEXT createInfo;
-        populateDebugMessengerCreateInfo(createInfo);
-
-        if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS) {
-            throw std::runtime_error("failed to set up debug messenger!");
-        }
-    }
-    VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkDebugUtilsMessengerEXT *pDebugMessenger) {
-        auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
-        if (func != nullptr) {
-            return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
-        } else {
-            return VK_ERROR_EXTENSION_NOT_PRESENT;
-        }
-    }
-    void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks *pAllocator) {
-        auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
-        if (func != nullptr) {
-            func(instance, debugMessenger, pAllocator);
-        }
-    }
 };
 
 Window Render::CreateAppWindow(int width, int height, const char *title, GLFWmonitor *screen, GLFWwindow *share) { return instance->CreateVulkanWindow(width, height, title, screen, share); }
@@ -2768,8 +2459,6 @@ bool Render::IsValidSurface(Surface surface) { return instance->IsValidSurface(s
 void Render::AddElementData(RenderData &data) { instance->AddElementData(data); }
 
 Render::Texture Render::CreateTexture(int descriptorId, std::string path) { return instance->CreateTexture(descriptorId, path); }
-
-void Render::Init(bool debugging) { instance = new Render::Vulkan(debugging); }
 
 void Render::Clean() { delete instance; }
 
@@ -2868,6 +2557,8 @@ void Render::Submit(Surface &surface) {
 
     instance->AddElementData(output);
 }
+
+void Render::Clear(Window &window) { instance->Clear(window); };
 
 Render::Vulkan *Render::instance = nullptr;
 std::unordered_map<int, Render::VertexData> Render::surfaceData;

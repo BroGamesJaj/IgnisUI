@@ -1,13 +1,13 @@
 #pragma once
 
-#include <any>
-#include <cstdint>
-#include <numeric>
 #include <algorithm>
+#include <any>
 #include <atomic>
+#include <cstdint>
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <numeric>
 #include <optional>
 #include <set>
 #include <string>
@@ -148,7 +148,7 @@ using Vec2i = Vec2<int>;
 #if defined(IGNIS_RENDER) || defined(IGNIS_UI)
 class Render {
    public:
-  // Rendering structs
+    // Rendering structs
     enum VertexDataType {
         FLOAT,
         UINT,
@@ -187,7 +187,7 @@ class Render {
     };
 
     struct Texture {
-    private:
+       private:
         int id;
 
         friend class Vulkan;
@@ -252,8 +252,8 @@ class Render {
     };
 
     struct ConstData {
-      std::string name;
-      uint32_t size;
+        std::string name;
+        uint32_t size;
     };
 
     struct CreateGraphicPipeLineInfo {
@@ -332,31 +332,32 @@ class Render {
         Surface() = default;
         ~Surface() = default;
         int surface;
-      private:
-        
 
+       private:
         friend class Render;
         friend class UI;
         friend class Input;
     };
 
-    
-    static void Init(bool debugging);
+    static void Init(bool debugging = false) {
+        WindowManager::Init(debugging);
+    }
     static void Clean();
 
-    static void PushOn(VertexData& data, Surface& surface);
-    static void Submit(Surface& surface);
+    static void PushOn(VertexData &data, Surface &surface);
+    static void Submit(Surface &surface);
 
     static Window CreateAppWindow(int width, int height, const char *title, GLFWmonitor *screen = nullptr, GLFWwindow *share = nullptr);
     static Surface CreateSurface(Window window, std::vector<int> pipelines);
     static Texture CreateTexture(int descriptorId, std::string path);
 
     static int CreateDescriptorSet(DescriptorSetInfo &descriptorSetInfos);
-    static std::vector<int> CreateDescriptorSet(std::vector<Render::DescriptorSetInfo>& descriptorSetInfo);
+    static std::vector<int> CreateDescriptorSet(std::vector<Render::DescriptorSetInfo> &descriptorSetInfo);
     static int CreatePipeline(CreateGraphicPipeLineInfo &gpInfo);
     static int CreateFontPage(const std::vector<uint8_t> &rgbaData, uint32_t width, uint32_t height);
 
     static void Draw(Surface surface);
+    static void Clear(Window &window);
     static void Update();
     static bool IsValidSurface(Surface surface);
 
@@ -364,24 +365,23 @@ class Render {
                              SamplerAddressing addressing = SamplerAddressing::REPEAT, SamplerMipmapMode mipmapMode = SamplerMipmapMode::LINEAR);
 
     template <typename... Args>
-    static void PublishConstants(std::vector<std::string> names)
-    {
-      std::vector<ConstData> result;
-      int i = 0;
-      (result.push_back({names[i++], sizeof(Args)}),...);
-      PublishConstantsToVulkan(result);
+    static void PublishConstants(std::vector<std::string> names) {
+        std::vector<ConstData> result;
+        int i = 0;
+        (result.push_back({ names[i++], sizeof(Args) }), ...);
+        PublishConstantsToVulkan(result);
     }
 
     template <typename T>
-    static void PushConstant(std::string name, T data){
-      PushConstantsToVulkan(name, &data, sizeof(T));
+    static void PushConstant(std::string name, T data) {
+        PushConstantsToVulkan(name, &data, sizeof(T));
     }
 
     static DescriptorInfo CreateUniformDescriptor(int binding, int size, int stage);
     static DescriptorInfo CreateStorageDescriptor(int binding, int size, int stage);
     static DescriptorInfo CreateImageDescriptor(int binding, int count, int sampler, int stage);
-    
-    static void PushVertexData(int surface, void* vertexData, uint32_t size);
+
+    static void PushVertexData(int surface, void *vertexData, uint32_t size);
 
     template <typename... Args>
         requires(std::same_as<Args, Render::VertexDataType> && ...)
@@ -402,8 +402,14 @@ class Render {
 
     static void *GetWindowOfSurface(int surface);
 
-    static void PublishConstantsToVulkan(std::vector<ConstData>& data);
-    static void PushConstantsToVulkan(std::string& name, void* data, uint32_t size);
+    static void PublishConstantsToVulkan(std::vector<ConstData> &data);
+    static void PushConstantsToVulkan(std::string &name, void *data, uint32_t size);
+
+    class WindowManager {
+        static void Init(bool debuging);
+
+        friend class Render;
+    };
 };
 
 #ifdef IGNIS_RENDER_NAMES
@@ -574,7 +580,7 @@ class UI {
 
    private:
     struct ButtonData {
-        ButtonData() : text(Text()){}
+        ButtonData() : text(Text()) {}
 
         ElementData base;
         void *function;
@@ -660,7 +666,7 @@ class UI {
 
     template <std::derived_from<UI::Element>... Args>
     static void PushOn(Window window, Args &...args) {
-      Render::Surface surface = surfaces[window.ptr];
+        Render::Surface surface = surfaces[window.ptr];
         if (!Render::IsValidSurface(surface)) return;
 
         (elements[surface.surface].push_back(args.data), ...);
@@ -686,7 +692,7 @@ class UI {
     static std::unordered_map<int, Font::Font *> fonts;
     static int nextFontId;
     static int pipeline;
-    static std::unordered_map<GLFWwindow*, Render::Surface> surfaces;
+    static std::unordered_map<GLFWwindow *, Render::Surface> surfaces;
 
     struct ProcessData {
         Vec2f ofst;

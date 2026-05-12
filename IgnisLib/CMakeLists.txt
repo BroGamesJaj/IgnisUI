@@ -8,7 +8,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Make clangd happy
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-file(GLOB_RECURSE SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/Source/*.cpp")
+file(GLOB_RECURSE SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/Source/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Source/Render/*.cpp"
+)
 
 add_library(Ignis STATIC ${SOURCES})
 
