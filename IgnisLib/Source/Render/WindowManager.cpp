@@ -1,5 +1,6 @@
+#include <vulkan/vulkan_core.h>
 #include "../IgnisLib.h"
-
+#include <cstring>
 #define GLFW_INCLUDE_VULKAN
 #include "GLFW/glfw3.h"
 
@@ -8,37 +9,6 @@ namespace Ignis {
 ////////////////////////
 ////    Structs    /////
 ////////////////////////
-
-struct WindowData {
-    VkSwapchainKHR swapChain;
-    std::vector<VkImage> swapChainImages;
-    std::vector<VkImageView> swapChainImageViews;
-    std::vector<VkFramebuffer> swapChainFramebuffers;
-
-    VkExtent2D swapChainExtent;
-    VkSurfaceCapabilitiesKHR capabilities;
-
-    std::vector<VkSemaphore> imageAvailableSemaphores;
-    std::vector<VkSemaphore> renderFinishedSemaphores;
-    std::vector<VkFence> inFlightFences;
-
-    VkBuffer vertexBuffer;
-    VkDeviceMemory vertexBufferMemory;
-    bool haveVertexData;
-
-    VkBuffer indexBuffer;
-    VkDeviceMemory indexBufferMemory;
-    uint32_t indiceCount;
-
-    bool framebufferResized = false;
-
-    VkImage depthImage;
-    VkDeviceMemory depthImageMemory;
-    VkImageView depthImageView;
-    size_t currentFrame = 0;
-
-    std::vector<int> pipelines;
-};
 
 struct QueueFamilyIndices {
     struct QueueInfo {
@@ -95,6 +65,8 @@ const std::vector<const char *> deviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
     VK_EXT_ROBUSTNESS_2_EXTENSION_NAME
 };
+
+std::unordered_set<GLFWwindow*> windows;
 
 ////////////////////////
 ////   Functions   /////
@@ -584,6 +556,44 @@ void Render::WindowManager::Init(bool debuging) {
     glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
 
     std::cout << "Instance Successfuly initialized";
+}
+
+
+    Window Render::WindowManager::Create(int width, int height, const char *title, GLFWmonitor *monitor, GLFWwindow *share) {
+        GLFWwindow *windowOut;
+        windowOut = glfwCreateWindow(width, height, title, monitor, share);
+
+        Window win;
+        win.ptr = windowOut;
+
+        return win;
+    }
+
+void Render::WindowManager::Close(Window window){
+  if(windows.contains(window.ptr)){
+    glfwDestroyWindow(window.ptr);
+  }
+}
+
+void Render::WindowManager::Cleanup() {
+        vkDestroyCommandPool(device, graphicPool, nullptr);
+        vkDestroyCommandPool(device, presentPool, nullptr);
+        vkDestroyCommandPool(device, transferPool, nullptr);
+        vkDestroyCommandPool(device, computePool, nullptr);
+
+        vkDestroyDevice(device, nullptr);
+
+        if (enableValidationLayers) {
+          vkDestroyDebugUtilsMessengerEXT(vulkan, debugMessenger, nullptr);
+        }
+
+        for (auto &window : windows) {
+            glfwDestroyWindow(window);
+        }
+
+        vkDestroyInstance(vulkan, nullptr);
+
+        glfwTerminate();
 }
 
 }  // namespace Ignis

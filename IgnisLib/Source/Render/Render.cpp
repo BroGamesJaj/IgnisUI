@@ -4,7 +4,6 @@
 #include <vector>
 
 #include "../IgnisLib.h"
-#include "vulkan/vulkan_core.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image/stb_image.h>
@@ -361,32 +360,6 @@ class Render::Vulkan {
     std::unordered_map<VkSurfaceKHR, std::vector<Render::VertexDataType>> vertexDataLayout;
 
     std::vector<int> drawQueue;
-
-    GLFWwindow *CreateTmpSurface() {
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-
-        GLFWwindow *windowOut = glfwCreateWindow(1, 1, "tmp", nullptr, nullptr);
-        if (!windowOut) {
-            const char *desc = nullptr;
-            int code = glfwGetError(&desc);
-            std::cerr << "GLFW window creation failed. Code: " << code
-                      << " Message: " << (desc ? desc : "unknown") << std::endl;
-            return nullptr;
-        }
-
-        VkSurfaceKHR surfaceOut;
-        VkResult res = glfwCreateWindowSurface(instance, windowOut, nullptr, &surfaceOut);
-        if (res != VK_SUCCESS) {
-            std::cerr << "Vulkan surface creation failed. VkResult: " << res << std::endl;
-            glfwDestroyWindow(windowOut);
-            return nullptr;
-        }
-
-        surface = surfaceOut;
-
-        return windowOut;
-    }
 
    public:
     ~Vulkan() {
@@ -808,7 +781,7 @@ class Render::Vulkan {
         vkDestroyDevice(device, nullptr);
 
         if (enableValidationLayers) {
-            DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
+            vkDestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
         }
 
         for (auto &[window, windowData] : windows) {

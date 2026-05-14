@@ -407,7 +407,9 @@ class Render {
 
     class WindowManager {
         static void Init(bool debuging);
-
+        static Window Create(int width, int height, const char *title, GLFWmonitor *monitor, GLFWwindow *share);
+        static void Close(Window window);
+        static void Cleanup();
         friend class Render;
     };
 };
