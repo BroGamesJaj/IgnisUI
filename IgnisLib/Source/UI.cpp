@@ -63,8 +63,8 @@ void UI::Init(Window window) {
 
         pipeline = Render::CreatePipeline(gpInfo);
     }
-    Render::Surface surface = Render::CreateSurface(window, { pipeline });
-    surfaces[window.ptr] = surface;
+    //    Render::Surface surface = Render::CreateSurface(window, { pipeline });
+    //    surfaces[window.ptr] = surface;
 }
 Render::Texture UI::CreateTexture(std::string path) {
     return Render::CreateTexture(mainDescriptor, path);

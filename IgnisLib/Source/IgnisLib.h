@@ -340,15 +340,23 @@ class Render {
     };
 
     static void Init(bool debugging = false) {
-        WindowManager::Init(debugging);
+        InitWindowManager(debugging);
+        InitVulkanDataManager();
     }
     static void Clean();
 
     static void PushOn(VertexData &data, Surface &surface);
     static void Submit(Surface &surface);
 
-    static Window CreateAppWindow(int width, int height, const char *title, GLFWmonitor *screen = nullptr, GLFWwindow *share = nullptr);
-    static Surface CreateSurface(Window window, std::vector<int> pipelines);
+    static Window CreateAppWindow(int width, int height, const char *title, GLFWmonitor *screen = nullptr, GLFWwindow *share = nullptr) {
+        Window window{};
+        window.ptr = CreateWindow(width, height, title, screen, share);
+        CreateSurface(window.ptr);
+
+        std::cout << "Window successfully created" << std::endl;
+
+        return window;
+    }
     static Texture CreateTexture(int descriptorId, std::string path);
 
     static int CreateDescriptorSet(DescriptorSetInfo &descriptorSetInfos);
@@ -390,10 +398,6 @@ class Render {
     }
 
    private:
-    class Vulkan;
-
-    static Vulkan *instance;
-
     static std::unordered_map<int, VertexData> surfaceData;
 
     friend class UI;
@@ -405,13 +409,48 @@ class Render {
     static void PublishConstantsToVulkan(std::vector<ConstData> &data);
     static void PushConstantsToVulkan(std::string &name, void *data, uint32_t size);
 
-    class WindowManager {
-        static void Init(bool debuging);
-        static Window Create(int width, int height, const char *title, GLFWmonitor *monitor, GLFWwindow *share);
-        static void Close(Window window);
-        static void Cleanup();
-        friend class Render;
+    static GLFWwindow *CreateWindow(int width, int height, const char *title, GLFWmonitor *screen, GLFWwindow *share);
+    static void CreateSurface(void *window);
+
+    struct QueueFamilyIndices {
+        struct QueueInfo {
+            uint32_t family = UINT32_MAX;
+            uint32_t index = UINT32_MAX;
+            bool isFamilySet() { return family != UINT32_MAX; }
+            bool isIndexSet() { return index != UINT32_MAX; }
+        };
+
+        QueueInfo graphics{};
+        QueueInfo present{};
+        QueueInfo compute{};
+        QueueInfo transfer{};
+
+        bool isComplete() { return graphics.isFamilySet() && present.isFamilySet() && compute.isFamilySet() && transfer.isFamilySet(); }
+        bool isMinimumComplete() { return graphics.isFamilySet() && present.isFamilySet(); }
+        bool isComputeUnique() { return graphics.family != compute.family || (graphics.family == compute.family && graphics.index != compute.index); }
+        bool isTransferUnique() { return graphics.family != transfer.family || (graphics.family == transfer.family && graphics.index != transfer.index); }
     };
+    static QueueFamilyIndices GetQueueFamilies();
+    static void *QuerySwapChainSupport();
+    static void *GetInstance();
+    static void *GetDevice();
+    static void *GetSurface();
+    static void *GetPhyDevice();
+
+    static void InitWindowManager(bool debugging);
+    static void InitVulkanDataManager();
+
+    class Vulkan;
+    friend Vulkan;
+    static Vulkan *instance;
+
+    class WindowManager;
+    friend WindowManager;
+    static WindowManager *windowManager;
+
+    class VulkanDataManager;
+    friend VulkanDataManager;
+    static VulkanDataManager *vulkanDataManager;
 };
 
 #ifdef IGNIS_RENDER_NAMES

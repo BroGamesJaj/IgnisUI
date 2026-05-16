@@ -780,10 +780,6 @@ class Render::Vulkan {
 
         vkDestroyDevice(device, nullptr);
 
-        if (enableValidationLayers) {
-            vkDestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
-        }
-
         for (auto &[window, windowData] : windows) {
             void *exists = glfwGetWindowUserPointer(window);
             if (exists != nullptr) {
@@ -1843,7 +1839,7 @@ class Render::Vulkan {
         createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
         // set ownership/sharing of images between queues
-        QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+        QueueFamilyIndices indices = GetQueueFamilies();
         uint32_t queueFamilyIndices[] = { indices.graphics.family, indices.present.family };
 
         if (indices.graphics.family != indices.present.family) {
@@ -2414,14 +2410,6 @@ class Render::Vulkan {
         return attributeDescriptions;
     }
 };
-
-Window Render::CreateAppWindow(int width, int height, const char *title, GLFWmonitor *screen, GLFWwindow *share) { return instance->CreateVulkanWindow(width, height, title, screen, share); }
-
-Surface Render::CreateSurface(Window window, std::vector<int> pipelines) {
-    Surface surface;
-    surface.surface = instance->CreateSurface(window, pipelines);
-    return surface;
-}
 
 void Render::Draw(Surface surface) { instance->Draw(surface.surface); }
 

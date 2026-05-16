@@ -27,9 +27,12 @@ struct Test {
 int main() {
     Input::Init();
     Render::Init(true);
-    /*
     Window window1 = Render::CreateAppWindow(1200, 800, "Gup 1");
 
+    while (true) {
+        Input::Event();
+    }
+    /*
     // int fontId = UI::LoadFont("../DejaVuSans.ttf");
     UI::Init(window1);
     UI::SetMainWindow(window1);
