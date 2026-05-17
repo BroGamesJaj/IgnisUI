@@ -467,6 +467,18 @@ using Surface = Render::Surface;
 
 #endif
 
+#if defined(IGNIS_RENDER) || defined(IGNIS_UI)
+
+class FileSystem {
+   private:
+    static std::vector<char> ReadFile(const std::string &filename);
+    static void CompileShader(const std::string filename, const std::string name);
+
+    friend class Render;
+};
+
+#endif  // IGNIS_RENDER
+
 #ifdef IGNIS_UI
 
 class UI {
@@ -791,10 +803,11 @@ using Button = UI::Button;
 
 #endif
 
-#if defined(IGNIS_INPUT) || defined(IGNIS_UI)
 #if defined(IGNIS_UI) && !defined(IGNIS_INPUT)
 #define IGNIS_INPUT
 #endif
+
+#if defined(IGNIS_INPUT) || defined(IGNIS_UI)
 class Input {
    public:
     typedef void (*HookFunction)(Window);

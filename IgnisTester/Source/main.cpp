@@ -20,10 +20,6 @@ void CursorMoved(Window window) {
     std::cout << "Curent cursor position: " << curPos.x << "; " << curPos.y << std::endl;
 }
 
-struct Test {
-    int a;
-};
-
 int main() {
     Input::Init();
     Render::Init(true);
@@ -32,6 +28,7 @@ int main() {
     while (true) {
         Input::Event();
     }
+
     /*
     // int fontId = UI::LoadFont("../DejaVuSans.ttf");
     UI::Init(window1);

@@ -409,50 +409,6 @@ class Render::Vulkan {
         return nextTexture++;  // returns texture slot ID
     }
 
-    // surface creating
-    int CreateSurface(Window windowIn, std::vector<int> pipeline) {
-        GLFWwindow *curWindow = windowIn.ptr;
-
-        for (size_t i = 0; i < pipeline.size(); i++)
-            if (!pipelines.contains(pipeline[i])) throw std::runtime_error("used invalid pipeline for the surface");
-
-        if (windows.find(curWindow) == windows.end()) throw std::runtime_error("failed to get the specified window");
-
-        VkSurfaceKHR curSurface;
-
-        glfwCreateWindowSurface(instance, curWindow, nullptr, &curSurface);
-
-        if (firstSurface) {
-            surface = curSurface;
-
-            firstSurface = false;
-        }
-
-        windows[curWindow]->surfaces[curSurface] = SurfaceVulkanData{};
-
-        SurfaceVulkanData *surface = &(windows[curWindow]->surfaces[curSurface]);
-
-        surface->haveVertexData = false;
-
-        surface->pipelines = pipeline;
-
-        // creates the swapchain, the images that are rendered onto the screen
-        CreateSwapChain(surface->swapChain, surface->swapChainImages, windows[curWindow].get(), curWindow, curSurface);
-
-        // creates the views for the imagese in the swapchain
-        CreateImageViews(surface->swapChainImageViews, surface->swapChainImages);
-
-        // creates command buffer that can be used to submit commands to specific queues
-        CreateCommandBuffers(surface->commandBuffers);
-
-        // creates the fences & semaphores to handle cpu-gpu syncronization
-        CreateSyncObjects(surface->imageAvailableSemaphores, surface->renderFinishedSemaphores, surface->inFlightFences);
-
-        surfaceAccess[nextSurface] = { curWindow, curSurface };
-
-        return nextSurface++;
-    }
-
     int CreatePipeline(CreateGraphicPipeLineInfo graphicPipeLineInfo) {
         // create the rendering procedure that the data passes to be rendered
         return CreateGraphicPipelines(RenderPassInfoToVK(graphicPipeLineInfo));
@@ -969,8 +925,8 @@ class Render::Vulkan {
 
         CleanupSwapChain(data);
 
-        CreateSwapChain(data->swapChain, data->swapChainImages, windows[window].get(), window, surface);
-        CreateImageViews(data->swapChainImageViews, data->swapChainImages);
+        // CreateSwapChain(data->swapChain, data->swapChainImages, windows[window].get(), window, surface);
+        // CreateImageViews(data->swapChainImageViews, data->swapChainImages);
         CreateDepthResources(data, windows[window]->swapChainExtent);
     }
 
@@ -984,26 +940,6 @@ class Render::Vulkan {
                 CreateIndexBuffer(surfaceData, element.indicies);
                 surfaceData->indiceCount = element.indicies.size();
                 element.changed = false;
-            }
-        }
-    }
-
-    // semaphore and fence creation
-    void CreateSyncObjects(std::vector<VkSemaphore> &imageAvailableSemaphores, std::vector<VkSemaphore> &renderFinishedSemaphores, std::vector<VkFence> &inFlightFences) {
-        imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-        renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-        inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
-
-        VkSemaphoreCreateInfo semaphoreInfo{};
-        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-        VkFenceCreateInfo fenceInfo{};
-        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-        for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-            if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]) != VK_SUCCESS || vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS || vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences[i]) != VK_SUCCESS) {
-                throw std::runtime_error("failed to create synchronization objects for a frame!");
             }
         }
     }
@@ -1338,21 +1274,6 @@ class Render::Vulkan {
         vkQueueWaitIdle(graphicsQueue);
 
         vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
-    }
-
-    // command buffer creation
-    void CreateCommandBuffers(std::vector<VkCommandBuffer> &commandBuffers) {
-        commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-
-        VkCommandBufferAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocInfo.commandPool = commandPool;
-        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocInfo.commandBufferCount = (uint32_t)commandBuffers.size();
-
-        if (vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data()) != VK_SUCCESS) {
-            throw std::runtime_error("failed to allocate command buffers!");
-        }
     }
 
     void CalculateBestOrdering(SurfaceVulkanData *surface) {
@@ -1808,109 +1729,7 @@ class Render::Vulkan {
     VkFormat findDepthFormat() { return findSupportedFormat({ VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT }, VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT); }
     bool hasStencilComponent(VkFormat format) { return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT; }
 
-    void GetSwapChainData() {
-        swapChainSupport = QuerySwapChainSupport(physicalDevice);
-
-        swapChainImageFormat = ChooseSwapSurfaceFormat(swapChainSupport.formats);
-        swapChainPresentMode = ChooseSwapPresentMode(swapChainSupport.presentModes);
-    }
-    // creating the swapchain
-    void CreateSwapChain(VkSwapchainKHR &swapchain, std::vector<VkImage> &images, WindowVulkanData *windowData, GLFWwindow *window, VkSurfaceKHR curSurface) {
-        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, curSurface, &windowData->capabilities);
-        windowData->swapChainExtent = ChooseSwapExtent(windowData->capabilities, window);
-        // number of images in swapchain
-        uint32_t imageCount = windowData->capabilities.minImageCount + 1;
-
-        // not exceeding maximum image count
-        if (windowData->capabilities.maxImageCount > 0 && imageCount > windowData->capabilities.maxImageCount) {
-            imageCount = windowData->capabilities.maxImageCount;
-        }
-
-        // seting surface and other info for swapchain
-        VkSwapchainCreateInfoKHR createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-        createInfo.surface = curSurface;
-
-        createInfo.minImageCount = imageCount;
-        createInfo.imageFormat = swapChainImageFormat.format;
-        createInfo.imageColorSpace = swapChainImageFormat.colorSpace;
-        createInfo.imageExtent = windowData->swapChainExtent;
-        createInfo.imageArrayLayers = 1;
-        createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-
-        // set ownership/sharing of images between queues
-        QueueFamilyIndices indices = GetQueueFamilies();
-        uint32_t queueFamilyIndices[] = { indices.graphics.family, indices.present.family };
-
-        if (indices.graphics.family != indices.present.family) {
-            createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-            createInfo.queueFamilyIndexCount = 2;
-            createInfo.pQueueFamilyIndices = queueFamilyIndices;
-        } else {
-            createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-            createInfo.queueFamilyIndexCount = 0;      // Optional
-            createInfo.pQueueFamilyIndices = nullptr;  // Optional
-        }
-
-        createInfo.preTransform = windowData->capabilities.currentTransform;
-
-        // if possible makes the buffer able to be transparent
-        if (windowData->capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR)
-            createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR;
-        else
-            createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-
-        createInfo.presentMode = swapChainPresentMode;
-
-        // doesnt caring about pixels that are covered by something else,
-        // maybe need to disable for transparency
-        createInfo.clipped = VK_TRUE;
-
-        createInfo.oldSwapchain = VK_NULL_HANDLE;
-
-        if (vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapchain) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create swap chain!");
-        }
-
-        // retrieveing the images for the swapchain
-        vkGetSwapchainImagesKHR(device, swapchain, &imageCount, nullptr);
-        images.resize(imageCount);
-        vkGetSwapchainImagesKHR(device, swapchain, &imageCount, images.data());
-    }
-    // create the view that the images can be viewed through
-    void CreateImageViews(std::vector<VkImageView> &views, std::vector<VkImage> &images) {
-        views.resize(images.size());
-
-        for (size_t i = 0; i < images.size(); i++) {
-            views[i] = CreateImageView(images[i], swapChainImageFormat.format, VK_IMAGE_ASPECT_COLOR_BIT);
-        }
-    }
-
-    struct GraphicsPipelineCreateInfo {
-        std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
-        VkVertexInputBindingDescription bindingDescription;
-        std::vector<VkVertexInputAttributeDescription> attributeDescriptions;
-
-        VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-        VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
-        VkViewport viewport{};
-        VkRect2D scissor{};
-        std::vector<VkDynamicState> dynamicStates = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
-
-        VkPipelineDynamicStateCreateInfo dynamicState{};
-        VkPipelineViewportStateCreateInfo viewportState{};
-        VkPipelineRasterizationStateCreateInfo rasterizer{};
-        // multisampling - a.k.a. easy anti-alliasing
-        VkPipelineMultisampleStateCreateInfo multisampling{};
-        VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-        VkPipelineColorBlendStateCreateInfo colorBlending{};
-        VkPipelineDepthStencilStateCreateInfo depthStencil{};
-        VkFormat depthFormat{};  // e.g., VK_FORMAT_D32_SFLOAT
-
-        VkPipelineRenderingCreateInfo renderCreateInfo{};
-    };
-
-    void getNeededDescriptorSetLayouts(std::vector<VkDescriptorSetLayout> &outLayouts, std::vector<int> &descriptorSetIds) {
+    void getNeededDescriptorSetLayouts(std::vector<VkDescriptorSetLayout> &outLayouts, std::vector<uint32_t> &descriptorSetIds) {
         for (auto &id : descriptorSetIds) {
             if (!descriptorSets.contains(id)) throw new std::runtime_error("there are no descriptorSetLayouts with set number");
             outLayouts.push_back(descriptorSets.at(id).descriptorSetLayout);
