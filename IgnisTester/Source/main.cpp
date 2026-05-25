@@ -31,51 +31,15 @@ int main() {
 
     /*
     // int fontId = UI::LoadFont("../DejaVuSans.ttf");
+    */
     UI::Init(window1);
     UI::SetMainWindow(window1);
-
     Texture monika = UI::CreateTexture("../Resources/Textures/monika2.png");
     Texture sus = UI::CreateTexture("../Resources/Textures/goated0.bmp");
 
-    Render::DescriptorSetInfo descriptorSet = {
-        {
-            Render::CreateImageDescriptor(0, 512, Render::CreateSampler(), Render::ShaderStage::FRAGMENT),
-        },
-        0x0,
-    };
-
-    int mainDescriptor = Render::CreateDescriptorSet(descriptorSet);
-
-    CreateGraphicPipeLineInfo gpInfo{};
-    gpInfo.vertexShader = "../Resources/Shaders/tester.vert";
-    gpInfo.fragmentShader = "../Resources/Shaders/tester.frag";
-    gpInfo.blendEnable = true;
-    gpInfo.descriptorSetIds = {
-        mainDescriptor
-    };
-    gpInfo.vertexDataLayout = Render::CreateVertexData(Render::VEC3, Render::VEC3, Render::VEC2, Render::UINT);
-    int pipeline = Render::CreatePipeline(gpInfo);
-
-    Render::Surface surface = Render::CreateSurface(window1, { pipeline });
-
-    std::vector<Vertex> vertecies = {
-        { .pos = glm::vec3(0.5, 0.5, 1) },
-        { .pos = glm::vec3(0.5, -0.5, 1) },
-        { .pos = glm::vec3(-0.5, 0.5, 1) },
-        { .pos = glm::vec3(-0.5, -0.5, 1) },
-    };
-
-    std::vector<uint32_t> indicies = {
-        2, 1, 0
-    };
-
-    VertexData data{
-        .vertecies = vertecies,
-        .indicies = indicies
-    };
-
     Image image = Image(Vec2f(45, 45), Vec2f(10, 10), Color(1.0f, 1.0f, 1.0f));
     Image image3 = Image(Vec2f(40, 35), Vec2f(20, 30), monika);
+    /*
     UI::PushOn(window1, image3);
     UI::Submit();
 

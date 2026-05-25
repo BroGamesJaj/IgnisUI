@@ -4,6 +4,7 @@
 #include "GLFW/glfw3.h"
 
 #define MAX_FRAMES_IN_FLIGHT 2
+#define TEXTURE_COUNT 1024
 
 #include <array>
 #include <filesystem>
@@ -78,17 +79,16 @@ struct CreateGraphicPipeLineInfoVKConvert {
     float clearBit[3];
     float stencilBit[2];
 
-    std::vector<uint32_t> constants;
-    std::vector<uint32_t> descriptorSetIds;
-
     std::vector<Render::VertexDataType> vertexDataLayout;
 };
+
+enum class PipelineType { Graphics,
+                          Compute };
 
 struct PipeLine {
     VkPipeline pipeline;
     VkPipelineLayout layout;
-    std::vector<uint32_t> constants;
-    std::vector<uint32_t> descriptorIds;
+    PipelineType type = Graphics;
     bool needDepth;
 };
 
@@ -117,6 +117,12 @@ struct DescriptorSet {
     uint32_t setIdx;
 };
 
+struct TextureData {
+    VkImage textureImage;
+    VkDeviceMemory textureImageMemory;
+    VkImageView textureImageView;
+};
+
 ////////////////////////
 //////    Data    //////
 ////////////////////////
@@ -125,10 +131,7 @@ class Render::VulkanDataManager {
    private:
     size_t currentFrame = 0;
 
-    VkCommandPool graphicPool;
-    VkCommandPool presentPool;
-    VkCommandPool computePool;
-    VkCommandPool transferPool;
+    VkPipelineLayout graphicPipelineLayout;
 
     SwapChainSupportDetails swapChainSupport;
     VkSurfaceFormatKHR swapChainImageFormat;
@@ -147,42 +150,19 @@ class Render::VulkanDataManager {
     std::unordered_map<uint32_t, DescriptorSet> descriptorSets;
     uint32_t nextDescriptorSetId = 0;
 
+    VkDescriptorPool descriptorPool;
+    VkDescriptorSetLayout bindlessLayout;
+
+   public:
+    VkDescriptorSet globalData;
+
+   private:
+    VkDescriptorSetLayout perFrameLayout;
+    VkDescriptorSet perFrameData;
+
     ////////////////////////
     ////   Functions   /////
     ////////////////////////
-
-    void CreateCommandPools() {
-        QueueFamilyIndices queueFamilyIndices = GetQueueFamilies();
-
-        VkCommandPoolCreateInfo poolInfo{};
-        poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-        poolInfo.queueFamilyIndex = queueFamilyIndices.graphics.family;
-
-        VkDevice device = *(VkDevice *)GetDevice();
-
-        if (vkCreateCommandPool(device, &poolInfo, nullptr, &graphicPool) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create command pool!");
-        }
-
-        poolInfo.queueFamilyIndex = queueFamilyIndices.present.family;
-
-        if (vkCreateCommandPool(device, &poolInfo, nullptr, &presentPool) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create command pool!");
-        }
-
-        poolInfo.queueFamilyIndex = queueFamilyIndices.compute.family;
-
-        if (vkCreateCommandPool(device, &poolInfo, nullptr, &computePool) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create command pool!");
-        }
-
-        poolInfo.queueFamilyIndex = queueFamilyIndices.transfer.family;
-
-        if (vkCreateCommandPool(device, &poolInfo, nullptr, &transferPool) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create command pool!");
-        }
-    }
 
     VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities, GLFWwindow *window) {
         if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
@@ -475,11 +455,133 @@ class Render::VulkanDataManager {
         if (outLayouts.size() != descriptorSetIds.size()) throw new std::runtime_error("somehow not all layout present in outLayouts");  // it will indeed be somehow
     }
 
-    // maytodo: do pipelines so other types can be created too, compute, raytracing
-    int CreateGraphicPipelines(CreateGraphicPipeLineInfoVKConvert pipelineData) {
+    void CreateDescriptorPool() {
+        std::array<VkDescriptorPoolSize, 3> poolSizes{ {
+            // UBOs — FrameData + PassData
+            {
+                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorCount = MAX_FRAMES_IN_FLIGHT  // set1.binding0
+            },
+            // SSBOs — transforms + draw commands
+            {
+                .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .descriptorCount = MAX_FRAMES_IN_FLIGHT  // set1.binding1
+            },
+            // Bindless textures — just one global set
+            {
+                .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .descriptorCount = TEXTURE_COUNT },
+        } };
+
+        VkDescriptorPoolCreateInfo poolInfo{};
+        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+        poolInfo.maxSets = 3 * MAX_FRAMES_IN_FLIGHT;  // not exact but we have more wiggleroom later
+        poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+        poolInfo.pPoolSizes = poolSizes.data();
+
+        if (vkCreateDescriptorPool(*device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create descriptor pool!");
+        }
+    }
+
+    void SetupGraphicDescriptors() {
+        // set 1
+        VkDescriptorSetLayoutBinding textureBinding{};
+        textureBinding.binding = 0;
+        textureBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        textureBinding.descriptorCount = 1024;
+        textureBinding.stageFlags = VK_SHADER_STAGE_ALL;
+
+        VkDescriptorBindingFlags flags =
+            VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
+            VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+
+        VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo{};
+        flagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+        flagsInfo.bindingCount = 1;
+        flagsInfo.pBindingFlags = &flags;
+
+        VkDescriptorSetLayoutCreateInfo layoutInfo{};
+        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layoutInfo.pNext = &flagsInfo;
+        layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+        layoutInfo.bindingCount = 1;
+        layoutInfo.pBindings = &textureBinding;
+
+        vkCreateDescriptorSetLayout(*device, &layoutInfo, nullptr, &bindlessLayout);
+
+        // set 2
+        VkDescriptorSetLayoutBinding UboBinding{};
+        textureBinding.binding = 0;
+        textureBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        textureBinding.descriptorCount = 1;
+        textureBinding.stageFlags = VK_SHADER_STAGE_ALL;
+
+        layoutInfo.bindingCount = 1;
+        layoutInfo.pBindings = &UboBinding;
+        layoutInfo.pNext = nullptr;
+
+        vkCreateDescriptorSetLayout(*device, &layoutInfo, nullptr, &perFrameLayout);
+
+        // creation
+        VkDescriptorSetAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocInfo.descriptorPool = descriptorPool;
+        allocInfo.descriptorSetCount = 1;
+        allocInfo.pSetLayouts = &bindlessLayout;
+        vkAllocateDescriptorSets(*device, &allocInfo, &globalData);
+    }
+
+    // for the library owned stuff, it wont change, for the user thingies, it will be auto generated
+    void SetupPipelineLayout() {
+        std::vector<VkDescriptorSetLayout> layout = { bindlessLayout, perFrameLayout };
+        VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipelineLayoutInfo.setLayoutCount = layout.size();
+        pipelineLayoutInfo.pSetLayouts = layout.data();
+
+        /*const isnt used just yet (there is nothing in it)
+        if (pipeline.constants.size() > 0) {
+            pipelineLayoutInfo.pushConstantRangeCount = 1;
+            pipelineLayoutInfo.pPushConstantRanges = &constRange;
+        }*/
+
+        if (vkCreatePipelineLayout(*device, &pipelineLayoutInfo, nullptr, &graphicPipelineLayout) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create pipeline layout!");
+        }
+    }
+
+    struct CreateComputePipeLineInfo {
+        std::string computeShader;
+    };
+
+    int CreateComputePipeline(CreateComputePipeLineInfo info) {
         PipeLine pipeline{};
-        pipeline.constants = std::move(pipelineData.constants);
-        pipeline.descriptorIds = pipelineData.descriptorSetIds;
+        pipeline.type = PipelineType::Compute;
+
+        FileSystem::CompileShader(info.computeShader, "compute");
+        auto computeShaderCode = FileSystem::ReadFile("compute.spv");
+
+        std::filesystem::remove("compute.spv");
+
+        VkPipelineShaderStageCreateInfo compShaderStageInfo{};
+        compShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        compShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+        compShaderStageInfo.module = createShaderModule(computeShaderCode);
+        compShaderStageInfo.pName = "main";
+
+        VkComputePipelineCreateInfo pipelineInfo{};
+        pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+        pipelineInfo.stage = compShaderStageInfo;
+        pipelineInfo.layout = graphicPipelineLayout;  // TODO: we need a pipeline for this when we use it
+
+        vkCreateComputePipelines(*device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline.pipeline);
+    }
+
+    // maytodo: do pipelines so other types can be created too, compute, raytracing
+    int CreateGraphicPipeline(CreateGraphicPipeLineInfoVKConvert pipelineData) {
+        PipeLine pipeline{};
 
         if (pipelineData.depthTestEnable || pipelineData.depthWriteEnable)
             pipeline.needDepth = true;
@@ -606,29 +708,14 @@ class Render::VulkanDataManager {
         renderCreateInfo.pColorAttachmentFormats = &swapChainImageFormat.format;
         renderCreateInfo.depthAttachmentFormat = depthFormat;
 
+        /*
         VkPushConstantRange constRange{};
         constRange.size = 0;
         constRange.offset = 0;
         for (size_t i = 0; i < pipeline.constants.size(); i++) {
             constRange.size += constantsData[pipeline.constants[i]].size;
             constRange.stageFlags = VK_SHADER_STAGE_ALL;
-        }
-
-        std::vector<VkDescriptorSetLayout> neededLayouts;
-        GetNeededDescriptorSetLayouts(neededLayouts, pipelineData.descriptorSetIds);
-
-        VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipelineLayoutInfo.setLayoutCount = neededLayouts.size();
-        pipelineLayoutInfo.pSetLayouts = neededLayouts.data();
-        if (pipeline.constants.size() > 0) {
-            pipelineLayoutInfo.pushConstantRangeCount = 1;
-            pipelineLayoutInfo.pPushConstantRanges = &constRange;
-        }
-
-        if (vkCreatePipelineLayout(*device, &pipelineLayoutInfo, nullptr, &pipeline.layout) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create pipeline layout!");
-        }
+        }*/
 
         VkGraphicsPipelineCreateInfo pipelineInfo{};
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -644,7 +731,7 @@ class Render::VulkanDataManager {
         pipelineInfo.pColorBlendState = &colorBlending;
         pipelineInfo.pDynamicState = &dynamicState;
 
-        pipelineInfo.layout = pipeline.layout;
+        pipelineInfo.layout = graphicPipelineLayout;
 
         pipelineInfo.renderPass = nullptr;
         pipelineInfo.pNext = &renderCreateInfo;
@@ -666,11 +753,13 @@ class Render::VulkanDataManager {
 
    public:
     VulkanDataManager() {
-        GetSwapChainData();
         instance = (VkInstance *)GetInstance();
         device = (VkDevice *)GetDevice();
         phyDevice = (VkPhysicalDevice *)GetPhyDevice();
         windowManagerSurface = (VkSurfaceKHR *)GetSurface();
+
+        GetSwapChainData();
+        SetupGraphicDescriptors();
     }
 
     void CreateSurface(GLFWwindow *window) {
@@ -697,5 +786,14 @@ void Render::CreateSurface(void *window) {
     vulkanDataManager->CreateSurface((GLFWwindow *)window);
 }
 
+Render::Texture Render::CreateTexture(std::string path) {
+    return vulkanDataManager->CreateTexture(path);
+}
+
+void *Render::GetBindlessSet() {
+    return &vulkanDataManager->globalData;
+}
+
 Render::VulkanDataManager *Render::vulkanDataManager = nullptr;
+
 }  // namespace Ignis

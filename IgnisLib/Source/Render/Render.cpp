@@ -2025,7 +2025,7 @@ class Render::Vulkan {
         }
 
         std::vector<VkDescriptorSetLayout> neededLayouts;
-        getNeededDescriptorSetLayouts(neededLayouts, pipelineData.descriptorSetIds);
+        // getNeededDescriptorSetLayouts(neededLayouts, pipelineData.descriptorSetIds);
 
         VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -2238,7 +2238,7 @@ bool Render::IsValidSurface(Surface surface) { return instance->IsValidSurface(s
 
 void Render::AddElementData(RenderData &data) { instance->AddElementData(data); }
 
-Render::Texture Render::CreateTexture(int descriptorId, std::string path) { return instance->CreateTexture(descriptorId, path); }
+// Render::Texture Render::CreateTexture(std::string path) { return instance->CreateTexture(path); }
 
 void Render::Clean() { delete instance; }
 

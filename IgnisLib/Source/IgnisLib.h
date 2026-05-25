@@ -159,9 +159,9 @@ class Render {
 
     struct Vertex {
         glm::vec3 pos;
-        glm::vec3 color;
-        glm::vec2 texCoord;
-        glm::uint texId;
+        uint32_t normal;
+        glm::vec2 uv;
+        uint32_t color;
     };
 
     struct VertexData {
@@ -357,7 +357,7 @@ class Render {
 
         return window;
     }
-    static Texture CreateTexture(int descriptorId, std::string path);
+    static Texture CreateTexture(std::string path);
 
     static int CreateDescriptorSet(DescriptorSetInfo &descriptorSetInfos);
     static std::vector<int> CreateDescriptorSet(std::vector<Render::DescriptorSetInfo> &descriptorSetInfo);
@@ -436,9 +436,17 @@ class Render {
     static void *GetDevice();
     static void *GetSurface();
     static void *GetPhyDevice();
+    static void *GetBindlessSet();
 
     static void InitWindowManager(bool debugging);
     static void InitVulkanDataManager();
+    static void InitVulkanImageManager();
+    static void InitVulkanQueueManager();
+
+    // pointers MUST BE deleted by caller function
+    // ImageManager.TransitionImageLayout for reference
+    static void *BeginSingleTimeCommands();
+    static void EndSingleTimeCommands(void *buffer);
 
     class Vulkan;
     friend Vulkan;
@@ -451,6 +459,14 @@ class Render {
     class VulkanDataManager;
     friend VulkanDataManager;
     static VulkanDataManager *vulkanDataManager;
+
+    class VulkanImageManager;
+    friend VulkanImageManager;
+    static VulkanImageManager *vulkanImageManager;
+
+    class VulkanQueueManager;
+    friend VulkanQueueManager;
+    static VulkanQueueManager *vulkanQueueManager;
 };
 
 #ifdef IGNIS_RENDER_NAMES
@@ -718,8 +734,8 @@ class UI {
     static int LoadFont(const std::string &fontPath, uint32_t size = 16);
 
     template <std::derived_from<UI::Element>... Args>
-    static void PushOn(Window window, Args &...args) {
-        Render::Surface surface = surfaces[window.ptr];
+    static void PushOn(Args &...args, Window window = mainWindow) {
+        if (!windows.contains(window.ptr)) return;
         if (!Render::IsValidSurface(surface)) return;
 
         (elements[surface.surface].push_back(args.data), ...);
@@ -745,7 +761,7 @@ class UI {
     static std::unordered_map<int, Font::Font *> fonts;
     static int nextFontId;
     static int pipeline;
-    static std::unordered_map<GLFWwindow *, Render::Surface> surfaces;
+    static std::unordered_set<GLFWwindow *> windows;
 
     struct ProcessData {
         Vec2f ofst;

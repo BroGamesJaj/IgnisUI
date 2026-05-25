@@ -30,11 +30,6 @@ class Render::WindowManager {
     QueueFamilyIndices queueFamilyIndicies;
     SwapChainSupportDetails swapChainSupport;
 
-    VkQueue graphicsQueue;
-    VkQueue presentQueue;
-    VkQueue computeQueue;
-    VkQueue transferQueue;
-
     bool enableValidationLayers = false;
     const std::vector<const char *> validationLayers = { "VK_LAYER_KHRONOS_validation" };
     VkDebugUtilsMessengerEXT debugMessenger;
@@ -388,22 +383,6 @@ class Render::WindowManager {
         if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS) {
             throw std::runtime_error("failed to create logical device!");
         }
-
-        std::vector<VkDeviceQueueInfo2> queueGetInfos;
-        queueGetInfos.reserve(queueInfos.size());
-
-        for (auto &qI : queueInfos) {
-            queueGetInfos.push_back({ VK_STRUCTURE_TYPE_DEVICE_QUEUE_INFO_2,
-                                      nullptr,
-                                      0,
-                                      qI->family,
-                                      qI->index });
-        }
-
-        vkGetDeviceQueue2(device, &queueGetInfos[0], &graphicsQueue);
-        vkGetDeviceQueue2(device, &queueGetInfos[1], &presentQueue);
-        vkGetDeviceQueue2(device, &queueGetInfos[2], &computeQueue);
-        vkGetDeviceQueue2(device, &queueGetInfos[3], &transferQueue);
     }
 
     void CreateInstance() {

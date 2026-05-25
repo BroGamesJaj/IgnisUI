@@ -33,49 +33,20 @@ Color Color::operator-(const Color &other) const { return Color(std::clamp(this-
 Color Color::Inverted() { return Color(1.0f - this->r, 1.0f - this->g, 1.0f - this->b); }
 
 // UI Handling
-
-bool firstInit = true;
-int mainDescriptor = -1;
-
 void UI::Init(Window window) {
-    if (firstInit) {
-        Render::DescriptorSetInfo descriptorSet = {
-            {
-                Render::CreateUniformDescriptor(0, sizeof(UniformData), Render::ShaderStage::VERTEX),
-                Render::CreateImageDescriptor(1, 512, Render::CreateSampler(), Render::ShaderStage::FRAGMENT),
-            },
-            0x0,
-        };
-
-        mainDescriptor = Render::CreateDescriptorSet(descriptorSet);
-
-        Render::PublishConstants<float, float, glm::mat4>({ "off", "color", "rot" });
-
-        CreateGraphicPipeLineInfo gpInfo{};
-        gpInfo.vertexShader = "../Resources/Shaders/shader.vert";
-        gpInfo.fragmentShader = "../Resources/Shaders/shader.frag";
-        gpInfo.blendEnable = true;
-        gpInfo.descriptorSetIds = {
-            mainDescriptor
-        };
-        gpInfo.constants = { "rot", "off", "color" };
-        gpInfo.vertexDataLayout = Render::CreateVertexData(Render::VEC3, Render::VEC3, Render::VEC2, Render::UINT);
-
-        pipeline = Render::CreatePipeline(gpInfo);
-    }
-    //    Render::Surface surface = Render::CreateSurface(window, { pipeline });
-    //    surfaces[window.ptr] = surface;
+    windows.insert(window.ptr);
 }
+
 Render::Texture UI::CreateTexture(std::string path) {
-    return Render::CreateTexture(mainDescriptor, path);
+    return Render::CreateTexture(path);
 }
 
 bool UI::CanDraw() {
     if (elements.size() == 0) return false;
 
     bool haveValid = false;
-    for (auto &[window, surface] : surfaces) {
-        haveValid |= Render::IsValidSurface(surface);
+    for (auto &window : windows) {
+        haveValid |= Render::IsValidWindow();
     }
 
     return haveValid;
@@ -88,7 +59,7 @@ void UI::Draw() {
     Render::PushConstant<float>("off", 0.5 * sin(time));
     Render::PushConstant<float>("color", fmod(time * 0.2, 1.0f));
     Render::PushConstant<glm::mat4>("rot", glm::rotate(glm::identity<glm::mat4>(), 3 * time, glm::vec3(0, 0, 1)));
-    for (auto &[window, surface] : surfaces) {
+    for (auto &window : windows) {
         if (Render::IsValidSurface(surface))
             Render::Draw(surface);
     }
@@ -663,5 +634,5 @@ int UI::nextFontId = 1;
 std::unordered_map<int, std::vector<UI::UIData *>> UI::elements;
 std::unordered_set<UI::UIData *> UI::dataPtrs;
 int UI::pipeline = true;
-std::unordered_map<GLFWwindow *, Render::Surface> UI::surfaces;
+std::unordered_set<GLFWwindow *> UI::windows;
 }  // namespace Ignis
