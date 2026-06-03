@@ -9,53 +9,7 @@
 using namespace Ignis;
 
 int main() {
-	std::vector<int> surfaces;
 
-	glfwInit();
+	Network::Init();
 
-
-	CreateGraphicPipeLineInfo gpInfo{};
-	gpInfo.vertexShader = "../Resources/Shaders/shader.vert";
-	gpInfo.fragmentShader = "../Resources/Shaders/shader.frag";
-
-	Render renderer = Render(true);
-
-
-
-	Window window1 = renderer.CreateAppWindow(500, 400, "Gup 1");
-	int surface = renderer.CreateSurface(window1, gpInfo);
-	surfaces.push_back(surface);
-
-	int texture = renderer.CreateTexture("../Resources/Textures/monikaTexture.jpg");
-	int texture2 = renderer.CreateTexture("../Resources/Textures/monika.gif");
-
-	UI::SetRender(&renderer);
-	UI::SetMainSurface(surface);
-
-	Color tip(255,0,255);
-	Color base(255,0,0);
-
-	Image image = Image( Vec2(20, 30), Vec2(20, 40), texture);
-	Image image2 = Image( Vec2(25, 40), Vec2(50, 20), texture2, base);
-	UI::AddToSurface(surface, image, image2);
-	UI::SubmitSurface();
-
-	Network::Test();
-	
-	while (surfaces.size() != 0)
-	{
-		renderer.Event();
-
-		for (auto it = surfaces.begin(); it != surfaces.end(); ) {
-			if (renderer.IsValidSurface(*it)) {
-				renderer.Draw(*it);
-				it++;
-			}
-			else it = surfaces.erase(it);
-
-		}
-	}
-	
-
-	UI::Clean();
 }

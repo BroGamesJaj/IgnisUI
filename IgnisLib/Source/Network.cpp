@@ -11,7 +11,15 @@
 #include "asio/asio/ssl.hpp"
 #include "nlohmann/json.hpp"
 
+using asio::ip::tcp;
+
 namespace Ignis {
+
+    struct Network::SecureSocket {
+        SecureSocket() : socket(io->io, io->ctx) {}
+
+        asio::ssl::stream<tcp::socket> socket;
+    };
 
     struct Network::Response {
 
@@ -20,31 +28,6 @@ namespace Ignis {
         nlohmann::json body;
         RedirectInfo redirect;
     };
-
-    Network::Response  Network::RedirectInfo::Redirect(Network::HTTPMethod method) {
-        std::string url = redirectString;
-        
-        if (url.find("http://", 0) == 0)
-            url.erase(0, 7);
-        else if (url.find("https://", 0) == 0)
-            url.erase(0, 8);
-
-        struct Network::Request rqs;
-        rqs.method = method;
-
-        std::string host;
-
-        auto slash = url.find('/');
-        if (slash == std::string::npos) {
-            host = url;
-        }
-        else {
-            host = url.substr(0, slash);
-            rqs.location = url.substr(slash);
-        }
-
-        return Network::Request(host, rqs);
-    }
 
     struct Network::Context {
         Context() : ctx(asio::ssl::context::tls_client), io() {
@@ -55,23 +38,79 @@ namespace Ignis {
         asio::ssl::context ctx;
     };
 
-    struct Network::Socket {
-        Socket(Network::Context* context) : socket(context->io, context->ctx) {}
-
-        asio::ssl::stream<asio::ip::tcp::socket> socket;
-    };
-    void Network::Test() {
-        io = new Network::Context();
-        socket = new Network::Socket(io);
-
-        struct Request rqs;
-        rqs.location = "/redirect";
-        Response rsp = Request("25.32.203.59", rqs);
-
-        rsp = rsp.redirect.Redirect(); //torequest for request generation from urls
-        std::cout << rsp.body.dump(4) << std::endl;
+    Network::Socket::Socket() {
+        socket = new tcp::socket(io->io);
+    }
+    Network::Socket::~Socket() {
+        delete socket;
     }
 
+    tcp::acceptor acceptor;
+    Network::Socket socky;
+
+    void Network::Socket::Read() {
+        ((tcp::socket*)socket)->async_read_some(
+            asio::buffer(data),
+            [this](std::error_code ec, std::size_t len) {
+                if (!ec) {
+                    func(data, len);
+                    Read();
+                }
+            }
+        );
+    }
+
+    void Network::Socket::Write(const char* data, std::size_t len) {
+        asio::async_write(
+            *((tcp::socket*)socket),
+            asio::buffer(data, len),
+            [this, data](std::error_code ec, std::size_t bytes_sent) {
+                if (!ec) {
+                    std::cout << "Sent: " << data << std::endl;
+                }
+            }
+        );
+    }
+
+    void Network::Init() {
+        io = new Network::Context();
+
+        acceptor = tcp::acceptor(io->io, tcp::endpoint(tcp::v4(), 12345));
+
+        tcp::resolver resolver(io->io);
+        auto endpoints = resolver.resolve("127.0.0.1", "12345");
+
+        socky = Socket();
+        asio::connect(*(tcp::socket*)socky.socket, endpoints);
+        
+    }
+
+    std::string ParseHost(const std::string& address) {
+        std::string host = address;
+
+        auto schemeEnd = host.find("://");
+        if (schemeEnd != std::string::npos)
+            host = host.substr(schemeEnd + 3);
+
+        auto pathStart = host.find('/');
+        if (pathStart != std::string::npos)
+            host = host.substr(0, pathStart);
+
+        auto portStart = host.find(':');
+        if (portStart != std::string::npos)
+            host = host.substr(0, portStart);
+
+        return host;
+    }
+
+    Network::Response  Network::RedirectInfo::Redirect(Network::HTTPMethod method) {
+        struct Network::Request rqs;
+        rqs.method = method;
+
+        return Network::Request(redirectString, rqs);
+    }
+    
+    //keep-alive isnt working, always creating new connections
     Network::Response Network::Request(std::string address, struct Request request) {
         try {
             std::string method;
@@ -104,6 +143,7 @@ namespace Ignis {
             }
             catch (std::system_error e) {
                 asio::ip::tcp::resolver resolver(io->io);
+                address = ParseHost(address);
                 asio::ip::tcp::resolver::results_type endpoints = resolver.resolve(address, "https");
                 endpoint = *endpoints.begin();
             }
@@ -116,7 +156,7 @@ namespace Ignis {
                 content = "*/*";
                 break;
             case JSON:
-                content = "application-json";
+                content = "application/json";
                 break;
             case PLAIN:
                 content = "text/plain";
@@ -129,17 +169,21 @@ namespace Ignis {
             std::string state = request.connectionState == CLOSE ? "close" : "keep-alive";
 
             socket->socket.lowest_layer().close();
-            socket = new Network::Socket(io);
+            if (socket) delete socket;
+            socket = new Network::Socket();
             socket->socket.lowest_layer().connect(endpoint);
 
             SSL_set_tlsext_host_name(socket->socket.native_handle(), address.c_str());
             socket->socket.handshake(asio::ssl::stream_base::client);
 
             std::string requestString =
-                method + " " + request.location + " HTTP/1.0\r\n"
+                method + " " + request.location + " HTTP/1.1\r\n"
                 "Host: " + address + "\r\n"
                 "Accept: " + content + "\r\n"
-                "Connection: " + state + "\r\n\r\n";
+                "Connection: " + state + "\r\n"
+                "User-Agent: Mozilla/5.0\r\n\r\n";
+
+            std::cout << requestString << std::endl;
 
             asio::write(socket->socket, asio::buffer(requestString));
 
@@ -180,15 +224,29 @@ namespace Ignis {
                 bodyStream << &response;
             }
 
+            asio::error_code ec;
+
             if (chunked) {
                 while (true) {
                     std::string line;
-                    asio::read_until(socket->socket, response, "\r\n");
+                    asio::read_until(socket->socket, response, "\r\n", ec);
+                    if (ec) {
+                        if (ec != asio::ssl::error::stream_truncated && ec != asio::error::eof)
+                            std::cout << "Read error: " << ec.message() << std::endl;
+                        break;
+                    }
+
                     std::getline(resp_stream, line);
                     std::size_t chunk_size = std::stoul(line, nullptr, 16);
                     if (chunk_size == 0) break;
 
-                    asio::read(socket->socket, response, asio::transfer_exactly(chunk_size + 2));
+                    asio::read(socket->socket, response, asio::transfer_exactly(chunk_size + 2), ec);
+                    if (ec) {
+                        if (ec != asio::ssl::error::stream_truncated && ec != asio::error::eof)
+                            std::cout << "Read error: " << ec.message() << std::endl;
+                        break;
+                    }
+                    
                     bodyStream << std::string(
                         asio::buffers_begin(response.data()),
                         asio::buffers_begin(response.data()) + chunk_size);
@@ -197,7 +255,15 @@ namespace Ignis {
             }
             else if (content_length > bodyStream.str().size()) {
                 asio::read(socket->socket, response,
-                    asio::transfer_exactly(content_length - bodyStream.str().size()));
+                    asio::transfer_exactly(content_length - bodyStream.str().size()), ec);
+                if (ec && ec != asio::ssl::error::stream_truncated && ec != asio::error::eof)
+                    std::cout << "Read error: " << ec.message() << std::endl;
+                bodyStream << &response;
+            }
+            else {
+                asio::read(socket->socket, response, asio::transfer_all(), ec);
+                if (ec && ec != asio::ssl::error::stream_truncated && ec != asio::error::eof)
+                    std::cout << "Read error: " << ec.message() << std::endl;
                 bodyStream << &response;
             }
 
@@ -216,6 +282,5 @@ namespace Ignis {
     }
 
     Network::Context* Network::io = nullptr;
-    Network::Socket* Network::socket = nullptr;
 }
 

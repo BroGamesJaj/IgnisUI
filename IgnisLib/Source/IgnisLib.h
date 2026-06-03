@@ -17,6 +17,7 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <functional>
 
 struct GLFWwindow;
 struct GLFWmonitor;
@@ -433,14 +434,29 @@ namespace Ignis {
             Response Redirect(Network::HTTPMethod method = Network::HTTPMethod::GET);
         };
 
-        static void Test();
+        static void Init();
         static Response Request(std::string address, struct Request request);
 
-    private:
-        struct Context;
-        struct Socket;
+        struct Socket {
+        public:
+            void OnRead(std::function<void(const char*, std::size_t)> function) {
+                func = function;
+            }
+            void Write(const char* data, std::size_t len);
+           private:
+            void* socket;
+            char data[1024];
 
+            std::function<void(const char*, std::size_t)> func;
+
+            void Read();
+
+            friend class Network;
+        };
+
+    private:
+        struct SecureSocket;
+        struct Context;
         static Context* io;
-        static Socket* socket;
     };
 }
