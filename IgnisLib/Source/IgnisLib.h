@@ -439,10 +439,17 @@ namespace Ignis {
 
         struct Socket {
         public:
+            Socket();
+            ~Socket();
+
             void OnRead(std::function<void(const char*, std::size_t)> function) {
                 func = function;
+                Read();
             }
             void Write(const char* data, std::size_t len);
+
+            void Host(uint16_t port, std::function<void(const char*, std::size_t)> onRead);
+            void Join(std::string host, std::string port, std::function<void(const char*, std::size_t)> onRead);
            private:
             void* socket;
             char data[1024];
@@ -452,6 +459,34 @@ namespace Ignis {
             void Read();
 
             friend class Network;
+        };
+
+        enum CastType{
+            SingeCast,
+            BroadCast,
+            ExceptSender
+        };
+
+        struct Server {
+
+            void Host(uint16_t port);
+            void OnClientConnectCallback(std::function<void(uint32_t clientId)>);
+            void OnClientDisconnectCallback(std::function<void(uint32_t clientId)>);
+            void OnDataCallback(std::function<void(const char* data, std::size_t, uint32_t senderId)>);
+            void Cast(const char* data, std::size_t, CastType castType);
+           private:
+            std::unordered_map<uint32_t, Socket> sockets;
+            uint32_t nextId = 1;
+        };
+
+        struct Client {
+            void Connect(std::string host, std::string port);
+            void OnConnectCallback(std::function<void>);
+            void OnDisonnectCallback(std::function<void>);
+            void OnDataCallback(const char* data, uint32_t senderId);
+            void Cast(const char* data, std::size_t, CastType castType);
+
+            uint32_t clientId;
         };
 
     private:

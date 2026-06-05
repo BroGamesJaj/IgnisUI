@@ -1,11 +1,6 @@
 #include "IgnisLib.h"
 
 #define ASIO_STANDALONE 
-#define ASIO_HAS_STD_ADDRESSOF
-#define ASIO_HAS_STD_ARRAY
-#define ASIO_HAS_CSTDINT
-#define ASIO_HAS_STD_SHARED_PTR
-#define ASIO_HAS_STD_TYPE_TRAITS
 
 #include "asio/asio.hpp"
 #include "asio/asio/ssl.hpp"
@@ -15,10 +10,20 @@ using asio::ip::tcp;
 
 namespace Ignis {
 
+    struct Network::Context {
+        Context() : ctx(asio::ssl::context::tls_client), io(), guard(asio::make_work_guard(io)) {
+            ctx.set_default_verify_paths();
+        }
+
+        asio::io_context io;
+        asio::ssl::context ctx;
+        asio::executor_work_guard<asio::io_context::executor_type> guard;
+    };
+
     struct Network::SecureSocket {
         SecureSocket() : socket(io->io, io->ctx) {}
 
-        asio::ssl::stream<tcp::socket> socket;
+        asio::ssl::stream<asio::ip::tcp::socket> socket;
     };
 
     struct Network::Response {
@@ -29,24 +34,12 @@ namespace Ignis {
         RedirectInfo redirect;
     };
 
-    struct Network::Context {
-        Context() : ctx(asio::ssl::context::tls_client), io() {
-            ctx.set_default_verify_paths();
-        }
-
-        asio::io_context io;
-        asio::ssl::context ctx;
-    };
-
     Network::Socket::Socket() {
         socket = new tcp::socket(io->io);
     }
     Network::Socket::~Socket() {
-        delete socket;
+        delete static_cast<tcp::socket*>(socket);
     }
-
-    tcp::acceptor acceptor;
-    Network::Socket socky;
 
     void Network::Socket::Read() {
         ((tcp::socket*)socket)->async_read_some(
@@ -55,7 +48,10 @@ namespace Ignis {
                 if (!ec) {
                     func(data, len);
                     Read();
-                }
+                } else{
+                    if(ec.value() == 10054) return;
+                    std::cout << ec.category().name() << ": " << ec.value() << " - " << ec.message() << std::endl;
+                } 
             }
         );
     }
@@ -64,25 +60,67 @@ namespace Ignis {
         asio::async_write(
             *((tcp::socket*)socket),
             asio::buffer(data, len),
-            [this, data](std::error_code ec, std::size_t bytes_sent) {
-                if (!ec) {
-                    std::cout << "Sent: " << data << std::endl;
+            [this](std::error_code ec, std::size_t bytes_sent) {
+                if(ec) {
+                    std::cout << ec.category().name() << ": " << ec.value() << " - " << ec.message() << std::endl;
                 }
             }
         );
     }
 
+    void Network::Socket::Host(uint16_t port, std::function<void(const char*, std::size_t)> onRead){
+        tcp::acceptor acceptor = tcp::acceptor(io->io, tcp::endpoint(tcp::v4(), port));
+        acceptor.accept(*(tcp::socket*)socket);
+        OnRead(onRead);
+    }
+
+    void Network::Socket::Join(std::string host, std::string port, std::function<void(const char*, std::size_t)> onRead){
+        tcp::resolver resolver(io->io);
+        auto endpoints = resolver.resolve(host, port);
+        asio::connect(*(tcp::socket*)socket, endpoints);
+        OnRead(onRead);
+    }
+
+    void Print(const char* text, size_t len){
+        std::cout.write(text, len);
+        std::cout << std::endl;
+    }
+
     void Network::Init() {
         io = new Network::Context();
 
-        acceptor = tcp::acceptor(io->io, tcp::endpoint(tcp::v4(), 12345));
+        std::thread ioThread([&] {
+            std::cout << "IO THREAD START\n";
+            io->io.run();
+            std::cout << "IO THREAD END\n";
+        });
 
-        tcp::resolver resolver(io->io);
-        auto endpoints = resolver.resolve("127.0.0.1", "12345");
+        Network::Socket socky;
 
-        socky = Socket();
-        asio::connect(*(tcp::socket*)socky.socket, endpoints);
-        
+        std::string input;
+
+        std::cin >> input;
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+        if(input == "a"){
+            socky.Host(12345, Print);
+            while(true){
+                std::getline(std::cin, input);
+                if(input == "exit") break;
+                socky.Write(input.c_str(), input.size());
+            }
+        }
+        else if(input == "b"){
+            socky.Join("127.0.0.1", "12345", Print);
+            while(true){
+                std::getline(std::cin, input);
+                if(input == "exit") break;
+                socky.Write(input.c_str(), input.size());
+            }
+        }
+
+        io->io.stop();
+        ioThread.join();
     }
 
     std::string ParseHost(const std::string& address) {
@@ -168,13 +206,11 @@ namespace Ignis {
 
             std::string state = request.connectionState == CLOSE ? "close" : "keep-alive";
 
-            socket->socket.lowest_layer().close();
-            if (socket) delete socket;
-            socket = new Network::Socket();
-            socket->socket.lowest_layer().connect(endpoint);
+            SecureSocket socket = Network::SecureSocket();
+            socket.socket.lowest_layer().connect(endpoint);
 
-            SSL_set_tlsext_host_name(socket->socket.native_handle(), address.c_str());
-            socket->socket.handshake(asio::ssl::stream_base::client);
+            SSL_set_tlsext_host_name(socket.socket.native_handle(), address.c_str());
+            socket.socket.handshake(asio::ssl::stream_base::client);
 
             std::string requestString =
                 method + " " + request.location + " HTTP/1.1\r\n"
@@ -185,12 +221,12 @@ namespace Ignis {
 
             std::cout << requestString << std::endl;
 
-            asio::write(socket->socket, asio::buffer(requestString));
+            asio::write(socket.socket, asio::buffer(requestString));
 
             Response responseData;
 
             asio::streambuf response;
-            asio::read_until(socket->socket, response, "\r\n\r\n");
+            asio::read_until(socket.socket, response, "\r\n\r\n");
 
             std::istream resp_stream(&response);
             std::string http_version;
@@ -229,7 +265,7 @@ namespace Ignis {
             if (chunked) {
                 while (true) {
                     std::string line;
-                    asio::read_until(socket->socket, response, "\r\n", ec);
+                    asio::read_until(socket.socket, response, "\r\n", ec);
                     if (ec) {
                         if (ec != asio::ssl::error::stream_truncated && ec != asio::error::eof)
                             std::cout << "Read error: " << ec.message() << std::endl;
@@ -240,7 +276,7 @@ namespace Ignis {
                     std::size_t chunk_size = std::stoul(line, nullptr, 16);
                     if (chunk_size == 0) break;
 
-                    asio::read(socket->socket, response, asio::transfer_exactly(chunk_size + 2), ec);
+                    asio::read(socket.socket, response, asio::transfer_exactly(chunk_size + 2), ec);
                     if (ec) {
                         if (ec != asio::ssl::error::stream_truncated && ec != asio::error::eof)
                             std::cout << "Read error: " << ec.message() << std::endl;
@@ -254,14 +290,14 @@ namespace Ignis {
                 }
             }
             else if (content_length > bodyStream.str().size()) {
-                asio::read(socket->socket, response,
+                asio::read(socket.socket, response,
                     asio::transfer_exactly(content_length - bodyStream.str().size()), ec);
                 if (ec && ec != asio::ssl::error::stream_truncated && ec != asio::error::eof)
                     std::cout << "Read error: " << ec.message() << std::endl;
                 bodyStream << &response;
             }
             else {
-                asio::read(socket->socket, response, asio::transfer_all(), ec);
+                asio::read(socket.socket, response, asio::transfer_all(), ec);
                 if (ec && ec != asio::ssl::error::stream_truncated && ec != asio::error::eof)
                     std::cout << "Read error: " << ec.message() << std::endl;
                 bodyStream << &response;

@@ -27,6 +27,8 @@ add_subdirectory(Dependencies/harfbuzz)
 target_include_directories(Ignis PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Dependencies/asio
 )
+
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 add_subdirectory(Dependencies/boringssl)
 
 if (WIN32)
@@ -48,6 +50,10 @@ else()
 endif()
 
 target_link_libraries(Ignis PRIVATE harfbuzz ssl crypto)
+
+target_compile_definitions(Ignis PRIVATE
+    _WIN32_WINNT=0x0A00
+)
 
 target_include_directories(Ignis PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}/Dependencies
