@@ -157,16 +157,36 @@ class Render {
         VEC4
     };
 
-    struct Vertex {
+    enum class VertexType {
+        Base,
+        Instance
+    };
+
+    struct InstanceVertex {
         glm::vec3 pos;
+        VertexType type = VertexType::Instance;
+    };
+
+    struct Vertex : InstanceVertex {
         uint32_t normal;
         glm::vec2 uv;
         uint32_t color;
+
+        Vertex() {
+            type = VertexType::Base;
+        }
     };
 
     struct VertexData {
-        std::vector<Render::Vertex> vertecies;
+        std::vector<Render::InstanceVertex> vertecies;
         std::vector<uint32_t> indicies;
+    };
+
+    struct InstanceData {
+        glm::mat4 model;
+        uint32_t textureId;
+        glm::vec2 uv;
+        uint32_t color;
     };
 
     struct GlyphInstance {
@@ -177,7 +197,7 @@ class Render {
     };
 
     struct Window {
-       private:
+       public:
         GLFWwindow *ptr;
 
         friend class Vulkan;
@@ -256,6 +276,7 @@ class Render {
         uint32_t size;
     };
 
+    /*
     struct CreateGraphicPipeLineInfo {
         CreateGraphicPipeLineInfo() {};
 
@@ -265,7 +286,7 @@ class Render {
                              x8 };
         enum class Topology { Point,
                               Line,
-                              Triangle };
+                               };
         enum class Culling { Front,
                              Back,
                              None };
@@ -318,13 +339,14 @@ class Render {
         std::vector<int> descriptorSetIds;
 
         std::vector<Render::VertexDataType> vertexDataLayout;
-    };
+    };*/
 
     struct RenderData {
-        std::vector<Vertex> vertecies;
+        std::vector<Render::InstanceVertex> vertecies;
         std::vector<uint32_t> indicies;
+        std::vector<Render::InstanceData> instances;
 
-        int surface;
+        Window window;
         bool changed = true;
     };
 
@@ -341,12 +363,18 @@ class Render {
 
     static void Init(bool debugging = false) {
         InitWindowManager(debugging);
+        InitVulkanImageManager();
+        InitVulkanQueueManager();
         InitVulkanDataManager();
     }
-    static void Clean();
+    static void CleanUp() {
+        VulkanDataManagerCleanUp();
+    }
 
-    static void PushOn(VertexData &data, Surface &surface);
-    static void Submit(Surface &surface);
+    static void PushOn(VertexData &data, Window &window);  // pushes on a specific element
+    static void PopOff(VertexData &data, Window &window);  // pops off a specific element
+    static void Submit(Window &window);                    // apply additions and deletions
+    static void Discard(Window &window);                   // wipes window clean (doesnt need submit)
 
     static Window CreateAppWindow(int width, int height, const char *title, GLFWmonitor *screen = nullptr, GLFWwindow *share = nullptr) {
         Window window{};
@@ -361,13 +389,16 @@ class Render {
 
     static int CreateDescriptorSet(DescriptorSetInfo &descriptorSetInfos);
     static std::vector<int> CreateDescriptorSet(std::vector<Render::DescriptorSetInfo> &descriptorSetInfo);
-    static int CreatePipeline(CreateGraphicPipeLineInfo &gpInfo);
     static int CreateFontPage(const std::vector<uint8_t> &rgbaData, uint32_t width, uint32_t height);
 
     static void Draw(Surface surface);
     static void Clear(Window &window);
-    static void Update();
-    static bool IsValidSurface(Surface surface);
+    static void Update() {
+        UpdateWindowManager();
+        UpdateVulkanDataManager();
+    }
+    static bool IsValidWindow(Window window);
+    static bool IsOpen();
 
     static int CreateSampler(SamplerFilter filter = SamplerFilter::LINEAR,
                              SamplerAddressing addressing = SamplerAddressing::REPEAT, SamplerMipmapMode mipmapMode = SamplerMipmapMode::LINEAR);
@@ -400,9 +431,7 @@ class Render {
    private:
     static std::unordered_map<int, VertexData> surfaceData;
 
-    friend class UI;
-
-    static void AddElementData(RenderData &data);
+    static void AddUIRenderData(RenderData &data);
 
     static void *GetWindowOfSurface(int surface);
 
@@ -437,6 +466,7 @@ class Render {
     static void *GetSurface();
     static void *GetPhyDevice();
     static void *GetBindlessSet();
+    static void *GetGraphicPool();
 
     static void InitWindowManager(bool debugging);
     static void InitVulkanDataManager();
@@ -445,8 +475,23 @@ class Render {
 
     // pointers MUST BE deleted by caller function
     // ImageManager.TransitionImageLayout for reference
+    static void *FindDepthFormat();
     static void *BeginSingleTimeCommands();
     static void EndSingleTimeCommands(void *buffer);
+
+    static void CreateDepthResources(void *image, void *extent);
+
+    static void SubmitToGraphicQueue(void *info, void *fence);
+
+    static void UpdateWindowManager();
+    static void UpdateVulkanDataManager();
+
+    static void VulkanDataManagerCleanUpWindowData(GLFWwindow *windowIn);
+
+    static void WindowManagerCleanUp();
+    static void VulkanDataManagerCleanUp();
+    static void VulkanImageManagerCleanUp();
+    static void VulkanQueueManagerCleanUp();
 
     class Vulkan;
     friend Vulkan;
@@ -467,11 +512,13 @@ class Render {
     class VulkanQueueManager;
     friend VulkanQueueManager;
     static VulkanQueueManager *vulkanQueueManager;
+
+    friend class UI;
 };
 
 #ifdef IGNIS_RENDER_NAMES
 using Window = Render::Window;
-using CreateGraphicPipeLineInfo = Render::CreateGraphicPipeLineInfo;
+// using CreateGraphicPipeLineInfo = Render::CreateGraphicPipeLineInfo;
 using SamplerFilter = Render::SamplerFilter;
 using SamplerAddressing = Render::SamplerAddressing;
 using SamplerMipmapMode = Render::SamplerMipmapMode;
@@ -498,6 +545,7 @@ class FileSystem {
 #ifdef IGNIS_UI
 
 class UI {
+   private:
    public:
     template <typename T>
         requires std::is_arithmetic_v<T>
@@ -734,20 +782,44 @@ class UI {
     static int LoadFont(const std::string &fontPath, uint32_t size = 16);
 
     template <std::derived_from<UI::Element>... Args>
-    static void PushOn(Args &...args, Window window = mainWindow) {
+    static void PushOn(Window window, Args &...args) {
         if (!windows.contains(window.ptr)) return;
-        if (!Render::IsValidSurface(surface)) return;
+        if (!Render::IsValidWindow(window)) return;
 
-        (elements[surface.surface].push_back(args.data), ...);
+        (elements[window.ptr].push_back(args.data), ...);
     }
 
-    static void Submit(Window window = mainWindow);
+    template <std::derived_from<UI::Element>... Args>
+    static void PushOn(Args &...args) {
+        PushOn(mainWindow, args...);
+    }
+
+    template <std::derived_from<UI::Element>... Args>
+    static void PopOff(Window window, Args &...args) {
+        if (!windows.contains(window.ptr)) return;
+        if (!Render::IsValidWindow(window)) return;
+
+        auto &vec = elements[window.ptr];
+        (vec.erase(std::remove(vec.begin(),
+                               vec.end(), args.data),
+                   vec.end()),
+         ...);
+    }
+
+    template <std::derived_from<UI::Element>... Args>
+    static void PopOf(Args &...args) {
+        PopOf(mainWindow, args...);
+    }
+
+    static void Submit(Window &window = mainWindow);
+
+    static void Discard(Window &window);
 
     static void Bind(Element &dst, Element &src);
 
     static void Delete(Element &element);
 
-    static void Clean();
+    static void CleanUp();
 
     static bool CanDraw();
 
@@ -755,7 +827,7 @@ class UI {
 
    private:
     static Window mainWindow;
-    static std::unordered_map<int, std::vector<UIData *>> elements;
+    static std::unordered_map<GLFWwindow *, std::vector<UIData *>> elements;
     static int nextId;
     static std::unordered_set<UIData *> dataPtrs;
     static std::unordered_map<int, Font::Font *> fonts;
@@ -768,8 +840,8 @@ class UI {
         Vec2f size;
     };
 
-    static Render::RenderData ProcessVertecies(ProcessData data, std::vector<UIData *> &elements);
-    static Render::VertexData GenerateVertecies(UI::ProcessData procData, int textureId, Color color);
+    static void ProcessElements(Render::RenderData &returnData, ProcessData data, std::vector<UIData *> &elements);
+    static void GenerateInstanceVertecies(Render::RenderData &renderData);
 
     // Data Handling
     static UIData *CreateData(UIType type);
@@ -791,7 +863,7 @@ class UI {
     static Font::Font *&GetFont(UIData *data);
     static std::vector<uint32_t> &GetClusters(UIData *data);
 
-    static Render::VertexData GenerateTextVertecies(UI::ProcessData procData, UIData *data, UI::Color color);
+    static Render::VertexData GenerateTextVertecies(UI::ProcessData procData, UIData *data, UI::Color color, uint32_t normal);
 
     // View
     static std::vector<UIData *> &GetChildrens(UIData *data);
@@ -905,6 +977,7 @@ class Input {
 
    public:
     static void Init();
+    static void CleanUp();
     static void InitWindow(Window &window);
     static void Event();
 

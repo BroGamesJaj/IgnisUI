@@ -68,6 +68,8 @@ class Render::WindowManager {
 
         surface = surfaceOut;
 
+        windows.emplace(windowOut);
+
         return windowOut;
     }
 
@@ -350,6 +352,7 @@ class Render::WindowManager {
         features12.runtimeDescriptorArray = VK_TRUE;
         features12.descriptorBindingPartiallyBound = VK_TRUE;
         features12.descriptorBindingVariableDescriptorCount = VK_TRUE;
+        features12.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
         features12.pNext = &robustness2Features;
 
         VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeature{};
@@ -439,7 +442,7 @@ class Render::WindowManager {
         // basicly the whole system, the connection between the app and the vulkan api
         CreateInstance();
 
-        // creating the messennger if the debug layer is enabled
+        // creating the messenger if the debug layer is enabled
         SetupDebugMessenger();
 
         GLFWwindow *window = CreateTmpSurface();
@@ -468,6 +471,7 @@ class Render::WindowManager {
 
     void Close(Window window) {
         if (windows.contains(window.ptr)) {
+            VulkanDataManagerCleanUpWindowData(window.ptr);
             glfwDestroyWindow(window.ptr);
         }
     }
@@ -483,9 +487,24 @@ class Render::WindowManager {
             glfwDestroyWindow(window);
         }
 
-        vkDestroyInstance(vulkan, nullptr);
+        windows.clear();
 
-        glfwTerminate();
+        vkDestroyInstance(vulkan, nullptr);
+    }
+
+    void Update() {
+#ifndef IGNIS_INPUT
+        glfwPollEvents();
+#endif
+        for (auto it = windows.begin(); it != windows.end();) {
+            if (glfwWindowShouldClose(*it)) {
+                VulkanDataManagerCleanUpWindowData(*it);
+                glfwDestroyWindow(*it);
+                it = windows.erase(it);
+            } else {
+                ++it;
+            }
+        }
     }
 
     void *GetDevice() { return &device; }
@@ -523,6 +542,14 @@ void *Render::QuerySwapChainSupport() {
 
 GLFWwindow *Render::CreateWindow(int width, int height, const char *title, GLFWmonitor *screen, GLFWwindow *share) {
     return windowManager->Open(width, height, title, screen, share);
+}
+
+void Render::UpdateWindowManager() {
+    windowManager->Update();
+}
+
+void Render::WindowManagerCleanUp() {
+    windowManager->Cleanup();
 }
 
 Render::WindowManager *Render::windowManager = nullptr;

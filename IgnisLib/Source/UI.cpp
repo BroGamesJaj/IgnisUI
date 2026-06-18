@@ -34,7 +34,8 @@ Color Color::Inverted() { return Color(1.0f - this->r, 1.0f - this->g, 1.0f - th
 
 // UI Handling
 void UI::Init(Window window) {
-    windows.insert(window.ptr);
+    if (!windows.contains(window.ptr))
+        windows.insert(window.ptr);
 }
 
 Render::Texture UI::CreateTexture(std::string path) {
@@ -46,24 +47,24 @@ bool UI::CanDraw() {
 
     bool haveValid = false;
     for (auto &window : windows) {
-        haveValid |= Render::IsValidWindow();
+        haveValid |= Render::IsValidWindow(Window{ window });
     }
 
     return haveValid;
 }
 
 float time = 0.0f;
-
+/*
 void UI::Draw() {
     time += 0.01f;
-    Render::PushConstant<float>("off", 0.5 * sin(time));
-    Render::PushConstant<float>("color", fmod(time * 0.2, 1.0f));
-    Render::PushConstant<glm::mat4>("rot", glm::rotate(glm::identity<glm::mat4>(), 3 * time, glm::vec3(0, 0, 1)));
+    //Render::PushConstant<float>("off", 0.5 * sin(time));
+    //Render::PushConstant<float>("color", fmod(time * 0.2, 1.0f));
+    //Render::PushConstant<glm::mat4>("rot", glm::rotate(glm::identity<glm::mat4>(), 3 * time, glm::vec3(0, 0, 1)));
     for (auto &window : windows) {
-        if (Render::IsValidSurface(surface))
-            Render::Draw(surface);
+        //if (Render::IsValidWindow(window))
+            //Render::Draw(surface);
     }
-}
+}*/
 
 // Data Handling
 
@@ -74,7 +75,7 @@ void UI::Delete(Element &element) {
     DeleteData(element.data);
 }
 
-void UI::Clean() {
+void UI::CleanUp() {
     for (auto &dataPtr : dataPtrs) {
         if (dataPtr) DeleteData(dataPtr);
     }
@@ -178,24 +179,32 @@ void UI::Bind(Element &dst, Element &src) {
     }
 }
 
-void UI::Submit(Window window) {
-    Render::Surface surface = surfaces[window.ptr];
-    int id = surface.surface;
-    if (!elements.contains(id)) return;
+void UI::Submit(Window &window) {
+    if (!elements.contains(window.ptr)) return;
 
     UI::ProcessData data{ .ofst{ 0, 0 }, .size{ 2, 2 } };
 
-    Render::RenderData outputData = ProcessVertecies(data, elements[id]);
-    outputData.surface = id;
+    Render::RenderData outputData;
+    GenerateInstanceVertecies(outputData);
+    ProcessElements(outputData, data, elements[window.ptr]);
+    outputData.window = window;
     outputData.changed = true;
-    Render::AddElementData(outputData);
+    Render::AddUIRenderData(outputData);
 }
 
-Render::RenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<UIData *> &elements) {
-    Render::RenderData returnData;
+glm::mat4 createModel(glm::vec3 position, glm::vec3 scale, float rotation, glm::vec3 axis) {
+    glm::mat4 model = glm::mat4(1.0f);
 
-    int additionIndex = 0;
+    model = glm::translate(model, position);
+    model = glm::rotate(model, glm::radians(rotation), axis);
+    model = glm::scale(model, scale);
 
+    return model;
+}
+
+// uint32_t normal = (127 << 16) | (127 << 8) | (255);
+
+void UI::ProcessElements(Render::RenderData &returnData, UI::ProcessData data, std::vector<UIData *> &elements) {
     for (auto element : elements) {
         Vec2f &position = GetPosition(element);
         Vec2f &size = GetSize(element);
@@ -210,64 +219,113 @@ Render::RenderData UI::ProcessVertecies(UI::ProcessData data, std::vector<UIData
                             Vec2<float>((calcData.ofst.x + calcData.size.x) / 2, (calcData.ofst.y + calcData.size.y) / 2));
 
         if (element->type == TEXT) {
-            Render::VertexData textVertexData = GenerateTextVertecies(calcData, element, GetColor(element));
-
-            returnData.vertecies.insert(returnData.vertecies.end(), textVertexData.vertecies.begin(), textVertexData.vertecies.end());
-
-            // fun word
-            for (auto indicy : textVertexData.indicies) {
-                returnData.indicies.push_back(indicy + additionIndex);
-            }
-            additionIndex += textVertexData.vertecies.size();
+            // TODO: the council shall decide its fate
         } else {
-            Render::VertexData vertexData = GenerateVertecies(calcData, GetTexture(element), GetColor(element));
+            Render::InstanceData instance;
 
-            returnData.vertecies.insert(returnData.vertecies.end(), vertexData.vertecies.begin(), vertexData.vertecies.end());
+            instance.model = createModel(
+                glm::vec3(-1 + calcData.ofst.x, -1 + calcData.ofst.y, 0.0f),  // position
+                glm::vec3(calcData.size.x, calcData.size.y, 1.0f),            // scale
+                0.0f,                                                         // rotation in degrees
+                glm::vec3(0.0f, 0.0f, 1.0f)                                   // axis
+            );
 
-            // i wont look it up how they write it, I BELIIIIVEEEEE
-            for (auto &indicy : vertexData.indicies) {
-                returnData.indicies.push_back(indicy + additionIndex);
-            }
-            additionIndex += 4;
+            instance.textureId = (uint32_t)GetTexture(element);
+
+            Color colorIn = GetColor(element);
+            instance.color = ((char)(colorIn.r * 265) << 16) | ((char)(colorIn.g * 265) << 16) | ((char)(colorIn.b * 265) << 16);
+
+            returnData.instances.push_back(instance);
         }
-
-        Render::RenderData childData;
 
         if (element->type == VIEW) {
             auto view = static_cast<ViewData *>(element->ptr);
-            childData = UI::ProcessVertecies(calcData, view->elements);
+            UI::ProcessElements(returnData, calcData, view->elements);
         } else if (element->type == BUTTON) {
             auto button = static_cast<ButtonData *>(element->ptr);
             std::vector<UIData *> text = { button->text.data };
-            childData = UI::ProcessVertecies(calcData, text);
-        }
-
-        if (childData.vertecies.size() > 0) {
-            returnData.vertecies.insert(returnData.vertecies.end(), childData.vertecies.begin(), childData.vertecies.end());
-
-            for (auto &indicy : childData.indicies) {
-                returnData.indicies.push_back(indicy + additionIndex);
-            }
-
-            additionIndex += childData.vertecies.size();
+            UI::ProcessElements(returnData, calcData, text);
         }
     }
-
-    return returnData;
 }
 
-Render::VertexData UI::GenerateVertecies(UI::ProcessData procDt, int textureId, Color color) {
-    glm::vec3 vertexColor = glm::vec3(color.r, color.g, color.b);
-    glm::uint texture = glm::uint(textureId);
-    Vertex topLeft = { glm::vec3(-1 + procDt.ofst.x, -1 + procDt.ofst.y, 0.0f), vertexColor, glm::vec2(0.0f, 0.0f), texture };
-    Vertex topRight = { glm::vec3(-1 + procDt.ofst.x + procDt.size.x, -1 + procDt.ofst.y, 0.0f), vertexColor, glm::vec2(1.0f, 0.0f), texture };
-    Vertex bottomRight = { glm::vec3(-1 + procDt.ofst.x + procDt.size.x, -1 + procDt.ofst.y + procDt.size.y, 0.0f), vertexColor, glm::vec2(1.0f, 1.0f), texture };
-    Vertex bottomLeft = { glm::vec3(-1 + procDt.ofst.x, -1 + procDt.ofst.y + procDt.size.y, 0.0f), vertexColor, glm::vec2(0.0f, 1.0f), texture };
+void UI::GenerateInstanceVertecies(Render::RenderData &renderData) {
+    Render::InstanceVertex topLeft = { glm::vec3(-0.5f, -0.5f, 0.0f) };
+    Render::InstanceVertex topRight = { glm::vec3(0.5f, -0.5f, 0.0f) };
+    Render::InstanceVertex bottomRight = { glm::vec3(0.5f, 0.5f, 0.0f) };
+    Render::InstanceVertex bottomLeft = { glm::vec3(-0.5f, 0.5f, 0.0f) };
 
-    Render::VertexData returnData{ .vertecies = { topLeft, topRight, bottomRight, bottomLeft },
-                                   .indicies = { 0, 2, 1, 0, 3, 2 } };
-    return returnData;
+    renderData.vertecies = { topLeft, topRight, bottomRight, bottomLeft };
+    renderData.indicies = { 0, 2, 1, 0, 3, 2 };
 }
+/*
+// TODO: change the whole position and sizing shit
+Render::VertexData UI::GenerateTextVertecies(UI::ProcessData procDt, UIData *data, UI::Color colorIn, uint32_t normal) {
+    // if (data->type != TEXT) return;
+    // TextData* textData = static_cast<TextData*>(data->ptr);
+
+    // TODO: unhardcode it IMPORTANT
+    float hardcode = 2.0f;
+    Render::VertexData returnData;
+    uint32_t color = ((char)(colorIn.r * 265) << 16) | ((char)(colorIn.g * 265) << 16) | ((char)(colorIn.b * 265) << 16);
+    glm::vec2 norm(100);
+
+    if (!GetFont(data) || GetText(data).empty()) {
+        std::cout << "sad\n";
+        std::cout << "text: " << GetText(data) << "\n";
+        return {};
+    }
+
+    Font::Font *font = GetFont(data);
+    std::string &text = GetText(data);
+
+    glm::vec2 pen(procDt.ofst.x, procDt.ofst.y);
+    float scale = 1.0f / (64.0f * norm.x * hardcode);
+
+    auto glyphs = font->shapeText(Font::sToU32s(text), font->defaultSize, Font::TextAlign::GUESS, Font::TextDirection::GUESS);
+
+    uint32_t indiceOffset = 0;
+    float baseline = font->defaultSize;
+    for (auto &sg : glyphs) {
+        const Font::Glyph *g = sg.glyph;
+        if (g) {
+            // Position: pen + shaped offsets
+            glm::vec2 glyphPos = pen + glm::vec2((float)(sg.xOffset + sg.getLeft()), baseline + ((float)(-sg.yOffset + (font->defaultSize * 64 - g->bearingY)))) * scale;
+            // Size: from glyph rect, scaled
+            glm::vec2 glyphSize = glm::vec2(g->w, g->h) / norm / hardcode;
+
+            // std::cout << "values\n";
+            // std::cout << (char)g->getUnicode() << " glyph\n";
+            // std::cout << "scale: " << scale << "\n";
+            // std::cout << "pos: ("<<glyphPos.x << "," << glyphPos.y <<")\n";
+            // std::cout << "size: ("<<glyphSize.x << "," << glyphSize.y <<")\n";
+            // std::cout << "g size: (" << g->w << "," << g->h << ")\n";
+            // std::cout << "uv: ("<<g->u0 << "," << g->v0 <<"),("<<g->u1 << "," << g->v1 << ")\n";
+            // std::cout << "pId: " << sg.pId << "\n";
+            // std::cout << "bearing: (" << g->bearingX << "," << g->bearingY << ")\n";
+            // std::cout << "advance: (" << g->advanceX << "," << g->advanceY << ")\n";
+            // std::cout << "pen: (" << pen.x << "," << pen.y << ")\n";
+            uint32_t pageId = sg.pId;
+
+            Vertex topLeft = { glm::vec3(-1 + glyphPos.x, -1 + glyphPos.y, 0.0f), normal, glm::vec2(g->u0, g->v0), color };
+            Vertex topRight = { glm::vec3(-1 + glyphPos.x + glyphSize.x, -1 + glyphPos.y, 0.0f), normal, glm::vec2(g->u1, g->v0), color };
+            Vertex bottomRight = { glm::vec3(-1 + glyphPos.x + glyphSize.x, -1 + glyphPos.y + glyphSize.y, 0.0f), normal, glm::vec2(g->u1, g->v1), color };
+            Vertex bottomLeft = { glm::vec3(-1 + glyphPos.x, -1 + glyphPos.y + glyphSize.y, 0.0f), normal, glm::vec2(g->u0, g->v1), color };
+            // std::cout << "top-left: (" << topLeft.pos.x << "," << topLeft.pos.y << ")\n";
+            // std::cout << "top-right: (" << topRight.pos.x << "," << topRight.pos.y << ")\n";
+            // std::cout << "bottom-right:" << bottomRight.pos.x << "," << bottomRight.pos.y << ")\n";
+            // std::cout << "bottom-left:" << bottomLeft.pos.x << "," << bottomLeft.pos.y << ")\n";
+
+            returnData.vertecies.insert(returnData.vertecies.end(), { topLeft, topRight, bottomRight, bottomLeft });
+
+            returnData.indicies.insert(returnData.indicies.end(), { 0 + indiceOffset, 2 + indiceOffset, 1 + indiceOffset, 0 + indiceOffset, 3 + indiceOffset, 2 + indiceOffset });
+
+            indiceOffset += 4;
+        }
+        pen.x += (float)sg.xAdvance * scale;
+    }
+    return returnData;
+}*/
 
 UI::UIData *UI::FindFirstClicked(std::vector<UIData *> &elements, Vec2<float> &position) {
     UIData *clickedElement = nullptr;
@@ -302,7 +360,7 @@ void UI::HandleClick(Window window) {
 
         // checks every surface on the position
         for (auto &element : elements) {
-            if (Render::GetWindowOfSurface(element.first) == window.ptr) {
+            if (element.first == window.ptr) {
                 clickedElement = FindFirstClicked(element.second, position);
                 break;
             }
@@ -347,79 +405,11 @@ void UI::HandleCursorMove(Window window) {
     Vec2<float> position = Vec2<float>(cursorPositoin.x / (float)windowSize.x, cursorPositoin.y / (float)windowSize.y);
 
     for (auto &element : elements) {
-        if (Render::GetWindowOfSurface(element.first) == window.ptr) {
+        if (element.first == window.ptr) {
             ProcHoveredElements(element.second, position);
             break;
         }
     }
-}
-
-// TODO: change the whole position and sizing shit
-Render::VertexData UI::GenerateTextVertecies(UI::ProcessData procDt, UIData *data, UI::Color color) {
-    // if (data->type != TEXT) return;
-    // TextData* textData = static_cast<TextData*>(data->ptr);
-
-    // TODO: unhardcode it IMPORTANT
-    float hardcode = 2.0f;
-    Render::VertexData returnData;
-    glm::vec3 vertexColor = glm::vec3((float)color.r, (float)color.g, (float)color.b);
-    glm::vec2 norm(100);
-
-    if (!GetFont(data) || GetText(data).empty()) {
-        std::cout << "sad\n";
-        std::cout << "text: " << GetText(data) << "\n";
-        return {};
-    }
-
-    Font::Font *font = GetFont(data);
-    std::string &text = GetText(data);
-
-    glm::vec2 pen(procDt.ofst.x, procDt.ofst.y);
-    float scale = 1.0f / (64.0f * norm.x * hardcode);
-
-    auto glyphs = font->shapeText(Font::sToU32s(text), font->defaultSize, Font::TextAlign::GUESS, Font::TextDirection::GUESS);
-
-    uint32_t indiceOffset = 0;
-    float baseline = font->defaultSize;
-    for (auto &sg : glyphs) {
-        const Font::Glyph *g = sg.glyph;
-        if (g) {
-            // Position: pen + shaped offsets
-            glm::vec2 glyphPos = pen + glm::vec2((float)(sg.xOffset + sg.getLeft()), baseline + ((float)(-sg.yOffset + (font->defaultSize * 64 - g->bearingY)))) * scale;
-            // Size: from glyph rect, scaled
-            glm::vec2 glyphSize = glm::vec2(g->w, g->h) / norm / hardcode;
-
-            // std::cout << "values\n";
-            // std::cout << (char)g->getUnicode() << " glyph\n";
-            // std::cout << "scale: " << scale << "\n";
-            // std::cout << "pos: ("<<glyphPos.x << "," << glyphPos.y <<")\n";
-            // std::cout << "size: ("<<glyphSize.x << "," << glyphSize.y <<")\n";
-            // std::cout << "g size: (" << g->w << "," << g->h << ")\n";
-            // std::cout << "uv: ("<<g->u0 << "," << g->v0 <<"),("<<g->u1 << "," << g->v1 << ")\n";
-            // std::cout << "pId: " << sg.pId << "\n";
-            // std::cout << "bearing: (" << g->bearingX << "," << g->bearingY << ")\n";
-            // std::cout << "advance: (" << g->advanceX << "," << g->advanceY << ")\n";
-            // std::cout << "pen: (" << pen.x << "," << pen.y << ")\n";
-            uint32_t pageId = sg.pId;
-
-            Vertex topLeft = { glm::vec3(-1 + glyphPos.x, -1 + glyphPos.y, 0.0f), vertexColor, glm::vec2(g->u0, g->v0), pageId };
-            Vertex topRight = { glm::vec3(-1 + glyphPos.x + glyphSize.x, -1 + glyphPos.y, 0.0f), vertexColor, glm::vec2(g->u1, g->v0), pageId };
-            Vertex bottomRight = { glm::vec3(-1 + glyphPos.x + glyphSize.x, -1 + glyphPos.y + glyphSize.y, 0.0f), vertexColor, glm::vec2(g->u1, g->v1), pageId };
-            Vertex bottomLeft = { glm::vec3(-1 + glyphPos.x, -1 + glyphPos.y + glyphSize.y, 0.0f), vertexColor, glm::vec2(g->u0, g->v1), pageId };
-            // std::cout << "top-left: (" << topLeft.pos.x << "," << topLeft.pos.y << ")\n";
-            // std::cout << "top-right: (" << topRight.pos.x << "," << topRight.pos.y << ")\n";
-            // std::cout << "bottom-right:" << bottomRight.pos.x << "," << bottomRight.pos.y << ")\n";
-            // std::cout << "bottom-left:" << bottomLeft.pos.x << "," << bottomLeft.pos.y << ")\n";
-
-            returnData.vertecies.insert(returnData.vertecies.end(), { topLeft, topRight, bottomRight, bottomLeft });
-
-            returnData.indicies.insert(returnData.indicies.end(), { 0 + indiceOffset, 2 + indiceOffset, 1 + indiceOffset, 0 + indiceOffset, 3 + indiceOffset, 2 + indiceOffset });
-
-            indiceOffset += 4;
-        }
-        pen.x += (float)sg.xAdvance * scale;
-    }
-    return returnData;
 }
 
 int UI::LoadFont(const std::string &fontPath, uint32_t size) {
@@ -631,7 +621,7 @@ Window UI::mainWindow;
 std::unordered_map<int, Font::Font *> UI::fonts;
 int UI::nextId = 0;
 int UI::nextFontId = 1;
-std::unordered_map<int, std::vector<UI::UIData *>> UI::elements;
+std::unordered_map<GLFWwindow *, std::vector<UI::UIData *>> UI::elements;
 std::unordered_set<UI::UIData *> UI::dataPtrs;
 int UI::pipeline = true;
 std::unordered_set<GLFWwindow *> UI::windows;

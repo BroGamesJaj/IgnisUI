@@ -9,7 +9,10 @@ class Render::VulkanQueueManager {
     VkDevice *device;
     VkPhysicalDevice *phyDevice;
 
+   public:
     VkCommandPool graphicPool;
+
+   private:
     VkCommandPool presentPool;
     VkCommandPool computePool;
     VkCommandPool transferPool;
@@ -119,6 +122,19 @@ class Render::VulkanQueueManager {
 
         vkFreeCommandBuffers(*device, graphicPool, 1, &commandBuffer);
     }
+
+    void SubmitToGraphicQueue(VkSubmitInfo *info, VkFence *fence) {
+        if (vkQueueSubmit(graphicsQueue, 1, info, *fence) != VK_SUCCESS) {
+            throw std::runtime_error("failed to submit draw command buffer!");
+        }
+    }
+
+    void CleanUp() {
+        vkDestroyCommandPool(*device, graphicPool, nullptr);
+        vkDestroyCommandPool(*device, presentPool, nullptr);
+        vkDestroyCommandPool(*device, computePool, nullptr);
+        vkDestroyCommandPool(*device, transferPool, nullptr);
+    }
 };
 
 void Render::InitVulkanQueueManager() {
@@ -126,13 +142,25 @@ void Render::InitVulkanQueueManager() {
 }
 
 void *Render::BeginSingleTimeCommands() {
-    VkCommandBuffer *output = new VkCommandBuffer();
-    *output = vulkanQueueManager->BeginSingleTimeCommands();
-    return output;
+    return vulkanQueueManager->BeginSingleTimeCommands();
 }
 
 void Render::EndSingleTimeCommands(void *buffer) {
-    vulkanQueueManager->EndSingleTimeCommands(*(VkCommandBuffer *)buffer);
+    vulkanQueueManager->EndSingleTimeCommands((VkCommandBuffer)buffer);
 }
+
+void *Render::GetGraphicPool() {
+    return &vulkanQueueManager->graphicPool;
+}
+
+void Render::SubmitToGraphicQueue(void *info, void *fence) {
+    vulkanQueueManager->SubmitToGraphicQueue((VkSubmitInfo *)info, (VkFence *)fence);
+}
+
+void Render::VulkanQueueManagerCleanUp() {
+    vulkanQueueManager->CleanUp();
+}
+
+Render::VulkanQueueManager *Render::vulkanQueueManager = nullptr;
 
 }  // namespace Ignis

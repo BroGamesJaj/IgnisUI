@@ -20,6 +20,12 @@ struct CreateSamplerVKConvert {
     VkSamplerAddressMode addressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 };
 
+struct BufferData {
+    VkBuffer buffer;
+    VkDeviceMemory bufferMemory;
+    void *bufferMapped;
+};
+
 class Render::VulkanImageManager {
     VkDevice *device;
     VkPhysicalDevice *phyDevice;
@@ -78,9 +84,7 @@ class Render::VulkanImageManager {
     }
 
     void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout) {
-        VkCommandBuffer *cmdPtr = (VkCommandBuffer *)BeginSingleTimeCommands();
-        VkCommandBuffer commandBuffer = *cmdPtr;
-        delete cmdPtr;
+        VkCommandBuffer commandBuffer = (VkCommandBuffer)BeginSingleTimeCommands();
 
         VkPipelineStageFlags sourceStage;
         VkPipelineStageFlags destinationStage;
@@ -213,9 +217,7 @@ class Render::VulkanImageManager {
     }
 
     void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height) {
-        VkCommandBuffer *cmdPtr = (VkCommandBuffer *)BeginSingleTimeCommands();
-        VkCommandBuffer commandBuffer = *cmdPtr;
-        delete cmdPtr;
+        VkCommandBuffer commandBuffer = (VkCommandBuffer)BeginSingleTimeCommands();
 
         VkBufferImageCopy region{};
         region.bufferOffset = 0;
@@ -304,9 +306,28 @@ class Render::VulkanImageManager {
         vkUpdateDescriptorSets(*device, 1, &write, 0, nullptr);
     }
 
+    VkFormat FindSupportedFormat(const std::vector<VkFormat> &candidates, VkImageTiling tiling, VkFormatFeatureFlags features) {
+        for (VkFormat format : candidates) {
+            VkFormatProperties props;
+            vkGetPhysicalDeviceFormatProperties(*phyDevice, format, &props);
+
+            if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) {
+                return format;
+            } else if (tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & features) == features) {
+                return format;
+            }
+
+            throw std::runtime_error("failed to find supported format!");
+        }
+
+        return candidates[0];
+    }
+
    public:
     VulkanImageManager() {
         CreateSamplerVKConvert data;
+        phyDevice = (VkPhysicalDevice *)GetPhyDevice();
+        device = (VkDevice *)GetDevice();
         mainSampler = CreateSamplerFromData(data);
     }
 
@@ -359,10 +380,56 @@ class Render::VulkanImageManager {
 
         return nextSampler++;
     }
+
+    void CreateDepthResources(TextureData *image, VkExtent2D *extent) {
+        VkFormat depthFormat = FindDepthFormat();
+
+        CreateImage(extent->width, extent->height, depthFormat, VK_IMAGE_TILING_OPTIMAL,
+                    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                    image->textureImage, image->textureImageMemory);
+
+        image->textureImageView = CreateImageView(image->textureImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+        TransitionImageLayout(image->textureImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+    }
+
+    VkFormat FindDepthFormat() { return FindSupportedFormat({ VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT }, VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT); }
+
+    void CleanUp() {
+        for (auto &[index, sampler] : samplerAccess) {
+            vkDestroySampler(*device, sampler, nullptr);
+        }
+
+        for (auto &[index, texture] : textureData) {
+            vkDestroyImageView(*device, texture.textureImageView, nullptr);
+            vkDestroyImage(*device, texture.textureImage, nullptr);
+            vkFreeMemory(*device, texture.textureImageMemory, nullptr);
+        }
+    }
 };
 
 void Render::InitVulkanImageManager() {
     vulkanImageManager = new VulkanImageManager();
 }
+
+Render::Texture Render::CreateTexture(std::string path) {
+    return vulkanImageManager->CreateTexture(path);
+}
+
+void *Render::FindDepthFormat() {
+    VkFormat *output = new VkFormat();
+    *output = vulkanImageManager->FindDepthFormat();
+    return output;
+}
+
+void Render::CreateDepthResources(void *image, void *extent) {
+    return vulkanImageManager->CreateDepthResources((TextureData *)image, (VkExtent2D *)extent);
+}
+
+void Render::VulkanImageManagerCleanUp() {
+    vulkanImageManager->CleanUp();
+}
+
+Render::VulkanImageManager *Render::vulkanImageManager = nullptr;
 
 }  // namespace Ignis

@@ -4,6 +4,7 @@
 //  creates bitmap struct? class?
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <complex>
@@ -12,12 +13,11 @@
 #include <iostream>
 #include <latch>
 #include <map>
+#include <numbers>
 #include <queue>
 #include <thread>
 #include <unordered_map>
 #include <vector>
-#include <numbers>
-#include <array>
 
 #include "freetype/freetype.h"
 #include "freetype/ftbbox.h"
@@ -470,7 +470,7 @@ struct Outline {
     void populateBounds();
     void populateBeziers();
     void getSegments(float acceptedAngleDeviation);
-    Bezier &findClosestBez(const Vec2f& point, float *distOut, float *t);
+    Bezier &findClosestBez(const Vec2f &point, float *distOut, float *t);
 
     Vec2f transformCoord(const float x, const float y);
     uint8_t distToColor(const float dist, const float maxDist);
@@ -1499,7 +1499,6 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
 
             auto [unicode, cp] = validPageCodepoints[rects[i].id];
             FT_Load_Glyph(ftFace, cp, FT_LOAD_RENDER);
-            
 
             const FT_Bitmap &bmp = ftFace->glyph->bitmap;
             FT_GlyphSlot slot = ftFace->glyph;
@@ -1558,7 +1557,7 @@ void Font::packUnicodeRange(const uint32_t unicodeStart, const uint32_t unicodeE
             page.addGlyph(glyph);
             pagePosition[fontSize].insert({ cp, pages.size() });
         }
-        page.textureId = Render::CreateFontPage(textureData, pageWidth, pageHeight);
+        // page.textureId = Render::CreateFontPage(textureData, pageWidth, pageHeight);
 
         char filename[20];
         sprintf(filename, "goat%u.bmp", pageCount);

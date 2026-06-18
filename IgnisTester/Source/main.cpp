@@ -1,6 +1,3 @@
-#include <cstdint>
-
-#include "glm/ext/vector_float3.hpp"
 #define IGNIS_UI
 #define IGNIS_UI_NAMES
 #define IGNIS_RENDER_NAMES
@@ -25,10 +22,6 @@ int main() {
     Render::Init(true);
     Window window1 = Render::CreateAppWindow(1200, 800, "Gup 1");
 
-    while (true) {
-        Input::Event();
-    }
-
     /*
     // int fontId = UI::LoadFont("../DejaVuSans.ttf");
     */
@@ -39,25 +32,16 @@ int main() {
 
     Image image = Image(Vec2f(45, 45), Vec2f(10, 10), Color(1.0f, 1.0f, 1.0f));
     Image image3 = Image(Vec2f(40, 35), Vec2f(20, 30), monika);
-    /*
-    UI::PushOn(window1, image3);
+    // should add popoff so elements can be removed seperately
+    UI::PushOn(image3, image);
     UI::Submit();
 
-    Render::PushOn(data, surface);
-    Render::Submit(surface);
-
-    float time = 0.0f;
-    while (UI::CanDraw()) {
-        // Render::Clear(window1);
-        UI::Draw();
-        Render::Draw(surface);
+    while (Render::IsOpen()) {
         Input::Event();
-        Render::Update();
+        Render::Update();  // i need to draw
     }
 
-    UI::Clean();
-    Render::Clean();
-    */
-    std::string somethign;
-    std::cin >> somethign;
+    UI::CleanUp();
+    Render::CleanUp();
+    Input::CleanUp();
 }

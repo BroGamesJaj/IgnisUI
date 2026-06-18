@@ -36,7 +36,6 @@ struct WindowUserPointer {
 };
 
 using Vertex = Render::Vertex;
-using CreateGraphicPipeLineInfo = Render::CreateGraphicPipeLineInfo;
 using RenderData = Render::RenderData;
 using Window = Render::Window;
 
@@ -342,7 +341,7 @@ class Render::Vulkan {
     std::unordered_map<int, TextureData> textureData;
     unsigned int nextTexture = 1;
 
-    std::unordered_map<int, RenderData> renderData;
+    std::unordered_map<Window, RenderData> renderData;
 
     std::unordered_map<int, SurfaceAccess> surfaceAccess;
     int nextSurface = 0;
@@ -409,11 +408,6 @@ class Render::Vulkan {
         return nextTexture++;  // returns texture slot ID
     }
 
-    int CreatePipeline(CreateGraphicPipeLineInfo graphicPipeLineInfo) {
-        // create the rendering procedure that the data passes to be rendered
-        return CreateGraphicPipelines(RenderPassInfoToVK(graphicPipeLineInfo));
-    }
-
     Render::Texture CreateTexture(int descriptorSet, std::string path) {
         if (!descriptorSets.contains(descriptorSet))
             throw std::runtime_error("can't add texture to descriptor, descriptor id is invalid");
@@ -449,8 +443,6 @@ class Render::Vulkan {
             }
         }
 
-        // if element changed update the vertex & index buffer for that surface
-        UpdateElementBuffers();
 
         DrawFrame();
         drawQueue.clear();
@@ -472,10 +464,6 @@ class Render::Vulkan {
             throw std::runtime_error("invalid window!");
     }
 
-    void AddElementData(RenderData &data) {
-        renderData[data.surface] = data;
-        UpdateElementBuffers();
-    }
 
     void *GetWindowOfSurface(int surface) {
         return surfaceAccess[surface].window;
@@ -506,125 +494,6 @@ class Render::Vulkan {
     }
 
    private:
-    CreateGraphicPipeLineInfoVKConvert RenderPassInfoToVK(CreateGraphicPipeLineInfo info) {
-        CreateGraphicPipeLineInfoVKConvert output;
-
-        output.vertexShader = info.vertexShader;
-        output.fragmentShader = info.fragmentShader;
-
-        switch (info.topology) {
-            case CreateGraphicPipeLineInfo::Topology::Triangle:
-                output.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-                break;
-            case CreateGraphicPipeLineInfo::Topology::Line:
-                output.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
-                break;
-            case CreateGraphicPipeLineInfo::Topology::Point:
-                output.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
-                break;
-        }
-
-        switch (info.culling) {
-            case CreateGraphicPipeLineInfo::Culling::Back:
-                output.cullMode = VK_CULL_MODE_BACK_BIT;
-                break;
-            case CreateGraphicPipeLineInfo::Culling::Front:
-                output.cullMode = VK_CULL_MODE_FRONT_BIT;
-                break;
-            case CreateGraphicPipeLineInfo::Culling::None:
-                output.cullMode = VK_CULL_MODE_NONE;
-                break;
-        }
-
-        switch (info.frontFace) {
-            case CreateGraphicPipeLineInfo::FrontFace::CounterClockwise:
-                output.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-                break;
-            case CreateGraphicPipeLineInfo::FrontFace::Clockwise:
-                output.frontFace = VK_FRONT_FACE_CLOCKWISE;
-                break;
-        }
-
-        output.lineWidth = info.lineWidth;
-
-        switch (info.samples) {
-            case CreateGraphicPipeLineInfo::Samples::x1:
-                output.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-                break;
-            case CreateGraphicPipeLineInfo::Samples::x2:
-                output.rasterizationSamples = VK_SAMPLE_COUNT_2_BIT;
-                break;
-            case CreateGraphicPipeLineInfo::Samples::x4:
-                output.rasterizationSamples = VK_SAMPLE_COUNT_4_BIT;
-                break;
-            case CreateGraphicPipeLineInfo::Samples::x8:
-                output.rasterizationSamples = VK_SAMPLE_COUNT_8_BIT;
-                break;
-        }
-
-        output.sampleShadingEnable = info.sampleShading ? VK_TRUE : VK_FALSE;
-        output.minSampleShading = info.minSampleShading;
-
-        output.blendEnable = info.blendEnable ? VK_TRUE : VK_FALSE;
-
-        auto ConvertBlendFactor = [](CreateGraphicPipeLineInfo::BlendFactor factor) -> VkBlendFactor {
-            switch (factor) {
-                case CreateGraphicPipeLineInfo::BlendFactor::SrcAlpha:
-                    return VK_BLEND_FACTOR_SRC_ALPHA;
-                case CreateGraphicPipeLineInfo::BlendFactor::DstAlpha:
-                    return VK_BLEND_FACTOR_DST_ALPHA;
-                case CreateGraphicPipeLineInfo::BlendFactor::OneMinusSrcAlpha:
-                    return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-                case CreateGraphicPipeLineInfo::BlendFactor::OneMinusDstAlpha:
-                    return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
-                case CreateGraphicPipeLineInfo::BlendFactor::SrcColor:
-                    return VK_BLEND_FACTOR_SRC_COLOR;
-                case CreateGraphicPipeLineInfo::BlendFactor::DstColor:
-                    return VK_BLEND_FACTOR_DST_COLOR;
-                case CreateGraphicPipeLineInfo::BlendFactor::OneMinusSrcColor:
-                    return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
-                case CreateGraphicPipeLineInfo::BlendFactor::OneMinusDstColor:
-                    return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
-            }
-            return VK_BLEND_FACTOR_ONE;  // fallback
-        };
-
-        auto ConvertBlendOp = [](CreateGraphicPipeLineInfo::BlendMode mode) -> VkBlendOp {
-            switch (mode) {
-                case CreateGraphicPipeLineInfo::BlendMode::Add:
-                    return VK_BLEND_OP_ADD;
-                case CreateGraphicPipeLineInfo::BlendMode::Sub:
-                    return VK_BLEND_OP_SUBTRACT;
-                case CreateGraphicPipeLineInfo::BlendMode::Max:
-                    return VK_BLEND_OP_MAX;
-                case CreateGraphicPipeLineInfo::BlendMode::Min:
-                    return VK_BLEND_OP_MIN;
-            }
-            return VK_BLEND_OP_ADD;  // fallback
-        };
-
-        output.srcColorBlendFactor = ConvertBlendFactor(info.scrColorBlend);
-        output.dstColorBlendFactor = ConvertBlendFactor(info.dstColorBlend);
-        output.colorBlendOp = ConvertBlendOp(info.colorBlendOp);
-
-        output.srcAlphaBlendFactor = ConvertBlendFactor(info.scrAlphaBlend);
-        output.dstAlphaBlendFactor = ConvertBlendFactor(info.dstAlphaBlend);
-        output.alphaBlendOp = ConvertBlendOp(info.alphaBlendOp);
-
-        output.depthTestEnable = info.depthTesting ? VK_TRUE : VK_FALSE;
-        output.depthWriteEnable = info.depthWriting ? VK_TRUE : VK_FALSE;
-
-        for (int i = 0; i < 3; i++) output.clearBit[i] = info.clearBit[i];
-        for (int i = 0; i < 2; i++) output.stencilBit[i] = info.stencilBit[i];
-
-        output.constants = std::move(info.constants);
-
-        output.descriptorSetIds = info.descriptorSetIds;
-
-        output.vertexDataLayout = std::move(info.vertexDataLayout);
-
-        return output;
-    }
 
     void CleanupSwapChain(SurfaceVulkanData *surface) {
         vkDestroyImageView(device, surface->depthImageView, nullptr);
@@ -930,20 +799,6 @@ class Render::Vulkan {
         CreateDepthResources(data, windows[window]->swapChainExtent);
     }
 
-    // assumes one element per surface
-    void UpdateElementBuffers() {
-        for (auto &[surfaceId, element] : renderData) {
-            if (element.changed) {
-                SurfaceAccess acces = surfaceAccess[surfaceId];
-                SurfaceVulkanData *surfaceData = &windows[acces.window]->surfaces[acces.surface];
-                CreateVertexBuffer(surfaceData, element.vertecies);
-                CreateIndexBuffer(surfaceData, element.indicies);
-                surfaceData->indiceCount = element.indicies.size();
-                element.changed = false;
-            }
-        }
-    }
-
     int CreateSamplerFromData(CreateSamplerVKConvert &samplerVK) {
         VkSamplerCreateInfo samplerInfo{};
 
@@ -982,7 +837,7 @@ class Render::Vulkan {
 
     // creates a buffer
     void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &bufferMemory) {
-        // basic vertex buffer data
+        // basic buffer data
         VkBufferCreateInfo bufferInfo{};
         bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         bufferInfo.size = size;
@@ -2234,10 +2089,6 @@ void Render::Draw(Surface surface) { instance->Draw(surface.surface); }
 
 void Render::Update() { instance->Update(); }
 
-bool Render::IsValidSurface(Surface surface) { return instance->IsValidSurface(surface.surface); }
-
-void Render::AddElementData(RenderData &data) { instance->AddElementData(data); }
-
 // Render::Texture Render::CreateTexture(std::string path) { return instance->CreateTexture(path); }
 
 void Render::Clean() { delete instance; }
@@ -2250,8 +2101,6 @@ int Render::CreateDescriptorSet(Render::DescriptorSetInfo &descriptorSetInfo) {
 std::vector<int> Render::CreateDescriptorSet(std::vector<Render::DescriptorSetInfo> &descriptorSetInfo) {
     return instance->CreateDescSets(descriptorSetInfo);
 }
-
-int Render::CreatePipeline(CreateGraphicPipeLineInfo &gpInfo) { return instance->CreatePipeline(gpInfo); }
 
 int Render::CreateFontPage(const std::vector<uint8_t> &rgbaData, uint32_t width, uint32_t height) { return instance->CreateFontPage(rgbaData, width, height); };
 
@@ -2305,38 +2154,6 @@ void Render::PushConstantsToVulkan(std::string &name, void *data, uint32_t size)
     instance->PushConstants(name, data, size);
 }
 
-void Render::PushOn(VertexData &data, Surface &surface) {
-    if (!IsValidSurface(surface))
-        throw new std::runtime_error("can't push onto invalid surface");
-
-    int id = surface.surface;
-
-    if (!surfaceData.contains(id)) {
-        surfaceData[id] = data;
-    } else {
-        VertexData &current = surfaceData[id];
-        uint32_t indicieShift = current.vertecies.size();
-        current.vertecies.insert(current.vertecies.end(), data.vertecies.begin(), data.vertecies.end());
-        for (size_t i = 0; i < data.indicies.size(); i++) {
-            current.indicies.push_back(indicieShift + data.indicies[i]);
-        }
-    }
-}
-
-void Render::Submit(Surface &surface) {
-    if (!surfaceData.contains(surface.surface))
-        throw new std::runtime_error("Cant submit the given surface");
-
-    int id = surface.surface;
-    RenderData output{
-        .vertecies = surfaceData[id].vertecies,
-        .indicies = surfaceData[id].indicies,
-        .surface = id,
-        .changed = true
-    };
-
-    instance->AddElementData(output);
-}
 
 void Render::Clear(Window &window) { instance->Clear(window); };
 
