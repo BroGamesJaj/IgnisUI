@@ -68,8 +68,6 @@ class Render::WindowManager {
 
         surface = surfaceOut;
 
-        windows.emplace(windowOut);
-
         return windowOut;
     }
 
@@ -465,8 +463,9 @@ class Render::WindowManager {
     }
 
     GLFWwindow *Open(int width, int height, const char *title, GLFWmonitor *monitor, GLFWwindow *share) {
-        GLFWwindow *windowOut;
-        return glfwCreateWindow(width, height, title, monitor, share);
+        GLFWwindow *window = glfwCreateWindow(width, height, title, monitor, share);
+        windows.emplace(window);
+        return window;
     }
 
     void Close(Window window) {

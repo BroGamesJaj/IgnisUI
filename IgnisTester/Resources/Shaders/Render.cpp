@@ -443,7 +443,6 @@ class Render::Vulkan {
             }
         }
 
-
         DrawFrame();
         drawQueue.clear();
     }
@@ -463,7 +462,6 @@ class Render::Vulkan {
         } else
             throw std::runtime_error("invalid window!");
     }
-
 
     void *GetWindowOfSurface(int surface) {
         return surfaceAccess[surface].window;
@@ -494,7 +492,6 @@ class Render::Vulkan {
     }
 
    private:
-
     void CleanupSwapChain(SurfaceVulkanData *surface) {
         vkDestroyImageView(device, surface->depthImageView, nullptr);
         vkDestroyImage(device, surface->depthImage, nullptr);
@@ -2153,7 +2150,6 @@ void Render::PublishConstantsToVulkan(std::vector<Render::ConstData> &data) {
 void Render::PushConstantsToVulkan(std::string &name, void *data, uint32_t size) {
     instance->PushConstants(name, data, size);
 }
-
 
 void Render::Clear(Window &window) { instance->Clear(window); };
 

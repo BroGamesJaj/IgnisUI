@@ -26,7 +26,6 @@ struct WindowData {
     VkSwapchainKHR swapChain;
     std::vector<VkImage> swapChainImages;
     std::vector<VkImageView> swapChainImageViews;
-    std::vector<VkFramebuffer> swapChainFramebuffers;
     bool framebufferResized = false;
 
     std::vector<VkCommandBuffer> commandBuffers;
@@ -81,7 +80,7 @@ struct CreateGraphicPipeLineInfo {
     VkBool32 depthTestEnable = VK_FALSE;
     VkBool32 depthWriteEnable = VK_FALSE;
 
-    std::vector<Render::VertexDataType> vertexDataLayout = { Render::VertexDataType::VEC3 };
+    std::vector<Render::VertexDataType> vertexDataLayout = { Render::VertexDataType::VEC3, Render::VertexDataType::FLOAT };
 };
 
 enum class PipelineType { Graphics,
@@ -772,10 +771,6 @@ class Render::VulkanDataManager {
         vkDestroyImage(*device, windows[window].depthImage, nullptr);
         vkFreeMemory(*device, windows[window].depthImageMemory, nullptr);
 
-        for (auto framebuffer : windows[window].swapChainFramebuffers) {
-            vkDestroyFramebuffer(*device, framebuffer, nullptr);
-        }
-
         for (auto imageView : windows[window].swapChainImageViews) {
             vkDestroyImageView(*device, imageView, nullptr);
         }
@@ -916,7 +911,7 @@ class Render::VulkanDataManager {
         if (window.indexBuffer != VK_NULL_HANDLE) {
             vkDestroyBuffer(*device, window.indexBuffer, nullptr);
             vkFreeMemory(*device, window.indexBufferMemory, nullptr);
-            window.vertexBuffer = VK_NULL_HANDLE;
+            window.indexBuffer = VK_NULL_HANDLE;
         }
 
         uint32_t baseIndicieCount = basicRenderData[windowIn.ptr].indicies.size();
@@ -968,6 +963,9 @@ class Render::VulkanDataManager {
         CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, window.drawBuffer, window.drawBufferMemory);
 
         CopyBuffer(stagingBuffer, window.drawBuffer, bufferSize);
+
+        vkDestroyBuffer(*device, stagingBuffer, nullptr);
+        vkFreeMemory(*device, stagingBufferMemory, nullptr);
     }
 
     std::unordered_set<GLFWwindow *> UpdateElementBuffers() {
@@ -1038,7 +1036,7 @@ class Render::VulkanDataManager {
         colorAttachmentInfo.imageView = window.swapChainImageViews[imageIndex];
         colorAttachmentInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
         colorAttachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        colorAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        colorAttachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         colorAttachmentInfo.clearValue = clearValues[0];
 
         VkRect2D renderArea{};
@@ -1246,8 +1244,8 @@ class Render::VulkanDataManager {
     }
 
     void AddUIRenderData(RenderData &data) {
-        uiRenderData[data.window.ptr] = std::move(data);
         uiDrawQueue.push_back(data.window);
+        uiRenderData[data.window.ptr] = std::move(data);
     }
 
     void Update() {
@@ -1266,6 +1264,10 @@ class Render::VulkanDataManager {
         CleanupSwapChain(windowIn);
 
         WindowData &window = windows[windowIn];
+
+        vkDeviceWaitIdle(*device);
+        vkFreeCommandBuffers(*device, *(VkCommandPool *)GetGraphicPool(),
+                             window.commandBuffers.size(), window.commandBuffers.data());
 
         vkDestroyBuffer(*device, window.vertexBuffer, nullptr);
         vkFreeMemory(*device, window.vertexBufferMemory, nullptr);
@@ -1287,6 +1289,8 @@ class Render::VulkanDataManager {
         vkFreeMemory(*device, window.drawBufferMemory, nullptr);
 
         vkDestroySurfaceKHR(*instance, window.surface, nullptr);
+
+        windows.erase(windowIn);
     }
 
     void CleanUp() {

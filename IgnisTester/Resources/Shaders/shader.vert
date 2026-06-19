@@ -1,6 +1,7 @@
 #version 450
 
 layout(location = 0) in vec3 inPosition;
+layout(location = 1) in float isInstance;
 
 layout(set = 1, binding = 0) uniform uniformbufferobject {
     mat4 model;
@@ -14,5 +15,5 @@ layout(set = 1, binding = 1) buffer StorageBuffer
 } ssbo;
 
 void main() {
-    gl_Position = vec4(inPosition*0.5, 1.0);
+    gl_Position = vec4(inPosition, 1.0);
 }

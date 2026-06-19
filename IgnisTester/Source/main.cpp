@@ -30,7 +30,7 @@ int main() {
     Texture monika = UI::CreateTexture("../Resources/Textures/monika2.png");
     Texture sus = UI::CreateTexture("../Resources/Textures/goated0.bmp");
 
-    Image image = Image(Vec2f(45, 45), Vec2f(10, 10), Color(1.0f, 1.0f, 1.0f));
+    Image image = Image(Vec2f(45, 45), Vec2f(10, 10), Color(0.5f, 1.0f, 1.0f));
     Image image3 = Image(Vec2f(40, 35), Vec2f(20, 30), monika);
     // should add popoff so elements can be removed seperately
     UI::PushOn(image3, image);

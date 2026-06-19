@@ -19,10 +19,10 @@ void main() {
     if (true) {
         //vec4 texColor = texture(textures[nonuniformEXT(fragTexId)], fragTexCoord);
 
-        outColor = vec4(1.0,1.0,1.0,1.0);
+        outColor = vec4(0.5,1.0,1.0,1.0);
 
     } else {
-        outColor = vec4(1.0,1.0,1.0,1.0);
+        outColor = vec4(0.5,1.0,1.0,1.0);
     }
 }
 
