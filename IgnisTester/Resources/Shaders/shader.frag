@@ -2,10 +2,13 @@
 
 #extension GL_EXT_nonuniform_qualifier : require
 
+layout(location = 0) in vec2 uv;
+layout(location = 1) in flat uint textureId;
+layout(location = 2) in flat uint color;
+layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 0) uniform sampler2D textures[];
 
-layout(location = 0) out vec4 outColor;
 
 vec3 hueToRGB(float h) {
     float r = abs(h * 6.0 - 3.0) - 1.0;
@@ -16,13 +19,16 @@ vec3 hueToRGB(float h) {
 
 void main() {
 
-    if (true) {
-        //vec4 texColor = texture(textures[nonuniformEXT(fragTexId)], fragTexCoord);
+    float r = float((color >> 16) & 0xFF) / 255.0;
+    float g = float((color >> 8)  & 0xFF) / 255.0;
+    float b = float((color)       & 0xFF) / 255.0;
 
-        outColor = vec4(0.5,1.0,1.0,1.0);
+    if (textureId > 0) {
+        vec4 texColor = texture(textures[nonuniformEXT(textureId)],uv);
+        outColor = texColor* vec4(r,g,b,1.0);
 
     } else {
-        outColor = vec4(0.5,1.0,1.0,1.0);
+        outColor = vec4(r,g,b,1.0);
     }
 }
 

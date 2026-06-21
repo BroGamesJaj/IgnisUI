@@ -32,25 +32,26 @@ Color Color::operator+(const Color &other) const { return Color(std::clamp(this-
 Color Color::operator-(const Color &other) const { return Color(std::clamp(this->r - other.r, 0.0f, 1.0f), std::clamp(this->g - other.g, 0.0f, 1.0f), std::clamp(this->b - other.b, 0.0f, 1.0f)); }
 Color Color::Inverted() { return Color(1.0f - this->r, 1.0f - this->g, 1.0f - this->b); }
 
+void UI::Rotate(Element &element, float angle) {
+    Window window = windowMapping[element.data];
+    uint32_t index = instanceIndex[element.data];
+    Render::InstanceData &instance = instances->at(index);
+
+    instance.model = glm::rotate(instance.model, angle, { 0, 0, 1 });
+
+    Render::SSBOChanged(window, { index });
+}
+
 // UI Handling
 void UI::Init(Window window) {
-    if (!windows.contains(window.ptr))
+    if (!windows.contains(window.ptr)) {
         windows.insert(window.ptr);
+        Render::InitUIRenderData(window);
+    }
 }
 
 Render::Texture UI::CreateTexture(std::string path) {
     return Render::CreateTexture(path);
-}
-
-bool UI::CanDraw() {
-    if (elements.size() == 0) return false;
-
-    bool haveValid = false;
-    for (auto &window : windows) {
-        haveValid |= Render::IsValidWindow(Window{ window });
-    }
-
-    return haveValid;
 }
 
 float time = 0.0f;
@@ -183,13 +184,8 @@ void UI::Submit(Window &window) {
     if (!elements.contains(window.ptr)) return;
 
     UI::ProcessData data{ .ofst{ 0, 0 }, .size{ 2, 2 } };
-
-    Render::RenderData outputData;
-    GenerateInstanceVertecies(outputData);
-    ProcessElements(outputData, data, elements[window.ptr]);
-    outputData.window = window;
-    outputData.changed = true;
-    Render::AddUIRenderData(outputData);
+    ProcessElements(data, elements[window.ptr]);
+    Render::SSBOChanged(window);
 }
 
 glm::mat4 createModel(glm::vec3 position, glm::vec3 scale, float rotation, glm::vec3 axis) {
@@ -204,7 +200,7 @@ glm::mat4 createModel(glm::vec3 position, glm::vec3 scale, float rotation, glm::
 
 // uint32_t normal = (127 << 16) | (127 << 8) | (255);
 
-void UI::ProcessElements(Render::RenderData &returnData, UI::ProcessData data, std::vector<UIData *> &elements) {
+void UI::ProcessElements(UI::ProcessData data, std::vector<UIData *> &elements) {
     for (auto element : elements) {
         Vec2f &position = GetPosition(element);
         Vec2f &size = GetSize(element);
@@ -233,30 +229,21 @@ void UI::ProcessElements(Render::RenderData &returnData, UI::ProcessData data, s
             instance.textureId = (uint32_t)GetTexture(element);
 
             Color colorIn = GetColor(element);
-            instance.color = ((char)(colorIn.r * 265) << 16) | ((char)(colorIn.g * 265) << 16) | ((char)(colorIn.b * 265) << 16);
+            instance.color = ((char)(colorIn.r * 255) << 16) | ((char)(colorIn.g * 255) << 8) | ((char)(colorIn.b * 255));
 
-            returnData.instances.push_back(instance);
+            instanceIndex[element] = instances->size();
+            instances->push_back(instance);
         }
 
         if (element->type == VIEW) {
             auto view = static_cast<ViewData *>(element->ptr);
-            UI::ProcessElements(returnData, calcData, view->elements);
+            UI::ProcessElements(calcData, view->elements);
         } else if (element->type == BUTTON) {
             auto button = static_cast<ButtonData *>(element->ptr);
             std::vector<UIData *> text = { button->text.data };
-            UI::ProcessElements(returnData, calcData, text);
+            UI::ProcessElements(calcData, text);
         }
     }
-}
-
-void UI::GenerateInstanceVertecies(Render::RenderData &renderData) {
-    Render::InstanceVertex topLeft = { glm::vec3(-0.5f, -0.5f, 0.0f) };
-    Render::InstanceVertex topRight = { glm::vec3(0.5f, -0.5f, 0.0f) };
-    Render::InstanceVertex bottomRight = { glm::vec3(0.5f, 0.5f, 0.0f) };
-    Render::InstanceVertex bottomLeft = { glm::vec3(-0.5f, 0.5f, 0.0f) };
-
-    renderData.vertecies = { topLeft, topRight, bottomRight, bottomLeft };
-    renderData.indicies = { 0, 2, 1, 0, 3, 2 };
 }
 /*
 // TODO: change the whole position and sizing shit
@@ -615,7 +602,7 @@ UI::Text &UI::GetTextElement(UIData *data) {
     }
 }
 
-// Variables
+// Variable Initialization
 
 Window UI::mainWindow;
 std::unordered_map<int, Font::Font *> UI::fonts;
@@ -625,4 +612,7 @@ std::unordered_map<GLFWwindow *, std::vector<UI::UIData *>> UI::elements;
 std::unordered_set<UI::UIData *> UI::dataPtrs;
 int UI::pipeline = true;
 std::unordered_set<GLFWwindow *> UI::windows;
+std::unordered_map<void *, uint32_t> UI::instanceIndex;
+std::vector<Render::InstanceData> *UI::instances;
+std::unordered_map<UI::UIData *, Window> UI::windowMapping;
 }  // namespace Ignis

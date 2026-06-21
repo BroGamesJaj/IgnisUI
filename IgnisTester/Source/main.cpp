@@ -30,15 +30,16 @@ int main() {
     Texture monika = UI::CreateTexture("../Resources/Textures/monika2.png");
     Texture sus = UI::CreateTexture("../Resources/Textures/goated0.bmp");
 
-    Image image = Image(Vec2f(45, 45), Vec2f(10, 10), Color(0.5f, 1.0f, 1.0f));
-    Image image3 = Image(Vec2f(40, 35), Vec2f(20, 30), monika);
+    Image image = Image(Vec2f(50, 20), Vec2f(10, 10), Color(0.0f, 1.0f, 1.0f));
+    Image image3 = Image(Vec2f(50, 60), Vec2f(40, 55), monika);
     // should add popoff so elements can be removed seperately
-    UI::PushOn(image3, image);
+    UI::PushOn(image, image3);
     UI::Submit();
 
     while (Render::IsOpen()) {
+        UI::Rotate(image3, 0.01f);
         Input::Event();
-        Render::Update();  // i need to draw
+        Render::Update();
     }
 
     UI::CleanUp();

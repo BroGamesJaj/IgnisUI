@@ -351,6 +351,7 @@ class Render::WindowManager {
         features12.descriptorBindingPartiallyBound = VK_TRUE;
         features12.descriptorBindingVariableDescriptorCount = VK_TRUE;
         features12.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+        features12.descriptorBindingStorageBufferUpdateAfterBind = VK_TRUE;
         features12.pNext = &robustness2Features;
 
         VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeature{};
@@ -462,9 +463,20 @@ class Render::WindowManager {
         std::cout << "Instance Successfuly initialized" << std::endl;
     }
 
+    static void FrameBufferCallback(Window window) {
+        FrameBufferResized(window);
+    }
+
     GLFWwindow *Open(int width, int height, const char *title, GLFWmonitor *monitor, GLFWwindow *share) {
         GLFWwindow *window = glfwCreateWindow(width, height, title, monitor, share);
-        windows.emplace(window);
+
+#ifdef IGNIS_INPUT
+        Window windowStuff{ window };
+        Input::InitWindow(windowStuff);
+        Input::HookFramebufferSizeCallback(windowStuff, FrameBufferCallback);
+#endif  // IGNIS_INPUT
+
+        windows.insert(window);
         return window;
     }
 

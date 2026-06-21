@@ -183,10 +183,11 @@ class Render {
     };
 
     struct InstanceData {
-        glm::mat4 model;
-        uint32_t textureId;
-        glm::vec2 uv;
-        uint32_t color;
+        alignas(16) glm::mat4 model;
+        alignas(16) glm::vec4 uv = { 0, 0, 1, 1 };
+        alignas(4) uint32_t textureId;
+        alignas(4) uint32_t color;
+        uint32_t _pad[2];
     };
 
     struct GlyphInstance {
@@ -344,10 +345,6 @@ class Render {
     struct RenderData {
         std::vector<Render::InstanceVertex> vertecies;
         std::vector<uint32_t> indicies;
-        std::vector<Render::InstanceData> instances;
-
-        Window window;
-        bool changed = true;
     };
 
     struct Surface {
@@ -367,6 +364,7 @@ class Render {
         InitVulkanQueueManager();
         InitVulkanDataManager();
     }
+
     static void CleanUp() {
         VulkanDataManagerCleanUp();
     }
@@ -432,6 +430,7 @@ class Render {
     static std::unordered_map<int, VertexData> surfaceData;
 
     static void AddUIRenderData(RenderData &data);
+    static void FrameBufferResized(Window window);
 
     static void *GetWindowOfSurface(int surface);
 
@@ -467,6 +466,7 @@ class Render {
     static void *GetPhyDevice();
     static void *GetBindlessSet();
     static void *GetGraphicPool();
+    static void *GetSSBOInstances();
 
     static void InitWindowManager(bool debugging);
     static void InitVulkanDataManager();
@@ -482,6 +482,7 @@ class Render {
     static void CreateDepthResources(void *image, void *extent);
 
     static void SubmitToGraphicQueue(void *info, void *fence);
+    static void PresentOnPresentQueue(void *info);
 
     static void UpdateWindowManager();
     static void UpdateVulkanDataManager();
@@ -492,6 +493,9 @@ class Render {
     static void VulkanDataManagerCleanUp();
     static void VulkanImageManagerCleanUp();
     static void VulkanQueueManagerCleanUp();
+
+    static void InitUIRenderData(Window window);
+    static void SSBOChanged(Window &window, std::vector<uint32_t> indecies = {});
 
     class Vulkan;
     friend Vulkan;
@@ -786,6 +790,8 @@ class UI {
         if (!windows.contains(window.ptr)) return;
         if (!Render::IsValidWindow(window)) return;
 
+        (windowMapping.insert({ args.data, window }), ...);
+
         (elements[window.ptr].push_back(args.data), ...);
     }
 
@@ -821,27 +827,31 @@ class UI {
 
     static void CleanUp();
 
-    static bool CanDraw();
-
-    static void Draw();
+    static void Rotate(Element &element, float angle);
 
    private:
     static Window mainWindow;
     static std::unordered_map<GLFWwindow *, std::vector<UIData *>> elements;
+    static std::unordered_map<UIData *, Window> windowMapping;
     static int nextId;
+    // not implemented correctly, cleared but never set
     static std::unordered_set<UIData *> dataPtrs;
     static std::unordered_map<int, Font::Font *> fonts;
     static int nextFontId;
     static int pipeline;
     static std::unordered_set<GLFWwindow *> windows;
+    static std::unordered_map<void *, uint32_t> instanceIndex;
+    static std::vector<Render::InstanceData> *instances;
 
     struct ProcessData {
         Vec2f ofst;
         Vec2f size;
     };
 
-    static void ProcessElements(Render::RenderData &returnData, ProcessData data, std::vector<UIData *> &elements);
-    static void GenerateInstanceVertecies(Render::RenderData &renderData);
+    static void ProcessElements(ProcessData data, std::vector<UIData *> &elements);
+    static uint32_t InstanceCount() {
+        return instanceIndex.size();
+    }
 
     // Data Handling
     static UIData *CreateData(UIType type);
@@ -879,6 +889,7 @@ class UI {
     static void ProcHoveredElements(std::vector<UIData *> &elements, Vec2<float> &position);
 
     friend class Input;
+    friend class Render;
 };
 
 #ifdef IGNIS_UI_NAMES

@@ -129,6 +129,10 @@ class Render::VulkanQueueManager {
         }
     }
 
+    void PresentOnPresentQueue(VkPresentInfoKHR *info) {
+        VkResult result = vkQueuePresentKHR(presentQueue, info);
+    }
+
     void CleanUp() {
         vkDestroyCommandPool(*device, graphicPool, nullptr);
         vkDestroyCommandPool(*device, presentPool, nullptr);
@@ -159,6 +163,10 @@ void Render::SubmitToGraphicQueue(void *info, void *fence) {
 
 void Render::VulkanQueueManagerCleanUp() {
     vulkanQueueManager->CleanUp();
+}
+
+void Render::PresentOnPresentQueue(void *info) {
+    vulkanQueueManager->PresentOnPresentQueue((VkPresentInfoKHR *)info);
 }
 
 Render::VulkanQueueManager *Render::vulkanQueueManager = nullptr;

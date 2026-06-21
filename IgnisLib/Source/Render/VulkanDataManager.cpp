@@ -7,6 +7,7 @@
 #define TEXTURE_COUNT 1024
 
 #include <array>
+#include <cstring>
 #include <filesystem>
 #include <unordered_set>
 
@@ -36,6 +37,9 @@ struct WindowData {
     std::vector<VkSemaphore> imageAvailableSemaphores;
     std::vector<VkSemaphore> renderFinishedSemaphores;
     std::vector<VkFence> inFlightFences;
+
+    uint32_t vertexOffset;
+    uint32_t indicieOffset;
 
     VkBuffer vertexBuffer;
     VkDeviceMemory vertexBufferMemory;
@@ -80,7 +84,7 @@ struct CreateGraphicPipeLineInfo {
     VkBool32 depthTestEnable = VK_FALSE;
     VkBool32 depthWriteEnable = VK_FALSE;
 
-    std::vector<Render::VertexDataType> vertexDataLayout = { Render::VertexDataType::VEC3, Render::VertexDataType::FLOAT };
+    std::vector<Render::VertexDataType> vertexDataLayout = { Render::VertexDataType::VEC3, Render::VertexDataType::UINT };
 };
 
 enum class PipelineType { Graphics,
@@ -104,18 +108,13 @@ struct BufferData {
     void *bufferMapped;
 };
 
-struct DescriptorSet {
+struct PerFrameDescriptorSet {
     // TODO: maybe reuse layouts between sets
-    VkDescriptorSetLayout descriptorSetLayout{ VK_NULL_HANDLE };
     std::array<VkDescriptorSet, MAX_FRAMES_IN_FLIGHT> descriptorSet{ VK_NULL_HANDLE };
 
     std::array<std::unique_ptr<BufferData>, MAX_FRAMES_IN_FLIGHT> uniformBuffer{ nullptr };
     std::array<std::unique_ptr<BufferData>, MAX_FRAMES_IN_FLIGHT> storageBuffer{ nullptr };
-
-    int textureBinding = -1;
-    int samplerId = -1;
-
-    uint32_t setIdx;
+    uint32_t storageBufferSize;
 };
 
 struct TextureData {
@@ -162,12 +161,18 @@ class Render::VulkanDataManager {
    private:
     VkDescriptorSetLayout perFrameLayout;
     VkDescriptorSet perFrameData;
+    PerFrameDescriptorSet perFrameDataBuffers;
+    std::array<bool, MAX_FRAMES_IN_FLIGHT> storageBufferUpdate;
+    std::vector<uint32_t> storageBufferChanges;
 
     std::unordered_map<GLFWwindow *, RenderData> basicRenderData;
     std::unordered_map<GLFWwindow *, RenderData> uiRenderData;
 
     std::vector<Window> basicDrawQueue;
     std::vector<Window> uiDrawQueue;
+
+    std::unordered_set<GLFWwindow *> needDraw;
+    std::vector<InstanceData> instances;
 
     ////////////////////////
     ////   Functions   /////
@@ -480,13 +485,7 @@ class Render::VulkanDataManager {
     void SetupGraphicDescriptors() {
         CreateDescriptorPool();
 
-        // set 1
-        VkDescriptorSetLayoutBinding textureBinding{};
-        textureBinding.binding = 0;
-        textureBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        textureBinding.descriptorCount = 1024;
-        textureBinding.stageFlags = VK_SHADER_STAGE_ALL;
-
+        // flag set 1
         VkDescriptorBindingFlags flags =
             VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
             VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
@@ -496,14 +495,32 @@ class Render::VulkanDataManager {
         flagsInfo.bindingCount = 1;
         flagsInfo.pBindingFlags = &flags;
 
-        VkDescriptorSetLayoutCreateInfo layoutInfo{};
-        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        layoutInfo.pNext = &flagsInfo;
-        layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
-        layoutInfo.bindingCount = 1;
-        layoutInfo.pBindings = &textureBinding;
+        // set 1
+        VkDescriptorSetLayoutBinding textureBinding{};
+        textureBinding.binding = 0;
+        textureBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        textureBinding.descriptorCount = 1024;
+        textureBinding.stageFlags = VK_SHADER_STAGE_ALL;
 
-        vkCreateDescriptorSetLayout(*device, &layoutInfo, nullptr, &bindlessLayout);
+        VkDescriptorSetLayoutCreateInfo bindlessLayoutInfo{};
+        bindlessLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        bindlessLayoutInfo.pNext = &flagsInfo;
+        bindlessLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+        bindlessLayoutInfo.bindingCount = 1;
+        bindlessLayoutInfo.pBindings = &textureBinding;
+
+        vkCreateDescriptorSetLayout(*device, &bindlessLayoutInfo, nullptr, &bindlessLayout);
+
+        // flag set 2
+        std::array<VkDescriptorBindingFlags, 2> perFrameFlags = {
+            0,                                           // binding 0 - UBO
+            VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT  // binding 1 - SSBO
+        };
+
+        VkDescriptorSetLayoutBindingFlagsCreateInfo perFrameFlagsInfo{};
+        perFrameFlagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+        perFrameFlagsInfo.bindingCount = 2;
+        perFrameFlagsInfo.pBindingFlags = perFrameFlags.data();
 
         // set 2
         VkDescriptorSetLayoutBinding UboBinding{};
@@ -521,11 +538,14 @@ class Render::VulkanDataManager {
 
         std::array<VkDescriptorSetLayoutBinding, 2> bindings = { UboBinding, SsboBinding };
 
-        layoutInfo.bindingCount = 2;
-        layoutInfo.pBindings = bindings.data();
-        layoutInfo.pNext = nullptr;
+        VkDescriptorSetLayoutCreateInfo perFrameLayoutInfo{};
+        perFrameLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        perFrameLayoutInfo.pNext = &perFrameFlagsInfo;
+        perFrameLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+        perFrameLayoutInfo.bindingCount = 2;
+        perFrameLayoutInfo.pBindings = bindings.data();
 
-        vkCreateDescriptorSetLayout(*device, &layoutInfo, nullptr, &perFrameLayout);
+        vkCreateDescriptorSetLayout(*device, &perFrameLayoutInfo, nullptr, &perFrameLayout);
 
         // creation
         VkDescriptorSetAllocateInfo allocInfo{};
@@ -537,6 +557,68 @@ class Render::VulkanDataManager {
 
         allocInfo.pSetLayouts = &perFrameLayout;
         vkAllocateDescriptorSets(*device, &allocInfo, &perFrameData);
+
+        perFrameDataBuffers.storageBufferSize = 12;
+        CreateStorageBuffers(perFrameDataBuffers.storageBuffer,
+                             perFrameDataBuffers.storageBufferSize * sizeof(InstanceData));
+    }
+
+    void CreateUniformBuffer(std::array<std::unique_ptr<BufferData>, MAX_FRAMES_IN_FLIGHT> &bufferData, uint32_t size) {
+        VkDeviceSize bufferSize = size;
+
+        for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+            bufferData[i] = std::make_unique<BufferData>();
+
+            CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, bufferData[i]->buffer, bufferData[i]->bufferMemory);
+
+            vkMapMemory(*device, bufferData[i]->bufferMemory, 0, bufferSize, 0, &bufferData[i]->bufferMapped);
+        }
+    }
+
+    void DeleteStorageBuffers(PerFrameDescriptorSet &set) {
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+            if (set.storageBuffer[i]->buffer != VK_NULL_HANDLE) {
+                vkDestroyBuffer(*device, set.storageBuffer[i]->buffer, nullptr);
+                vkFreeMemory(*device, set.storageBuffer[i]->bufferMemory, nullptr);
+                set.storageBuffer[i]->buffer = VK_NULL_HANDLE;
+            }
+        }
+    }
+
+    void RecreateStorageBuffers(BufferData *data, uint32_t size) {
+        if (data->buffer != VK_NULL_HANDLE) {
+            vkDestroyBuffer(*device, data->buffer, nullptr);
+            vkFreeMemory(*device, data->bufferMemory, nullptr);
+            data->buffer = VK_NULL_HANDLE;
+        }
+        CreateBuffer(size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, data->buffer, data->bufferMemory);
+
+        vkMapMemory(*device, data->bufferMemory, 0, size, 0, &data->bufferMapped);
+
+        VkDescriptorBufferInfo bufferInfo{};
+        bufferInfo.buffer = data->buffer;
+        bufferInfo.offset = 0;
+        bufferInfo.range = VK_WHOLE_SIZE;
+
+        VkWriteDescriptorSet write{};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = perFrameData;
+        write.dstBinding = 1;
+        write.dstArrayElement = 0;
+        write.descriptorCount = 1;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        write.pBufferInfo = &bufferInfo;
+
+        vkUpdateDescriptorSets(*device, 1, &write, 0, nullptr);
+    }
+
+    void CreateStorageBuffers(std::array<std::unique_ptr<BufferData>, MAX_FRAMES_IN_FLIGHT> &bufferData, uint32_t size) {
+        VkDeviceSize bufferSize = size;
+
+        for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+            bufferData[i] = std::make_unique<BufferData>();
+            RecreateStorageBuffers(bufferData[i].get(), size);
+        }
     }
 
     // for the library owned stuff, it wont change, for the user thingies, it will be auto generated
@@ -766,16 +848,24 @@ class Render::VulkanDataManager {
         return nextPipeline++;
     }
 
-    void CleanupSwapChain(GLFWwindow *window) {
-        vkDestroyImageView(*device, windows[window].depthImageView, nullptr);
-        vkDestroyImage(*device, windows[window].depthImage, nullptr);
-        vkFreeMemory(*device, windows[window].depthImageMemory, nullptr);
+    void CleanupSwapChain(GLFWwindow *windowIn) {
+        WindowData &window = windows[windowIn];
+        bool haveDepth = false;
+        for (auto &id : window.pipelines) {
+            haveDepth |= pipelines[id].needDepth;
+        }
 
-        for (auto imageView : windows[window].swapChainImageViews) {
+        if (haveDepth) {
+            vkDestroyImageView(*device, window.depthImageView, nullptr);
+            vkDestroyImage(*device, window.depthImage, nullptr);
+            vkFreeMemory(*device, window.depthImageMemory, nullptr);
+        }
+
+        for (auto imageView : window.swapChainImageViews) {
             vkDestroyImageView(*device, imageView, nullptr);
         }
 
-        vkDestroySwapchainKHR(*device, windows[window].swapChain, nullptr);
+        vkDestroySwapchainKHR(*device, window.swapChain, nullptr);
     }
 
     void RecreateSwapChain(GLFWwindow *window) {
@@ -793,12 +883,25 @@ class Render::VulkanDataManager {
         CreateSwapChain(window);
         CreateImageViews(window);
 
-        TextureData image;
-        image.textureImage = windows[window].depthImage;
-        image.textureImageMemory = windows[window].depthImageMemory;
-        image.textureImageView = windows[window].depthImageView;
+        WindowData &data = windows[window];
 
-        CreateDepthResources((void *)&image, (void *)&windows[window].swapChainExtent);
+        bool haveDepth = false;
+        for (auto &id : data.pipelines) {
+            haveDepth |= pipelines[id].needDepth;
+        }
+
+        if (haveDepth) {
+            TextureData image;
+            image.textureImage = data.depthImage;
+            image.textureImageMemory = data.depthImageMemory;
+            image.textureImageView = data.depthImageView;
+
+            CreateDepthResources((void *)&image, (void *)&windows[window].swapChainExtent);
+
+            data.depthImage = image.textureImage;
+            data.depthImageMemory = image.textureImageMemory;
+            data.depthImageView = image.textureImageView;
+        }
     }
 
     // finding the best memory type based on the data and usage in our application
@@ -864,16 +967,20 @@ class Render::VulkanDataManager {
             window.vertexBuffer = VK_NULL_HANDLE;
         }
 
-        // this does not work, it will crop off vertex data and only save instance data
-        // should use variant or idk
-        uint32_t baseVertexCount = basicRenderData[windowIn.ptr].vertecies.size();
+        RenderData &base = basicRenderData[windowIn.ptr];
+        RenderData &ui = uiRenderData[windowIn.ptr];
+
+        // TODO:
+        //  this does not work, it will crop off vertex data and only save instance data
+        //  should use variant or idk
+        uint32_t baseVertexCount = base.vertecies.size();
 
         uint32_t baseVertexSize = 0;
         if (baseVertexCount > 0)
-            baseVertexSize = basicRenderData[windowIn.ptr].vertecies[0].type == VertexType::Base ? sizeof(Vertex) : sizeof(InstanceVertex);
+            baseVertexSize = base.vertecies[0].type == VertexType::Base ? sizeof(Vertex) : sizeof(InstanceVertex);
 
         uint32_t uiVertexSize = 0;
-        if (uiRenderData[windowIn.ptr].vertecies.size() > 0)
+        if (ui.vertecies.size() > 0)
             uiVertexSize = sizeof(InstanceVertex);
 
         // ui always uses instancing and only 4 vertecies
@@ -890,8 +997,8 @@ class Render::VulkanDataManager {
         // and then copies the data, and unmaps it
         void *data;
         vkMapMemory(*device, stagingBufferMemory, 0, bufferSize, 0, &data);
-        memcpy(data, basicRenderData[windowIn.ptr].vertecies.data(), (size_t)baseVertexSize * baseVertexCount);
-        memcpy((char *)data + baseVertexSize * baseVertexCount, uiRenderData[windowIn.ptr].vertecies.data(), (size_t)(4 * uiVertexSize));
+        memcpy(data, base.vertecies.data(), (size_t)baseVertexSize * baseVertexCount);
+        memcpy((char *)data + baseVertexSize * baseVertexCount, ui.vertecies.data(), (size_t)(4 * uiVertexSize));
         vkUnmapMemory(*device, stagingBufferMemory);
 
         // creates the vertex buffer on the GPU where the CPU cant interact with it but its more efficient, and then transfers the data to it
@@ -914,27 +1021,32 @@ class Render::VulkanDataManager {
             window.indexBuffer = VK_NULL_HANDLE;
         }
 
-        uint32_t baseIndicieCount = basicRenderData[windowIn.ptr].indicies.size();
-        uint32_t baseIndicieSize = sizeof(uint32_t) * baseIndicieCount;
-        // ui always has only 4 indicie
-        VkDeviceSize bufferSize = sizeof(uint32_t) * 4 + baseIndicieSize;
+        RenderData &base = basicRenderData[windowIn.ptr];
+        RenderData &ui = uiRenderData[windowIn.ptr];
 
-        window.indiceCount = baseIndicieCount + 4;
+        uint32_t baseIndicieCount = base.indicies.size();
+        uint32_t UiIndicieCount = ui.indicies.size();
+        uint32_t baseIndicieSize = sizeof(uint32_t) * baseIndicieCount;
+        VkDeviceSize bufferSize = sizeof(uint32_t) * UiIndicieCount + baseIndicieSize;
+
+        window.indiceCount = baseIndicieCount + UiIndicieCount;
 
         VkBuffer stagingBuffer;
         VkDeviceMemory stagingBufferMemory;
         CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
-        std::vector<uint32_t> &indis = basicRenderData[windowIn.ptr].indicies;
+        std::vector<uint32_t> &indis = ui.indicies;
+
+        uint32_t baseVertexCount = base.vertecies.size();
 
         for (size_t i = 0; i < indis.size(); i++) {
-            indis[i] = indis[i] + baseIndicieCount;
+            indis[i] = indis[i] + baseVertexCount;
         }
 
         void *data;
         vkMapMemory(*device, stagingBufferMemory, 0, bufferSize, 0, &data);
-        memcpy(data, basicRenderData[windowIn.ptr].indicies.data(), (size_t)(baseIndicieCount * sizeof(uint32_t)));
-        memcpy((char *)data + baseIndicieSize, uiRenderData[windowIn.ptr].indicies.data(), (size_t)(sizeof(uint32_t) * 4));
+        memcpy(data, base.indicies.data(), (size_t)(baseIndicieCount * sizeof(uint32_t)));
+        memcpy((char *)data + baseIndicieSize, ui.indicies.data(), (size_t)(sizeof(uint32_t) * UiIndicieCount));
         vkUnmapMemory(*device, stagingBufferMemory);
 
         CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, window.indexBuffer, window.indexBufferMemory);
@@ -949,6 +1061,12 @@ class Render::VulkanDataManager {
 
     void CreateIndirectDrawBuffer(Window windowIn) {
         WindowData &window = windows[windowIn.ptr];
+
+        if (window.drawBuffer != VK_NULL_HANDLE) {
+            vkDestroyBuffer(*device, window.drawBuffer, nullptr);
+            vkFreeMemory(*device, window.drawBufferMemory, nullptr);
+            window.drawBuffer = VK_NULL_HANDLE;
+        }
 
         VkDeviceSize bufferSize = window.drawCommands.size() * sizeof(VkDrawIndexedIndirectCommand);
         VkBuffer stagingBuffer;
@@ -968,51 +1086,57 @@ class Render::VulkanDataManager {
         vkFreeMemory(*device, stagingBufferMemory, nullptr);
     }
 
-    std::unordered_set<GLFWwindow *> UpdateElementBuffers() {
-        std::unordered_set<GLFWwindow *> needReCreation;
+    void UpdateElementBuffers() {
+        needDraw.clear();
+
+        std::unordered_set<GLFWwindow *> basicWindows;
 
         for (auto &window : basicDrawQueue) {
-            if (basicRenderData[window.ptr].changed) {
-                needReCreation.insert(window.ptr);
-                basicRenderData[window.ptr].changed = false;
-            }
+            needDraw.insert(window.ptr);
+            basicWindows.insert(window.ptr);
         }
 
         for (auto &window : uiDrawQueue) {
-            if (uiRenderData[window.ptr].changed) {
-                needReCreation.insert(window.ptr);
-                uiRenderData[window.ptr].changed = false;
-            }
+            needDraw.insert(window.ptr);
         }
 
-        for (auto &window : needReCreation) {
-            uint32_t vertexOffset = CreateVertexBuffer(Window{ window });
-            uint32_t indicieOffset = CreateIndexBuffer(Window{ window });
+        for (auto &window : needDraw) {
+            if (!IsValidWindow(window)) return;
+            auto &data = windows[window];
 
-            if (vertexOffset > 0 && indicieOffset > 0) {
+            if (basicWindows.contains(window) || data.vertexBuffer == VK_NULL_HANDLE) {
+                data.vertexOffset = CreateVertexBuffer(Window{ window });
+                data.indicieOffset = CreateIndexBuffer(Window{ window });
+            } else {
+                if (storageBufferChanges.size() > 0) return;
+            }
+
+            data.drawCommands.clear();
+
+            if (data.vertexOffset > 0 && data.indicieOffset > 0) {
                 VkDrawIndexedIndirectCommand base{};
-                base.indexCount = indicieOffset;
+                base.indexCount = data.indicieOffset;
                 base.instanceCount = 1;
                 base.firstIndex = 0;
                 base.vertexOffset = 0;
                 base.firstInstance = 0;
-                windows[window].drawCommands.push_back(base);
+                data.drawCommands.push_back(base);
             }
 
-            if (windows[window].indiceCount > 0) {
+            if (data.indiceCount > 0) {
                 VkDrawIndexedIndirectCommand ui{};
-                ui.indexCount = 4;
-                ui.instanceCount = uiRenderData[window].instances.size();
-                ui.firstIndex = indicieOffset;
-                ui.vertexOffset = vertexOffset;
+                ui.indexCount = uiRenderData[window].indicies.size();  // also number of indicies per instance
+                ui.instanceCount = UI::InstanceCount();
+                ui.firstIndex = data.indicieOffset;
+                ui.vertexOffset = data.vertexOffset;
                 ui.firstInstance = 0;
-                windows[window].drawCommands.push_back(ui);
 
-                CreateIndirectDrawBuffer(Window{ window });
+                data.drawCommands.push_back(ui);
             }
-        }
 
-        return needReCreation;
+            if (data.drawCommands.size() > 0)
+                CreateIndirectDrawBuffer(Window{ window });
+        }
     }
 
     void RecordDraw(WindowData &window, uint32_t imageIndex) {
@@ -1062,6 +1186,9 @@ class Render::VulkanDataManager {
             image.textureImageView = window.depthImageView;
 
             CreateDepthResources((void *)&image, (void *)&window.swapChainExtent);
+            window.depthImage = image.textureImage;
+            window.depthImageMemory = image.textureImageMemory;
+            window.depthImageView = image.textureImageView;
 
             VkRenderingAttachmentInfoKHR depthAttachmentInfo{};
             depthAttachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
@@ -1162,9 +1289,13 @@ class Render::VulkanDataManager {
             swapChains.push_back(windowData.swapChain);
         }
 
+        if (fences.size() == 0) return;
+
         vkWaitForFences(*device, fences.size(), fences.data(), VK_TRUE, UINT64_MAX);
 
         for (size_t i = 0; i < windowsIn.size(); i++) {
+            if (!IsValidWindow(windowsIn[i])) continue;
+
             WindowData &windowData = windows[windowsIn[i]];
 
             // aquires the next available image, when it did, it signals the semaphore
@@ -1173,7 +1304,7 @@ class Render::VulkanDataManager {
 
             // check if swapchain recreation is necessary
             if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-                RecreateSwapChain(windowsIn[i]);
+                FrameBufferResized(Window{ windowsIn[i] });
                 return;
             } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
                 throw std::runtime_error("failed to acquire swap chain image!");
@@ -1200,9 +1331,32 @@ class Render::VulkanDataManager {
             submitInfo.pSignalSemaphores = &windowData.renderFinishedSemaphores[currentFrame];
 
             SubmitToGraphicQueue(&submitInfo, &windowData.inFlightFences[currentFrame]);
-
-            currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
         }
+
+        VkPresentInfoKHR presentInfo{};
+        presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+
+        presentInfo.waitSemaphoreCount = finishSemaphores.size();
+        presentInfo.pWaitSemaphores = finishSemaphores.data();
+
+        presentInfo.swapchainCount = swapChains.size();
+        presentInfo.pSwapchains = swapChains.data();
+        presentInfo.pImageIndices = images.data();
+        presentInfo.pResults = nullptr;
+
+        PresentOnPresentQueue(&presentInfo);
+
+        currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+    }
+
+    void GenerateUIInstanceVertecies(RenderData &renderData) {
+        InstanceVertex topLeft = { glm::vec3(-0.5f, -0.5f, 0.0f) };
+        InstanceVertex topRight = { glm::vec3(0.5f, -0.5f, 0.0f) };
+        InstanceVertex bottomRight = { glm::vec3(0.5f, 0.5f, 0.0f) };
+        InstanceVertex bottomLeft = { glm::vec3(-0.5f, 0.5f, 0.0f) };
+
+        renderData.vertecies = { topLeft, topRight, bottomRight, bottomLeft };
+        renderData.indicies = { 0, 2, 1, 0, 3, 2 };
     }
 
    public:
@@ -1216,6 +1370,10 @@ class Render::VulkanDataManager {
         SetupGraphicDescriptors();
         SetupPipelineLayout();
         SetupMainGraphicPipeline();
+
+#ifdef IGNIS_UI
+        UI::instances = (std::vector<Render::InstanceData> *)GetSSBOInstances();
+#endif
     }
 
     void CreateSurface(GLFWwindow *window) {
@@ -1243,13 +1401,54 @@ class Render::VulkanDataManager {
         return !windows.empty();
     }
 
-    void AddUIRenderData(RenderData &data) {
-        uiDrawQueue.push_back(data.window);
-        uiRenderData[data.window.ptr] = std::move(data);
+    void InitUIRenderData(Window window) {
+        uiRenderData[window.ptr] = RenderData{};
+        GenerateUIInstanceVertecies(uiRenderData[window.ptr]);
+    }
+
+    void UpdateSSBOInstances(std::vector<uint32_t> &indicies) {
+        if (true /*indicies.size() == 0*/) {
+            memcpy(perFrameDataBuffers.storageBuffer[currentFrame]->bufferMapped,
+                   instances.data(), instances.size() * sizeof(InstanceData));
+        } else {  // while if indicies are set, it means that some elements got changed
+
+            InstanceData *gpuInstances = (InstanceData *)perFrameDataBuffers.storageBuffer[currentFrame]->bufferMapped;
+
+            for (auto &index : indicies) {
+                gpuInstances[index] = instances[index];
+            }
+        }
+    }
+
+    void UpdateDescriptors() {
+        if (storageBufferUpdate[currentFrame]) {
+            UpdateSSBOInstances(storageBufferChanges);
+            storageBufferUpdate[currentFrame] = false;
+        }
+    }
+
+    void SSBOChanged(Window &window, std::vector<uint32_t> &indecies) {
+        if (instances.size() > perFrameDataBuffers.storageBufferSize) {
+            uint32_t newSize = instances.size() * 2 * sizeof(InstanceData);
+            for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+                RecreateStorageBuffers(perFrameDataBuffers.storageBuffer[i].get(), newSize);
+            }
+            perFrameDataBuffers.storageBufferSize = instances.size() * 2;
+            indecies.clear();
+        }
+
+        storageBufferChanges.clear();
+        if (indecies.size() > 0) storageBufferChanges = std::move(indecies);
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+            storageBufferUpdate[i] = true;
+        }
+
+        uiDrawQueue.push_back(window);
     }
 
     void Update() {
-        std::unordered_set<GLFWwindow *> needDraw = UpdateElementBuffers();
+        UpdateElementBuffers();
+        UpdateDescriptors();
 
         if (needDraw.size() > 0) {
             std::vector<GLFWwindow *> v(needDraw.begin(), needDraw.end());
@@ -1281,9 +1480,16 @@ class Render::VulkanDataManager {
             vkDestroyFence(*device, window.inFlightFences[i], nullptr);
         }
 
-        vkDestroyImageView(*device, window.depthImageView, nullptr);
-        vkDestroyImage(*device, window.depthImage, nullptr);
-        vkFreeMemory(*device, window.depthImageMemory, nullptr);
+        bool haveDepth = false;
+        for (auto &id : window.pipelines) {
+            haveDepth |= pipelines[id].needDepth;
+        }
+
+        if (haveDepth) {
+            vkDestroyImageView(*device, window.depthImageView, nullptr);
+            vkDestroyImage(*device, window.depthImage, nullptr);
+            vkFreeMemory(*device, window.depthImageMemory, nullptr);
+        }
 
         vkDestroyBuffer(*device, window.drawBuffer, nullptr);
         vkFreeMemory(*device, window.drawBufferMemory, nullptr);
@@ -1297,6 +1503,8 @@ class Render::VulkanDataManager {
         for (auto &[index, data] : constantsData) {
             if (data.data != nullptr) free(data.data);
         }
+
+        DeleteStorageBuffers(perFrameDataBuffers);
 
         for (auto &[index, data] : pipelines) {
             vkDestroyPipeline(*device, data.pipeline, nullptr);
@@ -1320,6 +1528,16 @@ class Render::VulkanDataManager {
 
         WindowManagerCleanUp();
     }
+
+    void FrameBufferResized(Window window) {
+        RecreateSwapChain(window.ptr);
+        basicDrawQueue.push_back(window);
+        uiDrawQueue.push_back(window);
+    }
+
+    void *GetSSBOInstances() {
+        return &instances;
+    }
 };
 
 void Render::InitVulkanDataManager() {
@@ -1338,8 +1556,20 @@ bool Render::IsValidWindow(Window window) {
     return vulkanDataManager->IsValidWindow(window.ptr);
 }
 
-void Render::AddUIRenderData(RenderData &data) {
-    vulkanDataManager->AddUIRenderData(data);
+void Render::SSBOChanged(Window &window, std::vector<uint32_t> indecies) {
+    vulkanDataManager->SSBOChanged(window, indecies);
+}
+
+void Render::InitUIRenderData(Window window) {
+    vulkanDataManager->InitUIRenderData(window);
+}
+
+void *Render::GetSSBOInstances() {
+    return vulkanDataManager->GetSSBOInstances();
+}
+
+void Render::FrameBufferResized(Window window) {
+    vulkanDataManager->FrameBufferResized(window);
 }
 
 bool Render::IsOpen() {
