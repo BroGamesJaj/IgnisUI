@@ -30,14 +30,28 @@ int main() {
     Texture monika = UI::CreateTexture("../Resources/Textures/monika2.png");
     Texture sus = UI::CreateTexture("../Resources/Textures/goated0.bmp");
 
-    Image image = Image(Vec2f(50, 20), Vec2f(10, 10), Color(0.0f, 1.0f, 1.0f));
-    Image image3 = Image(Vec2f(50, 60), Vec2f(40, 55), monika);
+    //Image image = Image(Vec2f(50, 20), Vec2f(10, 10), Color(0.0f, 1.0f, 1.0f));
+    std::vector<UI::Image> images = {
+        Image(Vec2f(20, 70), Vec2f(40, 55), monika),
+        Image(Vec2f(50, 40), Vec2f(30, 40), monika),
+        Image(Vec2f(80, 70), Vec2f(40, 55), monika)
+    };
     // should add popoff so elements can be removed seperately
-    UI::PushOn(image, image3);
+
+    UI::PushOn(images);
     UI::Submit();
 
+    float t = 0.0f;
+
     while (Render::IsOpen()) {
-        UI::Rotate(image3, 0.01f);
+        t += 0.0001f;
+
+        for (size_t i = 0; i < images.size(); i++) {
+            UI::Rotate(images[i], ((i % 2 == 0) ? 1 : -1) * - 0.05f);
+            UI::Move(images[i], { cos(t+i) * 0.008f, sin(t+i/2) * 0.008f });
+            UI::ColorChange(images[i], t*100 + i * 0.2f);
+        }
+
         Input::Event();
         Render::Update();
     }

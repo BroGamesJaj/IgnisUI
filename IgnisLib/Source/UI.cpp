@@ -42,6 +42,38 @@ void UI::Rotate(Element &element, float angle) {
     Render::SSBOChanged(window, { index });
 }
 
+void UI::Move(Element& element, Vec2f delta) {
+    Window window = windowMapping[element.data];
+    uint32_t index = instanceIndex[element.data];
+    Render::InstanceData &instance = instances->at(index);
+
+    instance.model = glm::translate(instance.model, { delta.x, delta.y, 0 });
+
+    Render::SSBOChanged(window, { index });
+}
+
+void UI::ColorChange(Element& element, float hue) {
+    Window window = windowMapping[element.data];
+    uint32_t index = instanceIndex[element.data];
+    Render::InstanceData &instance = instances->at(index);
+
+    hue = std::fmod(hue, 1.0f);
+    if (hue < 0.0f)
+        hue += 1.0f;
+
+    float r = abs(hue * 6.0 - 3.0) - 1.0;
+    float g = 2.0 - abs(hue * 6.0 - 2.0);
+    float b = 2.0 - abs(hue * 6.0 - 4.0);
+    glm::vec3 rgb = glm::clamp(glm::vec3(r, g, b), 0.0f, 1.0f);
+
+
+    uint32_t color = (static_cast<uint32_t>(rgb.r * 255) << 16) | (static_cast<uint32_t>(rgb.g * 255) << 8) | static_cast<uint32_t>(rgb.b * 255);
+
+    instance.color = color;
+
+    Render::SSBOChanged(window, { index });
+}
+
 // UI Handling
 void UI::Init(Window window) {
     if (!windows.contains(window.ptr)) {

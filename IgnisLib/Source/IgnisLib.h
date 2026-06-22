@@ -800,6 +800,17 @@ class UI {
         PushOn(mainWindow, args...);
     }
 
+    template <std::derived_from<UI::Element> T>
+    static void PushOn(Window window, std::vector<T> &elems) {
+        for (auto &e : elems)
+            PushOn(mainWindow, e);
+    }
+
+    template <std::derived_from<UI::Element> T>
+    static void PushOn(std::vector<T> &elems) {
+        PushOn(mainWindow, elems);
+    }
+
     template <std::derived_from<UI::Element>... Args>
     static void PopOff(Window window, Args &...args) {
         if (!windows.contains(window.ptr)) return;
@@ -828,6 +839,10 @@ class UI {
     static void CleanUp();
 
     static void Rotate(Element &element, float angle);
+
+    static void Move(Element &element, Vec2f delta);
+
+    static void ColorChange(Element &element, float hue);
 
    private:
     static Window mainWindow;
