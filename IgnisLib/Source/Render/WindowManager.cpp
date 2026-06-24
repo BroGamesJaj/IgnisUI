@@ -87,7 +87,7 @@ class Render::WindowManager {
 
    public:
     // maytodo: this needs to be split to getqueuefamilies and find, we dont need to get it every time cause physical device doesn't change
-    QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device) {
+    void FindQueueFamilies(VkPhysicalDevice device) {
         QueueFamilyIndices indices;
 
         uint32_t queueFamilyCount = 0;
@@ -202,7 +202,8 @@ class Render::WindowManager {
 
    private:
     bool isDeviceSuitable(VkPhysicalDevice device) {
-        QueueFamilyIndices indices = FindQueueFamilies(device);
+        FindQueueFamilies(device);
+        QueueFamilyIndices indices = GetQueueFamilies();
 
         bool extensionsSupported = CheckDeviceExtensionSupport(device);
 
@@ -324,14 +325,13 @@ class Render::WindowManager {
             }
         }
 
-        float queuePriority = 1.0f;
         for (auto [queueFamily, queueCount] : queueFamilies) {
-            // std::cout << "qf: " << queueFamily << " qC: " << queueCount << "\n";
+            std::vector<float> queuePriorities(queueCount, 1.0f);
             VkDeviceQueueCreateInfo queueCreateInfo{};
             queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
             queueCreateInfo.queueFamilyIndex = queueFamily;
             queueCreateInfo.queueCount = queueCount;
-            queueCreateInfo.pQueuePriorities = &queuePriority;
+            queueCreateInfo.pQueuePriorities = queuePriorities.data();
             queueCreateInfos.push_back(queueCreateInfo);
         }
 

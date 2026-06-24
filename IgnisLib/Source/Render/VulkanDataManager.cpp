@@ -328,7 +328,7 @@ class Render::VulkanDataManager {
     void CreateSyncObjects(GLFWwindow *window) {
         WindowData &data = windows[window];
         data.imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-        data.renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+        data.renderFinishedSemaphores.resize(data.swapChainImages.size());
         data.inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
 
         VkSemaphoreCreateInfo semaphoreInfo{};
@@ -340,10 +340,13 @@ class Render::VulkanDataManager {
 
         for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             if (vkCreateSemaphore(*device, &semaphoreInfo, nullptr, &data.imageAvailableSemaphores[i]) != VK_SUCCESS ||
-                vkCreateSemaphore(*device, &semaphoreInfo, nullptr, &data.renderFinishedSemaphores[i]) != VK_SUCCESS ||
                 vkCreateFence(*device, &fenceInfo, nullptr, &data.inFlightFences[i]) != VK_SUCCESS) {
                 throw std::runtime_error("failed to create synchronization objects for a frame!");
             }
+        }
+        for (size_t i = 0; i < data.swapChainImages.size(); i++) {
+            if (vkCreateSemaphore(*device, &semaphoreInfo, nullptr, &data.renderFinishedSemaphores[i]) != VK_SUCCESS)
+                throw std::runtime_error("failed to create synchronization objects for a frame!");
         }
     }
 
@@ -1285,7 +1288,6 @@ class Render::VulkanDataManager {
             WindowData &windowData = windows[window];
 
             fences.push_back(windowData.inFlightFences[currentFrame]);
-            finishSemaphores.push_back(windowData.renderFinishedSemaphores[currentFrame]);
             swapChains.push_back(windowData.swapChain);
         }
 
@@ -1328,7 +1330,8 @@ class Render::VulkanDataManager {
             submitInfo.pCommandBuffers = &windowData.commandBuffers[currentFrame];
             // what semaphore to signal when the command buffer finished execution
             submitInfo.signalSemaphoreCount = 1;
-            submitInfo.pSignalSemaphores = &windowData.renderFinishedSemaphores[currentFrame];
+            submitInfo.pSignalSemaphores = &windowData.renderFinishedSemaphores[images[i]];
+            finishSemaphores.push_back(windowData.renderFinishedSemaphores[images[i]]);
 
             SubmitToGraphicQueue(&submitInfo, &windowData.inFlightFences[currentFrame]);
         }
@@ -1474,9 +1477,11 @@ class Render::VulkanDataManager {
         vkDestroyBuffer(*device, window.indexBuffer, nullptr);
         vkFreeMemory(*device, window.indexBufferMemory, nullptr);
 
+        for (uint32_t i = 0; i < window.renderFinishedSemaphores.size(); i++) {
+            vkDestroySemaphore(*device, window.renderFinishedSemaphores[i], nullptr);
+        }
         for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             vkDestroySemaphore(*device, window.imageAvailableSemaphores[i], nullptr);
-            vkDestroySemaphore(*device, window.renderFinishedSemaphores[i], nullptr);
             vkDestroyFence(*device, window.inFlightFences[i], nullptr);
         }
 
