@@ -57,6 +57,9 @@ target_link_libraries(Ignis PRIVATE glfw)
 target_include_directories(Ignis PRIVATE Dependencies/GLFW/include)
 target_compile_definitions(Ignis PRIVATE GLFW_STATIC GLFW_VULKAN_STATIC)
 
+# SPIRV-Reflect
+add_subdirectory(Dependencies/SPIRV-Reflect-lean)
+
 # Vulkan
 if(WIN32)
     target_include_directories(Ignis PRIVATE $ENV{VULKAN_SDK}/Include)
@@ -70,6 +73,7 @@ endif()
 target_link_libraries(Ignis PRIVATE 
     harfbuzz 
     freetype
+    spirv-reflect-static
 )
 
 target_include_directories(Ignis PUBLIC 
