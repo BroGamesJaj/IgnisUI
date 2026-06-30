@@ -110,6 +110,7 @@ namespace Ignis {
                 else {
                     cacheEnd = true;
 					leftOnCache = leftOver + leftOnFile;
+                    cacheOffset = 0;
                 }
 
                 return;
@@ -130,7 +131,7 @@ namespace Ignis {
 
             if(size > BUFFER_SIZE) {
                 std::cerr << "Requested size exceeds buffer size" << std::endl;
-                return;
+                return 0;
 			}
 
             if(!cacheEnd && cacheOffset + size > 0.9 * CACHE_SIZE) {
@@ -178,24 +179,34 @@ namespace Ignis {
 		wavData.OpenStream(path);
 
         RtAudio dac;
-        std::vector<unsigned int> deviceIds = dac.getDeviceIds();
-        if (deviceIds.size() < 1) {
+        std::vector<unsigned int> ids = dac.getDeviceIds();
+        if (ids.size() < 1) {
             std::cout << "\nNo audio devices found!\n";
             exit(0);
         }
 
+        RtAudio::DeviceInfo info;
+        for (unsigned int n = 0; n < ids.size(); n++) {
+
+            info = dac.getDeviceInfo(ids[n]);
+
+            if (info.isDefaultOutput == false) continue;
+            std::cout << "device name = " << info.name << std::endl;
+            std::cout << "duplex channels = " << info.duplexChannels << std::endl;
+            std::cout << "is Default output = " << info.isDefaultOutput << std::endl;
+        }
+        
         RtAudio::StreamParameters parameters;
         parameters.deviceId = dac.getDefaultOutputDevice();
         parameters.nChannels = 2;
         parameters.firstChannel = 0;
-        unsigned int sampleRate = 44100;
-        unsigned int bufferFrames = 256; // 256 sample frames
-        double data[2] = { 0, 0 };
+        unsigned int sampleRate = wavData.sampleRate;
+        unsigned int bufferFrames = 256;
 
         if (dac.openStream(&parameters, NULL, RTAUDIO_SINT16, sampleRate,
             &bufferFrames, &music, (void*)&wavData)) {
             std::cout << '\n' << dac.getErrorText() << '\n' << std::endl;
-            exit(0); // problem with device settings
+            exit(0);
         }
 
         if (dac.startStream()) {
@@ -213,5 +224,6 @@ namespace Ignis {
 
     cleanup:
         if (dac.isStreamOpen()) dac.closeStream();
+        
 	}
 }

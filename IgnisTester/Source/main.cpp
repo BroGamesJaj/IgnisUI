@@ -10,6 +10,4 @@ using namespace Ignis;
 
 int main() {
 	Audio::Test("../Resources/Audios/Timber Hearth.wav");
-	int tmp;
-	std::cin >> tmp;
 }

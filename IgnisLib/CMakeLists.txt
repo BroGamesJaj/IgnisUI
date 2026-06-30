@@ -24,6 +24,7 @@ set_target_properties(Ignis PROPERTIES
 set(HB_BUILD_SUBSET OFF CACHE BOOL "" FORCE)
 add_subdirectory(Dependencies/harfbuzz)
 
+set(RTAUDIO_BUILD_SHARED_LIBS OFF CACHE BOOL "")
 add_subdirectory(Dependencies/rtAudio)
 
 if (WIN32)
@@ -44,7 +45,7 @@ else()
     target_link_libraries(Ignis PRIVATE Vulkan::Vulkan ${GLFW_LIBRARIES})
 endif()
 
-target_link_libraries(Ignis PRIVATE harfbuzz)
+target_link_libraries(Ignis PRIVATE harfbuzz rtaudio)
 
 target_include_directories(Ignis PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}/Dependencies
