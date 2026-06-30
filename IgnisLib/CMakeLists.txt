@@ -24,8 +24,6 @@ set_target_properties(Ignis PROPERTIES
 set(HB_BUILD_SUBSET OFF CACHE BOOL "" FORCE)
 add_subdirectory(Dependencies/harfbuzz)
 
-add_subdirectory(Dependencies/miniaudio)
-
 if (WIN32)
     target_compile_options(Ignis PRIVATE /permissive-)
     target_include_directories(Ignis PRIVATE

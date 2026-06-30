@@ -4,6 +4,3 @@
 [submodule "IgnisLib/Dependencies/harfbuzz"]
 	path = IgnisLib/Dependencies/harfbuzz
 	url = https://github.com/harfbuzz/harfbuzz
-[submodule "IgnisLib/Dependencies/miniaudio"]
-	path = IgnisLib/Dependencies/miniaudio
-	url = https://github.com/mackron/miniaudio.git
