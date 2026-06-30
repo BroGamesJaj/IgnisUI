@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <vector>
 #include <string>
+#include <cstring>
 
 #define BUFFER_SIZE 4096
 #define CACHE_SIZE BUFFER_SIZE*8
