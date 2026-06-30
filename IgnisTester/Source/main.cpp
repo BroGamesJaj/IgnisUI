@@ -9,5 +9,5 @@
 using namespace Ignis;
 
 int main() {
-	Audio::Test("../Resources/Audios/Timber Hearth.wav");
+	Audio::Test("../Resources/Audios/already dead.wav");
 }

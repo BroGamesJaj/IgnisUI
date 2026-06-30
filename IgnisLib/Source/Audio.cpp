@@ -177,6 +177,7 @@ namespace Ignis {
 	void Audio::Test(std::string path) {
 
 		WavData wavData;
+		wavData.loop = true;
 		wavData.OpenStream(path);
 
         RtAudio dac;
