@@ -399,6 +399,39 @@ namespace Ignis {
 
     class Audio {
     public:
-        static void Test(std::string path);
+
+        struct Device {
+            std::string name;
+            int id;
+        };
+
+        static std::vector<Device> GetDevices();
+
+        static void SetOutputDevice(int id);
+
+        static void SetInputDevice();
+
+        //opens the file and writes everything into ram, won't hold the file
+        static int Open(std::string path);
+
+        //the opposite, will hold the file open but wont use much of ram
+		static int OpenStream(std::string path);
+
+		static void Close(int id);
+
+        static void Play(int id);
+
+        static void Pause(int id);
+
+        static void Stop(int id);
+
+        static void Skip(int id, float sec);
+
+        //default is 1
+        static void Volume(int id, float volume);
+
+        static void On();
+
+        static void Off();
     };
 }

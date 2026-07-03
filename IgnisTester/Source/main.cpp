@@ -6,8 +6,60 @@
 #define IGNIS_RENDER_NAMES
 #include "../../IgnisLib/Source/IgnisLib.h"
 
+#include <thread>
+#include <chrono>
+
 using namespace Ignis;
 
 int main() {
-	Audio::Test("../Resources/Audios/already dead.wav");
+	int mainDev = -1;
+
+	std::vector<Audio::Device> devices =  Audio::GetDevices();
+	for (auto& dev : devices) {
+		std::cout << dev.name << " with id: " << dev.id << std::endl;
+		if (dev.name.find("Redmi") != std::string::npos && dev.name.find("Stereo") != std::string::npos) {
+			mainDev = dev.id;
+		}
+	}
+
+	std::cout << "Found at " << mainDev << std::endl;
+
+	Audio::SetOutputDevice(mainDev);
+
+	Audio::On();
+
+	int dead = Audio::OpenStream("../Resources/Audios/already dead.wav");
+	int dead2 = Audio::OpenStream("../Resources/Audios/Timber Hearth.wav");
+
+	while (true) {
+		std::string input;
+		std::cout << std::endl;
+		std::cin >> input;
+
+		if (input == "pause") {
+			Audio::Pause(dead2);
+		}
+		else if (input == "play") {
+			Audio::Play(dead2);
+		}
+		else if (input == "stop") {
+			Audio::Stop(dead2);
+		}
+		else if (input == "skip") {
+			std::cin >> input;
+			Audio::Skip(dead2, std::stof(input));
+		}
+		else if (input == "vol"){
+			std::cin >> input;
+			Audio::Volume(dead2, std::stof(input));
+		}
+		else if (input == "exit") {
+			break;
+		}
+		else {
+			std::cerr << "unknown command: " << input << std::endl;
+		}
+	}
+
+	Audio::Off();
 }
