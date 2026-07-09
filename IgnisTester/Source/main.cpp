@@ -28,7 +28,12 @@ int main() {
 
 	Audio::On();
 
-	int dead = Audio::OpenStream("../Resources/Audios/already dead.wav");
+	std::string file = "../Resources/Audios/already dead.wav";
+
+
+
+	int dead = Audio::Open(file);
+
 	int dead2 = Audio::OpenStream("../Resources/Audios/Timber Hearth.wav");
 
 	while (true) {
@@ -37,13 +42,16 @@ int main() {
 		std::cin >> input;
 
 		if (input == "pause") {
-			Audio::Pause(dead2);
+			std::cin >> input;
+			Audio::Pause(std::stoi(input));
 		}
 		else if (input == "play") {
-			Audio::Play(dead2);
+			std::cin >> input;
+			Audio::Play(std::stoi(input));
 		}
 		else if (input == "stop") {
-			Audio::Stop(dead2);
+			std::cin >> input;
+			Audio::Stop(std::stoi(input));
 		}
 		else if (input == "skip") {
 			std::cin >> input;

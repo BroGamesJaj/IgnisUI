@@ -38,11 +38,9 @@ namespace Ignis {
         bool loop = false;
         bool isStream = false;
 
-        void OpenStream(const std::string& path) {
-			isStream = true;
-
+        void ReadFile(const std::string& path) {
             cache.resize(CACHE_SIZE);
-			buffer.resize(BUFFER_SIZE);
+            buffer.resize(BUFFER_SIZE);
 
             file = std::ifstream(path, std::ios::binary);
             char riff[4];
@@ -65,7 +63,6 @@ namespace Ignis {
                     file.read(reinterpret_cast<char*>(&audioFormat), sizeof(audioFormat));
                     file.read(reinterpret_cast<char*>(&channels), sizeof(channels));
                     file.read(reinterpret_cast<char*>(&sampleRate), sizeof(sampleRate));
-                    std::cout << sampleRate << std::endl;
 
                     file.ignore(6);
 
@@ -74,21 +71,13 @@ namespace Ignis {
                     file.ignore(chunkSize - 16);
                 }
                 else if (id == "data") {
-                    if(bitsPerSample % 8 != 0) {
+                    if (bitsPerSample % 8 != 0) {
                         std::cerr << "Unsupported bits per sample: " << bitsPerSample << std::endl;
                         return;
-					}
+                    }
 
                     dataSize = chunkSize;
                     dataOffset = file.tellg();
-
-					uint32_t C = CACHE_SIZE;
-                    if (dataSize < CACHE_SIZE)
-                        C = dataSize;
-
-                    file.clear();
-                    file.read(cache.data(), C);
-                    readOffset = C;
 
                     haveData = true;
                     return;
@@ -96,6 +85,37 @@ namespace Ignis {
                 else {
                     file.ignore(chunkSize);
                 }
+            }
+        }
+
+        void Open(const std::string& path) {
+            ReadFile(path);
+
+            if (haveData) {
+                cache.resize(dataSize);
+                file.clear();
+                file.read(cache.data(), dataSize);
+
+                leftOnCache = dataSize;
+                readOffset = dataSize;
+            }
+
+            file.close();
+        }
+
+        void OpenStream(const std::string& path) {
+			isStream = true;
+
+            ReadFile(path);
+
+            if (haveData) {
+                uint32_t C = CACHE_SIZE;
+                if (dataSize < CACHE_SIZE)
+                    C = dataSize;
+
+                file.clear();
+                file.read(cache.data(), C);
+                readOffset = C;
             }
         }
     private:
@@ -138,24 +158,46 @@ namespace Ignis {
     public:
 
         uint32_t ReadOff(uint32_t size) {
-            uint32_t base = size;
-            if(size > BUFFER_SIZE) {
+            if (size > BUFFER_SIZE) {
                 std::cerr << "Requested size exceeds buffer size" << std::endl;
                 return 0;
-			}
+            }
 
-            if(!cacheEnd && cacheOffset + size > 0.9 * CACHE_SIZE) {
-				ReadToCache();
-			}
+            if (isStream) {
+                if (!cacheEnd && cacheOffset + size > 0.9 * CACHE_SIZE) {
+                    ReadToCache();
+                }
 
-            if(cacheEnd && cacheOffset + size > leftOnCache) {
-                bufferEnd = true;
-                size = leftOnCache - cacheOffset;
-			}
+                if (cacheEnd && cacheOffset + size > leftOnCache) {
+                    bufferEnd = true;
+                    size = leftOnCache - cacheOffset;
+                }
 
-			memcpy(buffer.data(), cache.data() + cacheOffset, size);
-            cacheOffset += size;
-            return size;
+                memcpy(buffer.data(), cache.data() + cacheOffset, size);
+                cacheOffset += size;
+                return size;
+            }
+            else {
+                if (size + cacheOffset > leftOnCache) {
+                    if (loop) {
+                        uint32_t leftOver = leftOnCache - cacheOffset;
+                        memcpy(buffer.data(), cache.data() + cacheOffset, leftOver);
+                        leftOver = size - leftOver;
+                        memcpy(buffer.data() + leftOver, cache.data(), leftOver);
+                        cacheOffset = leftOver;
+
+                        return size;
+                    }
+                    else {
+                        bufferEnd = true;
+                        size = leftOnCache - cacheOffset;
+                    }
+                }
+
+                memcpy(buffer.data(), cache.data() + cacheOffset, size);
+                cacheOffset += size;
+                return size;
+            }
         }
 
         friend class Audio;
@@ -236,6 +278,25 @@ namespace Ignis {
         return 0;
     }
 
+    int Audio::Open(std::string path) {
+        WavData wavData;
+        wavData.loop = true;
+        wavData.Open(path);
+
+        int index = data.size();
+
+        data.push_back(std::move(wavData));
+
+        size_t lastSlash = path.find_last_of("/\\");
+        size_t lastDot = path.find_last_of('.');
+
+        std::string name = path.substr(lastSlash + 1, lastDot - lastSlash - 1);
+
+        std::cout << "Loaded " << name << " into index " << index << std::endl;
+
+        return index;
+    }
+
 	int Audio::OpenStream(std::string path) {
 
 		WavData wavData;
@@ -245,6 +306,13 @@ namespace Ignis {
         int index = data.size();
 
         data.push_back(std::move(wavData));
+
+        size_t lastSlash = path.find_last_of("/\\");
+        size_t lastDot = path.find_last_of('.');
+
+        std::string name = path.substr(lastSlash + 1, lastDot - lastSlash - 1);
+
+        std::cout << "Loaded " << name << " into index " << index << std::endl;
 
         return index;
 	}
@@ -382,6 +450,10 @@ namespace Ignis {
     }
 
     void Audio::Off() {
+        for (auto& item : data) {
+            item.file.close();
+        }
+
         // Block released ... stop the stream
         if (dac.isStreamRunning())
             dac.stopStream();  // or could call dac.abortStream();
