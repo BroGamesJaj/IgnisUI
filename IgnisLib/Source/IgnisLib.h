@@ -423,6 +423,8 @@ namespace Ignis {
 
         static void Pause(int id);
 
+        static void Resume(int id);
+
         static void Stop(int id);
 
         static void Skip(int id, float sec);

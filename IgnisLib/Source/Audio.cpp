@@ -14,6 +14,11 @@
 
 namespace Ignis {
 
+    struct PlayingAudio {
+        uint32_t instanceId;
+        uint32_t id;
+    };
+
     struct WavData {
         uint32_t sampleRate;
         uint16_t channels;
@@ -26,6 +31,7 @@ namespace Ignis {
 
         std::vector<char> cache;
         std::vector<char> buffer;
+        std::unordered_map<int, uint32_t> instanceOffset;
         std::ifstream file;
         float volume = 1.0f;
 
@@ -157,7 +163,7 @@ namespace Ignis {
 
     public:
 
-        uint32_t ReadOff(uint32_t size) {
+        uint32_t ReadOff(uint32_t size, int index = -1) {
             if (size > BUFFER_SIZE) {
                 std::cerr << "Requested size exceeds buffer size" << std::endl;
                 return 0;
@@ -178,24 +184,26 @@ namespace Ignis {
                 return size;
             }
             else {
-                if (size + cacheOffset > leftOnCache) {
+                if (index == -1) throw std::runtime_error("didn't give instance index to instanced audio readoff");
+
+                if (size + instanceOffset[index] > leftOnCache) {
                     if (loop) {
-                        uint32_t leftOver = leftOnCache - cacheOffset;
+                        uint32_t leftOver = leftOnCache - instanceOffset[index];
                         memcpy(buffer.data(), cache.data() + cacheOffset, leftOver);
                         leftOver = size - leftOver;
                         memcpy(buffer.data() + leftOver, cache.data(), leftOver);
-                        cacheOffset = leftOver;
+                        instanceOffset[index] = leftOver;
 
                         return size;
                     }
                     else {
                         bufferEnd = true;
-                        size = leftOnCache - cacheOffset;
+                        size = leftOnCache - instanceOffset[index];
                     }
                 }
 
-                memcpy(buffer.data(), cache.data() + cacheOffset, size);
-                cacheOffset += size;
+                memcpy(buffer.data(), cache.data() + instanceOffset[index], size);
+                instanceOffset[index] += size;
                 return size;
             }
         }
@@ -204,12 +212,14 @@ namespace Ignis {
     };
 
     std::vector<WavData> data;
-    std::vector<int> dataIds;
+    std::vector<PlayingAudio> playing;
     RtAudio dac;
 
     RtAudio::DeviceInfo def;
 
     int outputDevice = -1;
+
+    uint32_t instanceCount = 1;
 
 
     int music(void* outputBuffer, void* inputBuffer,unsigned int nBufferFrames,double streamTime, RtAudioStreamStatus status, void* userData)
@@ -226,18 +236,30 @@ namespace Ignis {
             out[i] = 0;
         }
 
-        for (auto it = dataIds.begin(); it != dataIds.end();) {
-            uint32_t id = *it;
+        for (auto it = playing.begin(); it != playing.end();) {
+            PlayingAudio audio = *it;
 
-            float step = (float)data[id].sampleRate / 44100;
+            WavData& curData = data[audio.id];
+
+            float step = (float)curData.sampleRate / 44100;
 
             uint32_t neededFrames = (uint32_t)std::ceil(nBufferFrames * step) + 1; // +1 for interpolation lookahead
             uint32_t neededBytes = neededFrames * def.outputChannels * sizeof(int16_t);
-            uint32_t got = data[id].ReadOff(neededBytes);
-            int16_t* src = reinterpret_cast<int16_t*>(data[id].buffer.data());
 
-            if (data[id].bufferEnd)
-                it = dataIds.erase(it);
+            size_t idIndex = it - playing.begin();
+
+            uint32_t got;
+            if (!curData.isStream) got = curData.ReadOff(neededBytes, audio.instanceId);
+            else got = curData.ReadOff(neededBytes);
+
+
+            int16_t* src = reinterpret_cast<int16_t*>(curData.buffer.data());
+
+            if (curData.bufferEnd) {
+                it = playing.erase(it);
+                curData.instanceOffset.erase(idIndex);
+                curData.bufferEnd = false;
+            }
             else
                 ++it;
 
@@ -245,7 +267,7 @@ namespace Ignis {
 
             float pos = 0.0f;
 
-            int frame;
+            uint32_t frame;
             int base;
             int base2;
 
@@ -266,7 +288,7 @@ namespace Ignis {
                     int16_t sample = (int16_t)(s1 + (s2 - s1) * frac);
 
                     int32_t mixed = (int32_t)out[i * channels + c] + (int32_t)sample;
-                    mixed *= data[id].volume;
+                    mixed *= curData.volume;
                     mixed = std::clamp(mixed, (int32_t)INT16_MIN, (int32_t)INT16_MAX);
                     out[i * channels + c] = (int16_t)mixed;
                 }
@@ -280,7 +302,7 @@ namespace Ignis {
 
     int Audio::Open(std::string path) {
         WavData wavData;
-        wavData.loop = true;
+        wavData.loop = false;
         wavData.Open(path);
 
         int index = data.size();
@@ -310,6 +332,7 @@ namespace Ignis {
         size_t lastSlash = path.find_last_of("/\\");
         size_t lastDot = path.find_last_of('.');
 
+
         std::string name = path.substr(lastSlash + 1, lastDot - lastSlash - 1);
 
         std::cout << "Loaded " << name << " into index " << index << std::endl;
@@ -318,46 +341,84 @@ namespace Ignis {
 	}
 
     void Audio::Play(int id) {
-        dataIds.push_back(id);
+        if (!data[id].isStream) {
+            data[id].instanceOffset[instanceCount] = 0;
+        }
+
+        PlayingAudio audio{ instanceCount++, id };
+
+        playing.push_back(audio);
     }
 
     void Audio::Pause(int id) {
-        for (auto it = dataIds.begin(); it != dataIds.end();) {
-            uint32_t index = *it;
+        for (auto it = playing.begin(); it != playing.end();) {
+            uint32_t index = (*it).id;
 
             if (index == id) {
-                it = dataIds.erase(it);
-                return;
+                it = playing.erase(it);
+                if(data[id].isStream) return;
             }
             else ++it;
         }
     }
 
+    void Audio::Resume(int id) {
+        PlayingAudio audio;
+        if (!data[id].isStream) {
+            for (auto& [instance, offset] : data[id].instanceOffset) {
+
+                //O(n) so not very happy about it, if shit ass performance, should enhance
+                bool exists = std::any_of(playing.begin(), playing.end(),
+                    [instance](const PlayingAudio& a) {
+                        return a.instanceId == instance;
+                    });
+
+                if (exists) continue;
+
+                audio.instanceId = instance;
+                audio.id = id;
+                playing.push_back(audio);
+            }
+        }
+        else {
+            audio.instanceId = instanceCount++;
+            audio.id = id;
+            playing.push_back(audio);
+        }
+    }
+
     void Audio::Stop(int id) {
-        for (auto it = dataIds.begin(); it != dataIds.end();) {
-            uint32_t index = *it;
+        for (auto it = playing.begin(); it != playing.end();) {
+            uint32_t index = (*it).id;
 
             if (index == id) {
-                it = dataIds.erase(it);
                 WavData& dat = data[id];
-                dat.readOffset = 0;
-                dat.cacheOffset = 0;
-                dat.file.seekg(data[id].dataOffset);
-                dat.cache.clear();
-                dat.cache.resize(CACHE_SIZE);
-                dat.ReadToCache();
-                return;
+                if (dat.isStream) {
+                    it = playing.erase(it);
+                    dat.readOffset = 0;
+                    dat.cacheOffset = 0;
+                    dat.file.seekg(data[id].dataOffset);
+                    dat.cache.clear();
+                    dat.cache.resize(CACHE_SIZE);
+                    dat.ReadToCache();
+                    return;
+                }
+                else {
+                    it = playing.erase(it);
+                    dat.instanceOffset.clear();
+                }
             }
             else ++it;
         }
     }
 
     void Audio::Skip(int id, float sec) {
-        for (auto it = dataIds.begin(); it != dataIds.end();) {
-            uint32_t index = *it;
+        for (auto it = playing.begin(); it != playing.end();) {
+            uint32_t index = (*it).id;
 
             if (index == id) {
                 WavData& dat = data[id];
+                if (!dat.isStream) return;
                 dat.readOffset += (uint32_t)((float)dat.sampleRate * sec) * dat.channels * sizeof(int16_t);
                 dat.readOffset = dat.readOffset % dat.dataSize;
                 dat.file.seekg(dat.dataOffset + static_cast<std::streamoff>(dat.readOffset));

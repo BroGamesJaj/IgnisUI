@@ -28,11 +28,7 @@ int main() {
 
 	Audio::On();
 
-	std::string file = "../Resources/Audios/already dead.wav";
-
-
-
-	int dead = Audio::Open(file);
+	int dead = Audio::Open("../Resources/Audios/already dead.wav");
 
 	int dead2 = Audio::OpenStream("../Resources/Audios/Timber Hearth.wav");
 
@@ -53,13 +49,19 @@ int main() {
 			std::cin >> input;
 			Audio::Stop(std::stoi(input));
 		}
+		else if (input == "resume") {
+			std::cin >> input;
+			Audio::Resume(std::stoi(input));
+		}
 		else if (input == "skip") {
 			std::cin >> input;
 			Audio::Skip(dead2, std::stof(input));
 		}
 		else if (input == "vol"){
 			std::cin >> input;
-			Audio::Volume(dead2, std::stof(input));
+			std::string input2;
+			std::cin >> input2;
+			Audio::Volume(std::stoi(input), std::stof(input2));
 		}
 		else if (input == "exit") {
 			break;
