@@ -34,6 +34,7 @@ namespace Ignis {
         std::unordered_map<int, uint32_t> instanceOffset;
         std::ifstream file;
         float volume = 1.0f;
+        float speed = 1.0f;
 
     private:
         uint32_t leftOnCache = CACHE_SIZE;
@@ -222,6 +223,23 @@ namespace Ignis {
     uint32_t instanceCount = 1;
 
 
+    void LoadedPath(std::string& path, int index) {
+        size_t lastSlash = path.find_last_of("/\\");
+        size_t lastDot = path.find_last_of('.');
+
+        std::string name = path.substr(lastSlash + 1, lastDot - lastSlash - 1);
+
+        std::cout << "Loaded " << name << " into index " << index << std::endl;
+    }
+
+    void CacheReset(WavData& dat) {
+        dat.readOffset = 0;
+        dat.cacheOffset = 0;
+        dat.file.seekg(dat.dataOffset);
+        dat.cache.clear();
+        dat.cache.resize(CACHE_SIZE);
+    }
+
     int music(void* outputBuffer, void* inputBuffer,unsigned int nBufferFrames,double streamTime, RtAudioStreamStatus status, void* userData)
     {
         int16_t* out = (int16_t*)outputBuffer;
@@ -241,7 +259,7 @@ namespace Ignis {
 
             WavData& curData = data[audio.id];
 
-            float step = (float)curData.sampleRate / 44100;
+            float step = (float)curData.sampleRate * curData.speed / 44100;
 
             uint32_t neededFrames = (uint32_t)std::ceil(nBufferFrames * step) + 1; // +1 for interpolation lookahead
             uint32_t neededBytes = neededFrames * def.outputChannels * sizeof(int16_t);
@@ -302,19 +320,14 @@ namespace Ignis {
 
     int Audio::Open(std::string path) {
         WavData wavData;
-        wavData.loop = false;
+        wavData.loop = true;
         wavData.Open(path);
 
         int index = data.size();
 
         data.push_back(std::move(wavData));
 
-        size_t lastSlash = path.find_last_of("/\\");
-        size_t lastDot = path.find_last_of('.');
-
-        std::string name = path.substr(lastSlash + 1, lastDot - lastSlash - 1);
-
-        std::cout << "Loaded " << name << " into index " << index << std::endl;
+        LoadedPath(path, index);
 
         return index;
     }
@@ -329,20 +342,25 @@ namespace Ignis {
 
         data.push_back(std::move(wavData));
 
-        size_t lastSlash = path.find_last_of("/\\");
-        size_t lastDot = path.find_last_of('.');
-
-
-        std::string name = path.substr(lastSlash + 1, lastDot - lastSlash - 1);
-
-        std::cout << "Loaded " << name << " into index " << index << std::endl;
+        LoadedPath(path, index);
 
         return index;
 	}
 
     void Audio::Play(int id) {
+
         if (!data[id].isStream) {
             data[id].instanceOffset[instanceCount] = 0;
+        }
+        else {
+            bool exists = std::any_of(playing.begin(), playing.end(),
+                [id](const PlayingAudio& a) {
+                    return a.id == id;
+                });
+            if (exists) return;
+
+            CacheReset(data[id]);
+            data[id].ReadToCache();
         }
 
         PlayingAudio audio{ instanceCount++, id };
@@ -395,11 +413,7 @@ namespace Ignis {
                 WavData& dat = data[id];
                 if (dat.isStream) {
                     it = playing.erase(it);
-                    dat.readOffset = 0;
-                    dat.cacheOffset = 0;
-                    dat.file.seekg(data[id].dataOffset);
-                    dat.cache.clear();
-                    dat.cache.resize(CACHE_SIZE);
+                    CacheReset(dat);
                     dat.ReadToCache();
                     return;
                 }
@@ -419,7 +433,7 @@ namespace Ignis {
             if (index == id) {
                 WavData& dat = data[id];
                 if (!dat.isStream) return;
-                dat.readOffset += (uint32_t)((float)dat.sampleRate * sec) * dat.channels * sizeof(int16_t);
+                dat.readOffset += (uint32_t)((float)dat.sampleRate * dat.speed * sec) * dat.channels * sizeof(int16_t);
                 dat.readOffset = dat.readOffset % dat.dataSize;
                 dat.file.seekg(dat.dataOffset + static_cast<std::streamoff>(dat.readOffset));
                 dat.cacheOffset = 0;
@@ -435,7 +449,11 @@ namespace Ignis {
     void Audio::Volume(int id, float volume) {
         WavData& dat = data[id];
         dat.volume = volume;
-        return;
+    }
+
+    void Audio::Speed(int id, float speed) {
+        WavData& dat = data[id];
+        dat.speed = speed;
     }
     
     std::vector<Audio::Device> Audio::GetDevices() {

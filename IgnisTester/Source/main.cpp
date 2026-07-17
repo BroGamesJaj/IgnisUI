@@ -30,7 +30,14 @@ int main() {
 
 	int dead = Audio::Open("../Resources/Audios/already dead.wav");
 
-	int dead2 = Audio::OpenStream("../Resources/Audios/Timber Hearth.wav");
+	int hearth = Audio::OpenStream("../Resources/Audios/Timber Hearth.wav");
+
+	int dnd = Audio::OpenStream("../Resources/Audios/i drink and drive.wav");
+
+	Audio::Play(dnd);
+	Audio::Skip(dnd, 119.1f);
+	Audio::Speed(dnd, 1.1f);
+	Audio::Volume(dnd, 1.3f);
 
 	while (true) {
 		std::string input;
@@ -55,13 +62,21 @@ int main() {
 		}
 		else if (input == "skip") {
 			std::cin >> input;
-			Audio::Skip(dead2, std::stof(input));
+			std::string input2;
+			std::cin >> input2;
+			Audio::Skip(std::stoi(input), std::stof(input2));
 		}
 		else if (input == "vol"){
 			std::cin >> input;
 			std::string input2;
 			std::cin >> input2;
 			Audio::Volume(std::stoi(input), std::stof(input2));
+		}
+		else if (input == "speed") {
+			std::cin >> input;
+			std::string input2;
+			std::cin >> input2;
+			Audio::Speed(std::stoi(input), std::stof(input2));
 		}
 		else if (input == "exit") {
 			break;

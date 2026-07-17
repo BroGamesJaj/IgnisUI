@@ -432,6 +432,9 @@ namespace Ignis {
         //default is 1
         static void Volume(int id, float volume);
 
+        //default is 1
+        static void Speed(int id, float volume);
+
         static void On();
 
         static void Off();
