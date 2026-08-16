@@ -616,8 +616,6 @@ class Render::VulkanDataManager {
     }
 
     void CreateStorageBuffers(std::array<std::unique_ptr<BufferData>, MAX_FRAMES_IN_FLIGHT> &bufferData, uint32_t size) {
-        VkDeviceSize bufferSize = size;
-
         for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             bufferData[i] = std::make_unique<BufferData>();
             RecreateStorageBuffers(bufferData[i].get(), size);
@@ -1410,16 +1408,16 @@ class Render::VulkanDataManager {
     }
 
     void UpdateSSBOInstances(std::vector<uint32_t> &indicies) {
-        if (true /*indicies.size() == 0*/) {
+        if (true /* indicies.size() == 0*/) {
             memcpy(perFrameDataBuffers.storageBuffer[currentFrame]->bufferMapped,
                    instances.data(), instances.size() * sizeof(InstanceData));
         } else {  // while if indicies are set, it means that some elements got changed
 
-            InstanceData *gpuInstances = (InstanceData *)perFrameDataBuffers.storageBuffer[currentFrame]->bufferMapped;
-
+            // InstanceData *gpuInstances = (InstanceData *)perFrameDataBuffers.storageBuffer[currentFrame]->bufferMapped;
+            /*
             for (auto &index : indicies) {
                 gpuInstances[index] = instances[index];
-            }
+            }*/
         }
     }
 

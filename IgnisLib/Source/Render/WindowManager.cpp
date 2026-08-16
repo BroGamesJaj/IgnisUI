@@ -325,13 +325,16 @@ class Render::WindowManager {
             }
         }
 
+        std::vector<std::vector<float>> queuePriorities;
+
         for (auto [queueFamily, queueCount] : queueFamilies) {
-            std::vector<float> queuePriorities(queueCount, 1.0f);
+            std::vector<float> queuePriority(queueCount, 1.0f);
+            queuePriorities.push_back(queuePriority);
             VkDeviceQueueCreateInfo queueCreateInfo{};
             queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
             queueCreateInfo.queueFamilyIndex = queueFamily;
             queueCreateInfo.queueCount = queueCount;
-            queueCreateInfo.pQueuePriorities = queuePriorities.data();
+            queueCreateInfo.pQueuePriorities = queuePriorities.rbegin()->data();
             queueCreateInfos.push_back(queueCreateInfo);
         }
 

@@ -21,6 +21,7 @@ int main() {
     Input::Init();
     Render::Init(true);
     Window window1 = Render::CreateAppWindow(1200, 800, "Gup 1");
+    // Window window2 = Render::CreateAppWindow(1200, 800, "Gup 1");
 
     /*
     // int fontId = UI::LoadFont("../DejaVuSans.ttf");
@@ -30,7 +31,7 @@ int main() {
     Texture monika = UI::CreateTexture("../Resources/Textures/monika2.png");
     Texture sus = UI::CreateTexture("../Resources/Textures/goated0.bmp");
 
-    //Image image = Image(Vec2f(50, 20), Vec2f(10, 10), Color(0.0f, 1.0f, 1.0f));
+    // Image image = Image(Vec2f(50, 20), Vec2f(10, 10), Color(0.0f, 1.0f, 1.0f));
     std::vector<UI::Image> images = {
         Image(Vec2f(20, 70), Vec2f(40, 55), monika),
         Image(Vec2f(50, 40), Vec2f(30, 40), monika),
@@ -39,18 +40,18 @@ int main() {
     // should add popoff so elements can be removed seperately
 
     UI::PushOn(images);
+    // UI::PushOn(window2, images);
     UI::Submit();
+    // UI::Submit(window2);
 
     float t = 0.0f;
 
     while (Render::IsOpen()) {
         t += 0.0001f;
 
-        for (size_t i = 0; i < images.size(); i++) {
-            UI::Rotate(images[i], ((i % 2 == 0) ? 1 : -1) * - 0.05f);
-            UI::Move(images[i], { cos(t+i) * 0.008f, sin(t+i/2) * 0.008f });
-            UI::ColorChange(images[i], t*100 + i * 0.2f);
-        }
+        UI::Rotate(images[1], ((1 % 2 == 0) ? 1 : -1) * -0.05f);
+        UI::Move(images[1], { cos(t + 1) * 0.008f, sin(t + 0 / 2) * 0.008f });
+        UI::ColorChange(images[1], t * 100 + 1 * 0.2f);
 
         Input::Event();
         Render::Update();
